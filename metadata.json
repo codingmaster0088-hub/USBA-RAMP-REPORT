@@ -1,0 +1,6 @@
+{
+  "name": "USBA Ramp Operations & Flight Monitor",
+  "description": "Modern aviation HUD & real-time turnaround monitoring system for US-Bangla Airlines ramp area ground handling and departure management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
