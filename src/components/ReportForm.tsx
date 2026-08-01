@@ -182,6 +182,8 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       setSkippedModalOpen(true);
       return;
     }
+    // Automatically save report with modified data when download is clicked
+    onSaveReport(formData, reportType, flightMode, reportToEdit?.id);
     onDownloadJPG(formData, reportType, flightMode);
   };
 
@@ -1051,30 +1053,21 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
                 12. TRIM SUBMITTED
               </label>
-              <div className="flex gap-1">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData.trimSubmitted || ''}
+                  onChange={(e) => handleChange('trimSubmitted', e.target.value)}
+                  placeholder="1348"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                />
                 <button
                   type="button"
-                  onClick={() => setOBPreset('trimSubmitted')}
-                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-[10px] rounded-lg border border-slate-700"
+                  onClick={() => setNowTime('trimSubmitted')}
+                  className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
                 >
-                  OB
+                  🕒
                 </button>
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={formData.trimSubmitted || ''}
-                    onChange={(e) => handleChange('trimSubmitted', e.target.value)}
-                    placeholder="1348"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setNowTime('trimSubmitted')}
-                    className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
-                  >
-                    🕒
-                  </button>
-                </div>
               </div>
             </div>
 
@@ -1083,30 +1076,21 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
                 13. TRIM SIGNED
               </label>
-              <div className="flex gap-1">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData.trimSigned || ''}
+                  onChange={(e) => handleChange('trimSigned', e.target.value)}
+                  placeholder="1352"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                />
                 <button
                   type="button"
-                  onClick={() => setOBPreset('trimSigned')}
-                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-[10px] rounded-lg border border-slate-700"
+                  onClick={() => setNowTime('trimSigned')}
+                  className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
                 >
-                  OB
+                  🕒
                 </button>
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={formData.trimSigned || ''}
-                    onChange={(e) => handleChange('trimSigned', e.target.value)}
-                    placeholder="1352"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setNowTime('trimSigned')}
-                    className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
-                  >
-                    🕒
-                  </button>
-                </div>
               </div>
             </div>
           </div>
