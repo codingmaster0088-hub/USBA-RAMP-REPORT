@@ -82,6 +82,15 @@ export interface SavedReport {
   officerId: string;
 }
 
+export interface AdminNotice {
+  id: string;
+  message: string;
+  timestamp: string;
+  author: string;
+  authorName?: string;
+  authorId?: string;
+}
+
 export interface TurnaroundMilestone {
   key: string;
   label: string;

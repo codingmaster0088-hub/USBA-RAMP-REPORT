@@ -7,7 +7,8 @@ import {
   RampReportFormData,
   StationCode,
   ActiveTab,
-  ScheduleFlight
+  ScheduleFlight,
+  AdminNotice
 } from './types';
 import { initialSampleReports } from './data/routesDB';
 import { parseFLSTData, sampleFLSTInput } from './utils/flstParser';
@@ -16,7 +17,9 @@ import {
   syncReportToFirestore,
   deleteReportFromFirestore,
   subscribeToSchedule,
-  syncScheduleToFirestore
+  syncScheduleToFirestore,
+  subscribeToNotices,
+  broadcastNoticeToFirestore
 } from './lib/firebase';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -25,6 +28,7 @@ import { ReportForm } from './components/ReportForm';
 import { SavedReports } from './components/SavedReports';
 import { AdminSection } from './components/AdminSection';
 import { LoginModal } from './components/LoginModal';
+import { NoticeModal } from './components/NoticeModal';
 import { ReportCanvasCard } from './components/ReportCanvasCard';
 import { CheckCircle2, AlertCircle, RefreshCw, X, Wifi } from 'lucide-react';
 
@@ -73,6 +77,10 @@ export default function App() {
 
   const [isLiveConnected, setIsLiveConnected] = useState<boolean>(true);
 
+  // Admin Notices State & Pop-up Modal
+  const [notices, setNotices] = useState<AdminNotice[]>([]);
+  const [activePopupNotice, setActivePopupNotice] = useState<AdminNotice | null>(null);
+
   // Active Tab: 'live' | 'form' | 'saved' | 'admin'
   const [activeTab, setActiveTab] = useState<ActiveTab>('live');
 
@@ -92,7 +100,7 @@ export default function App() {
 
   const [isExporting, setIsExporting] = useState(false);
 
-  // Subscribe to Firebase Firestore real-time updates for Saved Reports & Schedules
+  // Subscribe to Firebase Firestore real-time updates for Saved Reports, Schedules & Notices
   useEffect(() => {
     const unsubReports = subscribeToSavedReports((reports) => {
       if (reports && reports.length > 0) {
@@ -122,9 +130,21 @@ export default function App() {
       setIsLiveConnected(true);
     }, () => setIsLiveConnected(false));
 
+    const unsubNotices = subscribeToNotices((incomingNotices) => {
+      setNotices(incomingNotices);
+      if (incomingNotices && incomingNotices.length > 0) {
+        const latest = incomingNotices[0];
+        const ackId = localStorage.getItem(`usb_notice_ack_${latest.id}`);
+        if (!ackId) {
+          setActivePopupNotice(latest);
+        }
+      }
+    });
+
     return () => {
       unsubReports();
       unsubSchedule();
+      unsubNotices();
     };
   }, []);
 
@@ -174,6 +194,29 @@ export default function App() {
     } catch (e) {
       console.error('Error saving schedule:', e);
       showToast('Updated locally', 'Cloud sync will retry automatically', 'info');
+    }
+  };
+
+  // Broadcast Special Notice from Admin
+  const handleBroadcastNotice = async (message: string) => {
+    if (!user) return;
+    const newNotice: AdminNotice = {
+      id: `notice-${Date.now()}`,
+      message,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' LT',
+      author: `${user.name} (${user.id})`,
+      authorName: user.name,
+      authorId: user.id
+    };
+
+    await broadcastNoticeToFirestore(newNotice);
+    showToast('Special Notice Broadcasted Live!', 'All online officers will receive the notice modal', 'success');
+  };
+
+  const handleAcknowledgeNotice = () => {
+    if (activePopupNotice) {
+      localStorage.setItem(`usb_notice_ack_${activePopupNotice.id}`, 'true');
+      setActivePopupNotice(null);
     }
   };
 
@@ -410,6 +453,7 @@ export default function App() {
             user={user}
             scheduleFlights={scheduleFlights}
             scheduleDate={scheduleDate}
+            notices={notices}
             onStartReportWithFlight={handleStartReportWithFlight}
             onStartReport={handleStartReport}
           />
@@ -444,10 +488,19 @@ export default function App() {
             scheduleFlights={scheduleFlights}
             scheduleDate={scheduleDate}
             onUpdateSchedule={handleUpdateSchedule}
+            onBroadcastNotice={handleBroadcastNotice}
             showToast={showToast}
           />
         )}
       </main>
+
+      {/* SPECIAL NOTICE POPUP MODAL FOR OFFICERS */}
+      {activePopupNotice && (
+        <NoticeModal
+          notice={activePopupNotice}
+          onClose={handleAcknowledgeNotice}
+        />
+      )}
 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { UserProfile, ScheduleFlight } from '../types';
 import { parseFLSTData, sampleFLSTInput } from '../utils/flstParser';
-import { ShieldCheck, Lock, Sparkles, Database, CheckCircle2, RefreshCw } from 'lucide-react';
+import { ShieldCheck, Lock, Sparkles, Database, CheckCircle2, RefreshCw, Bell, Send } from 'lucide-react';
 
 interface AdminSectionProps {
   user: UserProfile;
   scheduleFlights: ScheduleFlight[];
   scheduleDate: string;
   onUpdateSchedule: (flights: ScheduleFlight[], dateHeader: string, rawFlst: string) => void;
+  onBroadcastNotice?: (message: string) => Promise<void>;
   showToast: (title: string, subtitle?: string, type?: 'success' | 'info' | 'error') => void;
 }
 
@@ -16,6 +17,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   scheduleFlights,
   scheduleDate,
   onUpdateSchedule,
+  onBroadcastNotice,
   showToast
 }) => {
   // Check admin privileges: Name must be RASEL HOSSAIN and USBA ID must be 0088
@@ -26,35 +28,23 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
     return localStorage.getItem('usb_flst_raw') || sampleFLSTInput;
   });
 
+  const [noticeMessage, setNoticeMessage] = useState<string>('');
+  const [isBroadcasting, setIsBroadcasting] = useState<boolean>(false);
+
   if (!isAdmin) {
     return (
-      <div className="bg-slate-900 border border-red-500/40 rounded-2xl p-6 text-center space-y-4 shadow-2xl fade-in my-auto">
-        <div className="w-16 h-16 mx-auto rounded-2xl bg-red-950/80 border border-red-500/50 flex items-center justify-center text-red-400 shadow-lg">
+      <div className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-6 text-center space-y-4 shadow-2xl fade-in my-auto max-w-lg mx-auto">
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500/10 border border-amber-400/40 flex items-center justify-center text-amber-400 shadow-lg">
           <Lock className="w-8 h-8" />
         </div>
 
-        <div className="space-y-1">
-          <h2 className="text-base font-black text-red-300 uppercase tracking-wider">
-            ADMIN ACCESS RESTRICTED
-          </h2>
-          <p className="text-xs text-slate-300">
-            This section is strictly reserved for authorized System Administrators.
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-5 rounded-2xl border border-amber-500/30 text-center shadow-xl space-y-2">
+          <p className="text-sm sm:text-base font-black text-amber-300 tracking-wider uppercase">
+            HI OFFICER, THIS PAGE IS ONLY RESERVED FOR RADOAN RASEL
           </p>
-        </div>
-
-        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-left font-mono text-[11px] space-y-1 text-slate-400">
-          <div className="flex justify-between">
-            <span>Required Name:</span>
-            <strong className="text-amber-400">RASEL HOSSAIN</strong>
-          </div>
-          <div className="flex justify-between">
-            <span>Required USBA ID:</span>
-            <strong className="text-amber-400">0088</strong>
-          </div>
-          <div className="flex justify-between pt-1 border-t border-slate-800 text-slate-500">
-            <span>Your Current Login:</span>
-            <span className="text-red-400 font-bold">{user.name} (ID-{user.id})</span>
-          </div>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Please return to Live Monitor or Turnaround Report section to perform flight operations.
+          </p>
         </div>
       </div>
     );
@@ -83,6 +73,27 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   const handleLoadSample = () => {
     setFlstInput(sampleFLSTInput);
     showToast('Sample FLST Loaded', 'Click GENERATE to update LIVE monitor', 'info');
+  };
+
+  const handleSendNotice = async () => {
+    if (!noticeMessage.trim()) {
+      showToast('Notice Message Empty', 'Please write a message to broadcast', 'error');
+      return;
+    }
+
+    if (!onBroadcastNotice) return;
+
+    try {
+      setIsBroadcasting(true);
+      await onBroadcastNotice(noticeMessage.trim());
+      setNoticeMessage('');
+      showToast('Special Notice Broadcasted!', 'All active officers will receive pop-up notice', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Broadcast Failed', 'Check network connection', 'error');
+    } finally {
+      setIsBroadcasting(false);
+    }
   };
 
   return (
@@ -140,7 +151,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
         </p>
 
         <textarea
-          rows={10}
+          rows={8}
           value={flstInput}
           onChange={(e) => setFlstInput(e.target.value)}
           placeholder="Paste FLST data here..."
@@ -154,10 +165,50 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
 
           <button
             onClick={handleGenerate}
-            className="py-3 px-6 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 hover:from-amber-400 hover:to-yellow-400 active:scale-95 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2"
+            className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 hover:from-amber-400 hover:to-yellow-400 active:scale-95 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2"
           >
             <Database className="w-4 h-4" />
             <span>GENERATE SCHEDULE</span>
+          </button>
+        </div>
+      </div>
+
+      {/* SPECIAL NOTICE FOR ALL OFFICERS FIELD */}
+      <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-4 shadow-xl space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+          <label className="text-xs font-extrabold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+            <Bell className="w-4 h-4 text-amber-400 animate-bounce" />
+            SPECIAL NOTICE INPUT FOR ALL OFFICERS
+          </label>
+          <span className="text-[10px] text-amber-400/90 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+            POP-UP BROADCAST
+          </span>
+        </div>
+
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          Post special operational instructions or announcement below. This notice will appear as a <strong className="text-amber-300">live pop-up modal</strong> for all officers when they return or open the app.
+        </p>
+
+        <textarea
+          rows={3}
+          value={noticeMessage}
+          onChange={(e) => setNoticeMessage(e.target.value)}
+          placeholder="e.g. Attention Officers: Gate 4 closed for maintenance. All DAC turnaround flights operate from Gate 6 today..."
+          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 outline-none focus:border-amber-400 leading-relaxed font-sans"
+        />
+
+        <div className="flex justify-end pt-1">
+          <button
+            onClick={handleSendNotice}
+            disabled={isBroadcasting || !noticeMessage.trim()}
+            className={`py-2.5 px-6 rounded-xl font-extrabold text-xs uppercase tracking-wider transition-all flex items-center gap-2 ${
+              isBroadcasting || !noticeMessage.trim()
+                ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 active:scale-95'
+            }`}
+          >
+            <Send className="w-4 h-4" />
+            <span>{isBroadcasting ? 'BROADCASTING...' : 'BROADCAST NOTICE'}</span>
           </button>
         </div>
       </div>
@@ -200,3 +251,4 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
     </div>
   );
 };
+

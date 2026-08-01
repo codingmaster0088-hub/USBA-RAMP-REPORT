@@ -9,7 +9,7 @@ import {
   query,
   orderBy
 } from 'firebase/firestore';
-import { SavedReport, ScheduleFlight } from '../types';
+import { SavedReport, ScheduleFlight, AdminNotice } from '../types';
 import config from '../../firebase-applet-config.json';
 
 const app = !getApps().length ? initializeApp(config) : getApp();
@@ -115,6 +115,45 @@ export async function syncScheduleToFirestore(
     });
   } catch (err) {
     console.error('Failed to sync schedule to Firestore:', err);
+    throw err;
+  }
+}
+
+// Real-time listener for Admin Notices
+export function subscribeToNotices(
+  onUpdate: (notices: AdminNotice[]) => void,
+  onError?: (err: any) => void
+) {
+  try {
+    const q = query(collection(db, 'notices'), orderBy('timestamp', 'desc'));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const notices: AdminNotice[] = [];
+        snapshot.forEach((docSnap) => {
+          notices.push(docSnap.data() as AdminNotice);
+        });
+        onUpdate(notices);
+      },
+      (error) => {
+        console.error('Error listening to notices:', error);
+        if (onError) onError(error);
+      }
+    );
+  } catch (err) {
+    console.error('Failed to subscribe to notices:', err);
+    if (onError) onError(err);
+    return () => {};
+  }
+}
+
+// Broadcast Admin Notice to Firestore
+export async function broadcastNoticeToFirestore(notice: AdminNotice) {
+  try {
+    const docRef = doc(db, 'notices', notice.id);
+    await setDoc(docRef, notice);
+  } catch (err) {
+    console.error('Failed to broadcast notice:', err);
     throw err;
   }
 }

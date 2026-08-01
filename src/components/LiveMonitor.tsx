@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ScheduleFlight, UserProfile, ReportType } from '../types';
+import { ScheduleFlight, UserProfile, ReportType, AdminNotice } from '../types';
 import {
   Plane,
   Calendar,
@@ -9,14 +9,16 @@ import {
   Activity,
   Filter,
   CheckCircle,
-  Clock3
+  Clock3,
+  Bell,
+  Sparkles
 } from 'lucide-react';
 
 interface LiveMonitorProps {
   user: UserProfile;
   scheduleFlights: ScheduleFlight[];
   scheduleDate: string;
-  onStartReportWithFlight?: (flt: ScheduleFlight) => void;
+  notices?: AdminNotice[];
   onStartReport: (type: ReportType) => void;
 }
 
@@ -55,11 +57,87 @@ function parseTimeToMinutes(timeStr: string): number | null {
   return null;
 }
 
+// Get duration addition offset in minutes for DAC arrivals
+function getArrivalOffsetMinutes(flt: ScheduleFlight, station: string): number {
+  if (station !== 'DAC' || flt.isDeparture) return 0;
+
+  const rawUpper = (flt.formattedDisplay + ' ' + (flt.sector || '') + ' ' + (flt.rawLine || '')).toUpperCase();
+
+  // Check if VIA CGP
+  if (rawUpper.includes('VIA CGP') || rawUpper.includes('-VIA-CGP') || (rawUpper.includes('CGP') && rawUpper.includes('VIA'))) {
+    return 50;
+  }
+
+  const sector = (flt.sector || '').toUpperCase().trim();
+
+  if (rawUpper.includes('CCU') || sector === 'CCU') return 60; // 1 hour
+  if (rawUpper.includes('MAA') || sector === 'MAA') return 170; // 2 hour 50 mins
+  if (rawUpper.includes('CAN') || sector === 'CAN') return 310; // 5 hour 10 mins
+  if (rawUpper.includes('MCT') || sector === 'MCT') return 280; // 4 hour 40 mins
+  if (rawUpper.includes('MLE') || sector === 'MLE') return 245; // 4 hour 05 mins
+  if (rawUpper.includes('KUL') || sector === 'KUL') return 240; // 4 hour
+  if (rawUpper.includes('BKK') || sector === 'BKK') return 160; // 2 hour 40 mins
+  if (rawUpper.includes('SHJ') || sector === 'SHJ') return 300; // 5 hour
+  if (rawUpper.includes('DXB') || sector === 'DXB') return 310; // 5 hour 10 mins
+  if (rawUpper.includes('RUH') || sector === 'RUH') return 390; // 6 hour 30 mins
+  if (rawUpper.includes('JED') || sector === 'JED') return 390; // 6 hour 30 mins
+  if (rawUpper.includes('AUH') || sector === 'AUH') return 290; // 4 hour 50 mins
+  if (rawUpper.includes('DOH') || sector === 'DOH') return 320; // 5 hour 20 mins
+  if (rawUpper.includes('SIN') || sector === 'SIN') return 280; // 4 hour 40 mins
+
+  // Default domestic arrival into DAC
+  return 35;
+}
+
+// Calculate adjusted arrival time string & next day flag
+function calculateFlightTimeDisplay(flt: ScheduleFlight, station: string): { timeStr: string; totalMinutes: number | null; isNextDay: boolean } {
+  const baseMinutes = parseTimeToMinutes(flt.timeStr);
+  if (baseMinutes === null) {
+    return { timeStr: flt.timeStr, totalMinutes: null, isNextDay: false };
+  }
+
+  const offset = getArrivalOffsetMinutes(flt, station);
+  const totalMinutes = baseMinutes + offset;
+
+  if (totalMinutes >= 1440) {
+    // Next day flight (> 11:59 PM)
+    return { timeStr: flt.timeStr, totalMinutes, isNextDay: true };
+  }
+
+  const hrs24 = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  const minsStr = mins < 10 ? `0${mins}` : `${mins}`;
+
+  if (flt.timeStr.toUpperCase().includes('AM') || flt.timeStr.toUpperCase().includes('PM')) {
+    const period = hrs24 >= 12 ? 'PM' : 'AM';
+    let hrs12 = hrs24 % 12;
+    if (hrs12 === 0) hrs12 = 12;
+    const hrsStr = hrs12 < 10 ? `0${hrs12}` : `${hrs12}`;
+    return { timeStr: `${hrsStr}:${minsStr} ${period}`, totalMinutes, isNextDay: false };
+  }
+
+  const hrsStr = hrs24 < 10 ? `0${hrs24}` : `${hrs24}`;
+  return { timeStr: `${hrsStr}:${minsStr}`, totalMinutes, isNextDay: false };
+}
+
+function formatHeaderDate(scheduleDate: string): string {
+  if (!scheduleDate) return '01 AUG 2026';
+  const cleaned = scheduleDate.replace(/00$/, '').trim();
+  const match = cleaned.match(/^(\d{1,2})\s*([A-Z]{3})/i);
+  if (match) {
+    const day = match[1].padStart(2, '0');
+    const month = match[2].toUpperCase();
+    const year = new Date().getFullYear();
+    return `${day} ${month} ${year}`;
+  }
+  return scheduleDate.toUpperCase();
+}
+
 export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   user,
   scheduleFlights,
   scheduleDate,
-  onStartReportWithFlight
+  notices = []
 }) => {
   const [activeSection, setActiveSection] = useState<'DEPARTURE' | 'ARRIVAL'>('DEPARTURE');
   const [showRemainingOnly, setShowRemainingOnly] = useState<boolean>(true);
@@ -68,16 +146,24 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  // Filter remaining vs past flights
+  // Filter remaining vs past flights with station-wise time adjustments
   const { departures, arrivals, remainingDepCount, remainingArrCount } = useMemo(() => {
-    const deps = scheduleFlights.filter((f) => f.isDeparture);
-    const arrs = scheduleFlights.filter((f) => !f.isDeparture);
+    const processedFlights = scheduleFlights.map((flt) => {
+      const calc = calculateFlightTimeDisplay(flt, user.station);
+      return {
+        ...flt,
+        calculatedTimeStr: calc.timeStr,
+        calculatedMinutes: calc.totalMinutes,
+        isNextDay: calc.isNextDay
+      };
+    }).filter((f) => !f.isNextDay); // Exclude next-day (> 11:59 PM) flights
 
-    const isFlightRemaining = (flt: ScheduleFlight) => {
-      const fltMins = parseTimeToMinutes(flt.timeStr);
-      if (fltMins === null) return true; // Keep if time format unknown
-      // Flight is remaining if scheduled time + 15 mins buffer is >= current time
-      return fltMins + 15 >= currentMinutes;
+    const deps = processedFlights.filter((f) => f.isDeparture);
+    const arrs = processedFlights.filter((f) => !f.isDeparture);
+
+    const isFlightRemaining = (flt: typeof processedFlights[0]) => {
+      if (flt.calculatedMinutes === null) return true;
+      return flt.calculatedMinutes + 15 >= currentMinutes;
     };
 
     const remDeps = deps.filter(isFlightRemaining);
@@ -91,18 +177,49 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
       totalDepCount: deps.length,
       totalArrCount: arrs.length
     };
-  }, [scheduleFlights, currentMinutes, showRemainingOnly]);
+  }, [scheduleFlights, currentMinutes, showRemainingOnly, user.station]);
 
-  const displayDate =
-    scheduleDate ||
-    now
-      .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-      .toUpperCase();
+  const displayDate = formatHeaderDate(scheduleDate);
 
   const activeList = activeSection === 'DEPARTURE' ? departures : arrivals;
 
   return (
     <div className="space-y-3 pb-20 fade-in text-slate-100">
+      {/* HIGHLIGHTED ADMIN NOTICE BOARD FOLDER */}
+      {notices && notices.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border border-amber-500/60 rounded-2xl p-3.5 shadow-2xl space-y-2">
+          <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
+            <div className="flex items-center gap-2">
+              <Bell className="w-4 h-4 text-amber-400 animate-bounce" />
+              <h3 className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                ADMIN SPECIAL NOTICES ({notices.length})
+              </h3>
+            </div>
+            <span className="text-[10px] text-amber-400/90 font-mono font-bold bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/30">
+              OFFICER HUD
+            </span>
+          </div>
+
+          <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+            {notices.map((notice, idx) => (
+              <div
+                key={notice.id || idx}
+                className="bg-slate-950/90 p-2.5 rounded-xl border border-amber-500/40 text-xs space-y-1.5 shadow-md"
+              >
+                <p className="text-amber-200 font-semibold leading-relaxed">
+                  {notice.message}
+                </p>
+                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-800">
+                  <span>Author: <strong className="text-amber-400">{notice.author}</strong></span>
+                  <span>{new Date(notice.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Top LIVE Header & Date Badge */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 border border-amber-500/30 p-3.5 shadow-xl">
         <div className="flex items-center justify-between">
@@ -225,8 +342,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
           ) : (
             <div className="divide-y divide-slate-800/60 bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
               {activeList.map((flt, index) => {
-                const fltMins = parseTimeToMinutes(flt.timeStr);
-                const isPast = fltMins !== null && fltMins + 15 < currentMinutes;
+                const isPast = flt.calculatedMinutes !== null && flt.calculatedMinutes + 15 < currentMinutes;
 
                 return (
                   <div
@@ -257,18 +373,9 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      {onStartReportWithFlight && (
-                        <button
-                          onClick={() => onStartReportWithFlight(flt)}
-                          className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold rounded-lg border border-amber-500/30 transition-all"
-                        >
-                          + REPORT
-                        </button>
-                      )}
-
+                    <div className="text-right shrink-0">
                       <div className="font-mono text-xs font-bold text-white bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
-                        {flt.timeStr}
+                        {flt.calculatedTimeStr}
                       </div>
                     </div>
                   </div>
@@ -281,4 +388,5 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
     </div>
   );
 };
+
 
