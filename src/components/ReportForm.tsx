@@ -7,7 +7,10 @@ import {
   FileText,
   Globe,
   Lock,
-  Unlock
+  Unlock,
+  AlertTriangle,
+  AlertCircle,
+  X
 } from 'lucide-react';
 import {
   RampReportFormData,
@@ -73,6 +76,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       co: '',
       ab: '',
       status: '',
+      delayReason: '',
       securitySt: '',
       securityEnd: '',
       cleaningSt: '',
@@ -84,11 +88,15 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       lbag: '',
       permit: '',
       pax: '',
+      trimSubmitted: '',
       trimSigned: '',
       ground: '',
       station: user.station
     };
   });
+
+  const [skippedModalOpen, setSkippedModalOpen] = useState<boolean>(false);
+  const [skippedFieldsList, setSkippedFieldsList] = useState<string[]>([]);
 
   useEffect(() => {
     if (reportToEdit) {
@@ -102,6 +110,80 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   // If gate number has a letter after digits (e.g., C1A, C2A), DOC IN & DOC OUT are NOT editable
   const hasLetterAfterNumber = /\d+[A-Za-z]/.test((formData.bay || '').trim());
   const isDocEditable = reportType === 'INTERNATIONAL' && !hasLetterAfterNumber;
+
+  // Validate all required fields
+  const getSkippedFields = (): string[] => {
+    const skipped: string[] = [];
+
+    // General Info
+    if (!formData.date.trim()) skipped.push('DATE');
+    if (!formData.bay.trim()) skipped.push(reportType === 'INTERNATIONAL' ? 'GATE NO' : 'BAY NO');
+    if (!formData.ac.trim()) skipped.push('AIRCRAFT REGISTRATION (A/C REG)');
+
+    if (reportType === 'INTERNATIONAL' && isDocEditable) {
+      if (!formData.docin?.trim()) skipped.push('DOC IN (LT)');
+      if (!formData.docout?.trim()) skipped.push('DOC OUT (LT)');
+    }
+
+    // Arrival Info if ROUND
+    if (flightMode === 'ROUND') {
+      if (!formData.arvFlt.trim()) skipped.push('ARR FLIGHT (ARV FLT)');
+      if (!formData.arvRoute.trim()) skipped.push('ARR ROUTE');
+      if (!formData.con.trim()) skipped.push('C/ON (LT)');
+      if (!formData.do.trim()) skipped.push('D/O (LT)');
+      if (!formData.disem.trim()) skipped.push('ALL DISEM');
+    }
+
+    // Departure Info
+    if (!formData.deptFlt.trim()) skipped.push('DEPT FLIGHT (BS-)');
+    if (!formData.deptRoute.trim()) skipped.push('DEPT ROUTE');
+    if (!formData.std.trim()) skipped.push('STD (LT)');
+    if (!formData.dc.trim()) skipped.push('D/C (LT)');
+    if (!formData.co.trim()) skipped.push('C/OFF (LT)');
+    if (!formData.ab.trim()) skipped.push('A/B (LT)');
+
+    // Turnaround Milestones (13 fields)
+    if (!formData.securitySt?.trim()) skipped.push('1. SECURITY CHECK ST');
+    if (!formData.securityEnd?.trim()) skipped.push('2. SECURITY CHECK END');
+    if (!formData.cleaningSt?.trim()) skipped.push('3. CLEANING START');
+    if (!formData.cleaningEnd?.trim()) skipped.push('4. CLEANING END');
+    if (!formData.cateringSt?.trim()) skipped.push('5. CATERING START');
+    if (!formData.cateringEnd?.trim()) skipped.push('6. CATERING END');
+    if (!formData.crew.trim()) skipped.push('7. CREW REPORT');
+    if (!formData.refuel.trim()) skipped.push('8. REFUELING DONE');
+    if (!formData.lbag.trim()) skipped.push('9. LAST BAGGAGE REPORT');
+    if (!formData.permit.trim()) skipped.push('10. BOARDING PERMITTED');
+    if (!formData.pax.trim()) skipped.push('11. LAST PAX ONBOARD');
+    if (!formData.trimSubmitted?.trim()) skipped.push('12. TRIM SUBMITTED');
+    if (!formData.trimSigned?.trim()) skipped.push('13. TRIM SIGNED');
+
+    // Delay Reason if Flight Status is DELAY
+    if (formData.status?.includes('DELAY')) {
+      if (!formData.delayReason?.trim()) skipped.push('REASON FOR FLIGHT DELAY');
+    }
+
+    return skipped;
+  };
+
+  const handleSaveAttempt = () => {
+    const skipped = getSkippedFields();
+    if (skipped.length > 0) {
+      setSkippedFieldsList(skipped);
+      setSkippedModalOpen(true);
+      return;
+    }
+    onSaveReport(formData, reportType, flightMode, reportToEdit?.id);
+  };
+
+  const handleDownloadAttempt = () => {
+    const skipped = getSkippedFields();
+    if (skipped.length > 0) {
+      setSkippedFieldsList(skipped);
+      setSkippedModalOpen(true);
+      return;
+    }
+    onDownloadJPG(formData, reportType, flightMode);
+  };
 
   // Handle Field Changes
   const handleChange = (field: keyof RampReportFormData, value: string) => {
@@ -636,23 +718,42 @@ export const ReportForm: React.FC<ReportFormProps> = ({
           </div>
         </div>
 
-        {/* Status Preview Bar */}
+        {/* Status Preview & Delay Reason Box */}
         {formData.status && (
-          <div
-            className={`p-2.5 rounded-xl border text-center font-mono font-extrabold text-xs transition-all ${
-              formData.status.includes('DELAY')
-                ? 'bg-red-950/80 border-red-500/50 text-red-300'
-                : 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
-            }`}
-          >
-            {formData.status}
+          <div className="space-y-2">
+            <div
+              className={`p-2.5 rounded-xl border text-center font-mono font-extrabold text-xs transition-all ${
+                formData.status.includes('DELAY')
+                  ? 'bg-red-950/80 border-red-500/50 text-red-300'
+                  : 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+              }`}
+            >
+              {formData.status}
+            </div>
+
+            {/* ADDITIONAL DELAY REASON INPUT BOX FOR DELAYED FLIGHTS */}
+            {formData.status.includes('DELAY') && (
+              <div className="bg-red-950/50 border border-red-500/60 rounded-xl p-3 space-y-1.5 animate-in fade-in">
+                <label className="text-xs font-black text-red-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-red-400" />
+                  REASON FOR FLIGHT DELAY *
+                </label>
+                <textarea
+                  rows={2}
+                  value={formData.delayReason || ''}
+                  onChange={(e) => handleChange('delayReason', e.target.value)}
+                  placeholder="Write reason for flight delay e.g. Late Arrival of Inbound Aircraft / ATC Clearance / Technical Inspection..."
+                  className="w-full bg-slate-950 border border-red-500/50 rounded-xl p-2.5 text-xs text-amber-200 font-sans outline-none focus:border-red-400 leading-relaxed placeholder:text-slate-500"
+                />
+              </div>
+            )}
           </div>
         )}
 
-        {/* EXACT 12 TURNAROUND FIELDS REQUESTED BY USER */}
+        {/* EXACT 13 TURNAROUND FIELDS REQUESTED BY USER */}
         <div className="space-y-2.5 pt-2 border-t border-slate-800">
           <label className="text-[10px] font-extrabold text-amber-300 uppercase tracking-wider block">
-            TURNAROUND MILESTONES (12 FIELDS)
+            TURNAROUND MILESTONES (13 FIELDS)
           </label>
 
           <div className="grid grid-cols-2 gap-2">
@@ -945,10 +1046,42 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 12. TRIM SIGNED */}
+            {/* 12. TRIM SUBMITTED */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                12. TRIM SIGNED
+                12. TRIM SUBMITTED
+              </label>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setOBPreset('trimSubmitted')}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-[10px] rounded-lg border border-slate-700"
+                >
+                  OB
+                </button>
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={formData.trimSubmitted || ''}
+                    onChange={(e) => handleChange('trimSubmitted', e.target.value)}
+                    placeholder="1348"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNowTime('trimSubmitted')}
+                    className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                  >
+                    🕒
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 13. TRIM SIGNED */}
+            <div className="col-span-2 sm:col-span-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
+                13. TRIM SIGNED
               </label>
               <div className="flex gap-1">
                 <button
@@ -1003,8 +1136,8 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       <div className="grid grid-cols-2 gap-2 pt-1">
         <button
           type="button"
-          onClick={() => onSaveReport(formData, reportType, flightMode, reportToEdit?.id)}
-          className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-600 hover:to-indigo-700 active:scale-98 text-white font-black text-xs shadow-lg shadow-blue-950/80 transition-all border border-blue-400/30"
+          onClick={handleSaveAttempt}
+          className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-600 hover:to-indigo-700 active:scale-98 text-white font-black text-xs shadow-lg shadow-blue-950/80 transition-all border border-blue-400/30 cursor-pointer"
         >
           <Save className="w-4 h-4 text-amber-300" />
           <span>SAVE REPORT</span>
@@ -1012,13 +1145,73 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
         <button
           type="button"
-          onClick={() => onDownloadJPG(formData, reportType, flightMode)}
-          className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 active:scale-98 text-slate-950 font-black text-xs shadow-lg shadow-amber-950/50 transition-all border border-amber-300/50"
+          onClick={handleDownloadAttempt}
+          className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 active:scale-98 text-slate-950 font-black text-xs shadow-lg shadow-amber-950/50 transition-all border border-amber-300/50 cursor-pointer"
         >
           <Download className="w-4 h-4" />
           <span>DOWNLOAD JPG</span>
         </button>
       </div>
+
+      {/* SKIPPED FIELDS POPUP MODAL */}
+      {skippedModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md fade-in">
+          <div className="bg-slate-900 border-2 border-red-500 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-red-950 via-slate-900 to-red-950 p-4 border-b border-red-500/40 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-red-500/20 border border-red-400/40 flex items-center justify-center text-red-400">
+                  <AlertCircle className="w-5 h-5 animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-red-300 uppercase tracking-wider">
+                    SKIPPED REQUIRED FIELDS!
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    Please fill up all skipped fields before saving/downloading
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSkippedModalOpen(false)}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center border border-slate-700 transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body: List of Skipped Fields */}
+            <div className="p-4 space-y-3 overflow-y-auto flex-1 bg-slate-950/80">
+              <p className="text-xs text-amber-200 font-medium">
+                The following required fields were left empty:
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                {skippedFieldsList.map((field, idx) => (
+                  <span
+                    key={idx}
+                    className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-lg bg-red-500/20 text-red-300 border border-red-500/40 flex items-center gap-1.5"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                    {field}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 bg-slate-900 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setSkippedModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>GO BACK & FILL FIELDS</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -11,7 +11,9 @@ import {
   CheckCircle,
   Clock3,
   Bell,
-  Sparkles
+  Sparkles,
+  X,
+  MessageSquare
 } from 'lucide-react';
 
 interface LiveMonitorProps {
@@ -141,6 +143,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
 }) => {
   const [activeSection, setActiveSection] = useState<'DEPARTURE' | 'ARRIVAL'>('DEPARTURE');
   const [showRemainingOnly, setShowRemainingOnly] = useState<boolean>(true);
+  const [showNoticesModal, setShowNoticesModal] = useState<boolean>(false);
 
   // Current time in minutes from midnight
   const now = new Date();
@@ -185,54 +188,29 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
 
   return (
     <div className="space-y-3 pb-20 fade-in text-slate-100">
-      {/* HIGHLIGHTED ADMIN NOTICE BOARD FOLDER */}
-      {notices && notices.length > 0 && (
-        <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border border-amber-500/60 rounded-2xl p-3.5 shadow-2xl space-y-2">
-          <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
-            <div className="flex items-center gap-2">
-              <Bell className="w-4 h-4 text-amber-400 animate-bounce" />
-              <h3 className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                ADMIN SPECIAL NOTICES ({notices.length})
-              </h3>
-            </div>
-            <span className="text-[10px] text-amber-400/90 font-mono font-bold bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/30">
-              OFFICER HUD
-            </span>
-          </div>
-
-          <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-            {notices.map((notice, idx) => (
-              <div
-                key={notice.id || idx}
-                className="bg-slate-950/90 p-2.5 rounded-xl border border-amber-500/40 text-xs space-y-1.5 shadow-md"
-              >
-                <p className="text-amber-200 font-semibold leading-relaxed">
-                  {notice.message}
-                </p>
-                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-800">
-                  <span>Author: <strong className="text-amber-400">{notice.author}</strong></span>
-                  <span>{new Date(notice.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Top LIVE Header & Date Badge */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 border border-amber-500/30 p-3.5 shadow-xl">
         <div className="flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/40">
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
                 LIVE SYNC
               </span>
+
               <span className="text-xs text-amber-400 font-mono font-bold flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5" />
                 {displayDate}
               </span>
+
+              {/* COMPACT NOTICE ACTION BUTTON */}
+              <button
+                onClick={() => setShowNoticesModal(true)}
+                className="inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-slate-950 border border-amber-300 shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+              >
+                <Bell className="w-3.5 h-3.5 text-slate-950 animate-bounce" />
+                <span>NOTICE ({notices.length})</span>
+              </button>
             </div>
 
             <h1 className="text-base font-black text-white tracking-wider uppercase">
@@ -243,7 +221,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
             </p>
           </div>
 
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-400/40 flex items-center justify-center text-amber-400">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0">
             <Activity className="w-5 h-5 animate-pulse" />
           </div>
         </div>
@@ -383,6 +361,77 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* POP-UP TYPE NOTICES PAGE / MODAL */}
+      {showNoticesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md fade-in">
+          <div className="bg-slate-900 border-2 border-amber-500/60 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 p-4 border-b border-amber-500/40 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400">
+                  <Bell className="w-5 h-5 animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    ADMIN SPECIAL NOTICES ({notices.length})
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    Official Operational Directives & Announcements
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowNoticesModal(false)}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center border border-slate-700 transition-all active:scale-95"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Content - Notices List */}
+            <div className="p-4 space-y-3 overflow-y-auto flex-1 bg-slate-950/60">
+              {notices.length === 0 ? (
+                <div className="text-center py-10 space-y-2">
+                  <MessageSquare className="w-10 h-10 text-slate-600 mx-auto opacity-50" />
+                  <p className="text-xs text-slate-400 font-bold uppercase">No Active Special Notices</p>
+                  <p className="text-[11px] text-slate-500">
+                    There are currently no special operational notices broadcasted by Admin.
+                  </p>
+                </div>
+              ) : (
+                notices.map((notice, idx) => (
+                  <div
+                    key={notice.id || idx}
+                    className="bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/40 text-xs space-y-2 shadow-lg"
+                  >
+                    <p className="text-amber-100 font-semibold leading-relaxed whitespace-pre-wrap">
+                      {notice.message}
+                    </p>
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono pt-2 border-t border-slate-800">
+                      <span>Author: <strong className="text-amber-400">{notice.author}</strong></span>
+                      <span>{new Date(notice.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Modal Footer with Close Button */}
+            <div className="p-3.5 bg-slate-900 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setShowNoticesModal(false)}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5"
+              >
+                <X className="w-4 h-4" />
+                <span>CLOSE</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

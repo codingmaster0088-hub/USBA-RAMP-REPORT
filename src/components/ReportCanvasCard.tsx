@@ -352,50 +352,57 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
         <table style={{ width: '100%', borderCollapse: 'collapse', borderBottom: '3px solid #000000' }}>
           <tbody>
             <style>{`
-              .rpt-cell-lbl { padding: 12px 16px; font-size: 24px; font-weight: 800; color: #000000; border-bottom: 2px solid #ddd; text-transform: uppercase; }
-              .rpt-cell-val { padding: 12px 16px; font-size: 26px; font-weight: 900; color: #000000; border-bottom: 2px solid #ddd; text-align: center; font-family: monospace; }
+              .rpt-cell-lbl { padding: 12px 16px; font-size: 22px; font-weight: 800; color: #000000; border-bottom: 2px solid #ddd; text-transform: uppercase; }
+              .rpt-cell-val { padding: 12px 16px; font-size: 28px; font-weight: 900; color: #000000; border-bottom: 2px solid #ddd; text-align: center; font-family: monospace; }
             `}</style>
             
             <tr>
-              <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>SECURITY CHECK ST</td>
+              <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>1. SECURITY CHECK ST</td>
               <td className="rpt-cell-val" style={{ width: '18%', borderRight: '3px solid #000' }}>{formData.securitySt || ''}</td>
-              <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>SECURITY CHECK END</td>
+              <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>2. SECURITY CHECK END</td>
               <td className="rpt-cell-val" style={{ width: '18%' }}>{formData.securityEnd || ''}</td>
             </tr>
 
             <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>CLEANING START</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>3. CLEANING START</td>
               <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.cleaningSt || ''}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>CLEANING END</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>4. CLEANING END</td>
               <td className="rpt-cell-val">{formData.cleaningEnd || ''}</td>
             </tr>
 
             <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>CATERING START</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>5. CATERING START</td>
               <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.cateringSt || ''}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>CATERING END</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>6. CATERING END</td>
               <td className="rpt-cell-val">{formData.cateringEnd || ''}</td>
             </tr>
 
             <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>CREW REPORT</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>7. CREW REPORT</td>
               <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.crew || ''}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>REFUELING DONE</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>8. REFUELING DONE</td>
               <td className="rpt-cell-val">{formData.refuel || ''}</td>
             </tr>
 
             <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>BOARDING PERMITTED</td>
-              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.permit || ''}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>LAST PAX ONBOARD</td>
-              <td className="rpt-cell-val">{formData.pax || ''}</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>9. LAST BAGGAGE REPORT</td>
+              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.lbag || ''}</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>10. BOARDING PERMITTED</td>
+              <td className="rpt-cell-val">{formData.permit || ''}</td>
             </tr>
 
             <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>LAST BAGGAGE</td>
-              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.lbag || ''}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>TRIM SIGNED</td>
-              <td className="rpt-cell-val">{formData.trimSigned || ''}</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>11. LAST PAX ONBOARD</td>
+              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.pax || ''}</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>12. TRIM SUBMITTED</td>
+              <td className="rpt-cell-val">{formData.trimSubmitted || ''}</td>
+            </tr>
+
+            <tr>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>13. TRIM SIGNED</td>
+              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.trimSigned || ''}</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>FLIGHT STATUS</td>
+              <td className="rpt-cell-val">{formData.status || 'ON TIME'}</td>
             </tr>
           </tbody>
         </table>
@@ -425,12 +432,49 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
             borderTop: '4px solid #003366',
             padding: '25px',
             display: 'flex',
-            justifyContent: 'flex-end',
+            justifyContent: 'space-between',
             alignItems: 'center',
             background: '#ffffff'
           }}
         >
-          <div style={{ textAlign: 'center', minWidth: '400px' }}>
+          {/* Highlighted Reason for Flight Delay Box if flight is delayed */}
+          <div style={{ flex: '1', paddingRight: '25px' }}>
+            {(isDelay || formData.delayReason) && (
+              <div
+                style={{
+                  background: '#fff3cd',
+                  border: '4px solid #dc3545',
+                  borderRadius: '12px',
+                  padding: '16px 20px'
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '22px',
+                    fontWeight: 900,
+                    color: '#721c24',
+                    textTransform: 'uppercase',
+                    marginBottom: '6px'
+                  }}
+                >
+                  ⚠️ REASON FOR FLIGHT DELAY:
+                </div>
+                <div
+                  style={{
+                    fontSize: '26px',
+                    fontWeight: 900,
+                    color: '#000000',
+                    lineHeight: '1.4',
+                    whiteSpace: 'pre-wrap'
+                  }}
+                >
+                  {formData.delayReason || 'DELAY REASON NOT SPECIFIED'}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ textAlign: 'center', minWidth: '380px' }}>
             <div
               style={{
                 background: '#ffffff',

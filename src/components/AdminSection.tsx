@@ -212,42 +212,6 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
           </button>
         </div>
       </div>
-
-      {/* Current Active Schedule Preview */}
-      {scheduleFlights.length > 0 && (
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              ACTIVE GENERATED SCHEDULE PREVIEW
-            </h3>
-            <span className="text-[10px] text-amber-400 font-mono">{scheduleDate}</span>
-          </div>
-
-          <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 font-mono text-[11px]">
-            {scheduleFlights.map((flt) => (
-              <div
-                key={flt.id}
-                className="bg-slate-950 p-2 rounded-lg border border-slate-800/80 flex items-center justify-between text-slate-300"
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                      flt.isDeparture
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                    }`}
-                  >
-                    {flt.isDeparture ? 'DEPARTURE' : 'ARRIVAL'}
-                  </span>
-                  <span className="font-extrabold text-amber-300">{flt.formattedDisplay}</span>
-                </div>
-                <span className="text-slate-500 text-[10px]">{flt.sector}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

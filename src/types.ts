@@ -48,8 +48,9 @@ export interface RampReportFormData {
   co: string; // Chocks Off LT
   ab: string; // Airborne LT
   status: string; // ONTIME / DELAY / EARLY calculation text
+  delayReason?: string; // Reason for flight delay if applicable
 
-  // Turnaround Timings (Exact 12 fields requested)
+  // Turnaround Timings (13 fields requested)
   securitySt?: string; // SECURITY CHECK ST
   securityEnd?: string; // SECURITY CHECK END
   cleaningSt?: string; // CLEANING START
@@ -61,6 +62,7 @@ export interface RampReportFormData {
   lbag: string; // LAST BAGGAGE REPORT
   permit: string; // BOARDING PERMITTED
   pax: string; // LAST PAX ONBOARD
+  trimSubmitted?: string; // TRIM SUBMITTED
   trimSigned?: string; // TRIM SIGNED
 
   // Ground Time (Auto calculated if ROUND, "ON GROUND" if DIRECT)
