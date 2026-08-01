@@ -1,16 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ScheduleFlight, UserProfile, ReportType } from '../types';
 import {
   Plane,
   Calendar,
   Clock,
-  Users,
-  Compass,
   ArrowUpRight,
   ArrowDownRight,
-  PlusCircle,
   Activity,
-  Layers
+  Filter,
+  CheckCircle,
+  Clock3
 } from 'lucide-react';
 
 interface LiveMonitorProps {
@@ -21,19 +20,82 @@ interface LiveMonitorProps {
   onStartReport: (type: ReportType) => void;
 }
 
+// Parse time string (e.g. "07:00 AM", "14:30", "0915") to total minutes from midnight
+function parseTimeToMinutes(timeStr: string): number | null {
+  if (!timeStr) return null;
+  const str = timeStr.trim().toUpperCase();
+
+  // Match "07:00 AM" or "02:20 PM"
+  const ampmMatch = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
+  if (ampmMatch) {
+    let hrs = parseInt(ampmMatch[1], 10);
+    const mins = parseInt(ampmMatch[2], 10);
+    const ampm = ampmMatch[3];
+    if (ampm === 'PM' && hrs < 12) hrs += 12;
+    if (ampm === 'AM' && hrs === 12) hrs = 0;
+    return hrs * 60 + mins;
+  }
+
+  // Match "14:30" or "07:00"
+  const colonMatch = str.match(/^(\d{1,2}):(\d{2})$/);
+  if (colonMatch) {
+    const hrs = parseInt(colonMatch[1], 10);
+    const mins = parseInt(colonMatch[2], 10);
+    return hrs * 60 + mins;
+  }
+
+  // Match "1430" or "0700"
+  const digitsMatch = str.match(/^(\d{2})(\d{2})$/);
+  if (digitsMatch) {
+    const hrs = parseInt(digitsMatch[1], 10);
+    const mins = parseInt(digitsMatch[2], 10);
+    return hrs * 60 + mins;
+  }
+
+  return null;
+}
+
 export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   user,
   scheduleFlights,
-  scheduleDate
+  scheduleDate,
+  onStartReportWithFlight
 }) => {
   const [activeSection, setActiveSection] = useState<'DEPARTURE' | 'ARRIVAL'>('DEPARTURE');
+  const [showRemainingOnly, setShowRemainingOnly] = useState<boolean>(true);
 
-  const departures = scheduleFlights.filter((f) => f.isDeparture);
-  const arrivals = scheduleFlights.filter((f) => !f.isDeparture);
+  // Current time in minutes from midnight
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  // Filter remaining vs past flights
+  const { departures, arrivals, remainingDepCount, remainingArrCount } = useMemo(() => {
+    const deps = scheduleFlights.filter((f) => f.isDeparture);
+    const arrs = scheduleFlights.filter((f) => !f.isDeparture);
+
+    const isFlightRemaining = (flt: ScheduleFlight) => {
+      const fltMins = parseTimeToMinutes(flt.timeStr);
+      if (fltMins === null) return true; // Keep if time format unknown
+      // Flight is remaining if scheduled time + 15 mins buffer is >= current time
+      return fltMins + 15 >= currentMinutes;
+    };
+
+    const remDeps = deps.filter(isFlightRemaining);
+    const remArrs = arrs.filter(isFlightRemaining);
+
+    return {
+      departures: showRemainingOnly ? remDeps : deps,
+      arrivals: showRemainingOnly ? remArrs : arrs,
+      remainingDepCount: remDeps.length,
+      remainingArrCount: remArrs.length,
+      totalDepCount: deps.length,
+      totalArrCount: arrs.length
+    };
+  }, [scheduleFlights, currentMinutes, showRemainingOnly]);
 
   const displayDate =
     scheduleDate ||
-    new Date()
+    now
       .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
       .toUpperCase();
 
@@ -69,8 +131,42 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
           </div>
         </div>
 
-        {/* Section Filter Controls: Exactly 2 Action Buttons */}
-        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-800 text-xs">
+        {/* Remaining Flights Toggle Switch Bar */}
+        <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs">
+            <Clock3 className="w-3.5 h-3.5 text-amber-400" />
+            <span className="font-bold text-slate-300">Filter Mode:</span>
+          </div>
+
+          <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-[10px]">
+            <button
+              onClick={() => setShowRemainingOnly(true)}
+              className={`px-2.5 py-1 rounded-lg font-black transition-all flex items-center gap-1 ${
+                showRemainingOnly
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Clock className="w-3 h-3" />
+              <span>REMAINING ({activeSection === 'DEPARTURE' ? remainingDepCount : remainingArrCount})</span>
+            </button>
+
+            <button
+              onClick={() => setShowRemainingOnly(false)}
+              className={`px-2.5 py-1 rounded-lg font-black transition-all flex items-center gap-1 ${
+                !showRemainingOnly
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Filter className="w-3 h-3" />
+              <span>SHOW ALL ({scheduleFlights.filter(f => f.isDeparture === (activeSection === 'DEPARTURE')).length})</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Section Filter Controls: DEPARTURE vs ARRIVAL */}
+        <div className="grid grid-cols-2 gap-2 mt-2.5 text-xs">
           <button
             onClick={() => setActiveSection('DEPARTURE')}
             className={`py-2.5 rounded-xl font-extrabold tracking-wider transition-all flex items-center justify-center gap-1.5 ${
@@ -108,46 +204,76 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
       ) : (
         <div className="space-y-2">
           <div className="flex items-center justify-between px-1 text-xs font-bold text-slate-400 uppercase tracking-wider">
-            <span>{activeSection} LIST</span>
+            <span>{activeSection} LIST {showRemainingOnly ? '(UPCOMING / REMAINING)' : '(ALL FLIGHTS)'}</span>
             <span className="font-mono text-amber-400">{activeList.length} ITEMS</span>
           </div>
 
           {activeList.length === 0 ? (
-            <div className="p-6 bg-slate-900/50 rounded-xl text-center text-xs text-slate-500 border border-slate-800">
-              No {activeSection.toLowerCase()} flights found.
+            <div className="p-8 bg-slate-900/60 rounded-2xl text-center space-y-2 border border-slate-800">
+              <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto opacity-80" />
+              <p className="text-xs text-slate-200 font-bold uppercase">No remaining {activeSection.toLowerCase()} flights!</p>
+              <p className="text-[11px] text-slate-400">
+                All scheduled {activeSection.toLowerCase()} flights for earlier time have departed/arrived.
+              </p>
+              <button
+                onClick={() => setShowRemainingOnly(false)}
+                className="mt-2 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-lg border border-slate-700"
+              >
+                View Past Flights
+              </button>
             </div>
           ) : (
             <div className="divide-y divide-slate-800/60 bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
-              {activeList.map((flt, index) => (
-                <div
-                  key={flt.id || index}
-                  className="p-3 hover:bg-slate-800/50 transition-colors flex items-center justify-between gap-2"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span
-                      className={`w-2 h-2 rounded-full shrink-0 ${
-                        activeSection === 'DEPARTURE' ? 'bg-amber-400' : 'bg-blue-400'
-                      }`}
-                    />
-                    <div className="truncate">
-                      <div className="font-mono font-black text-amber-300 text-xs sm:text-sm tracking-wide truncate">
-                        {flt.formattedDisplay}
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-medium flex items-center gap-2 mt-0.5">
-                        <span>A/C: <strong className="text-slate-200">{flt.aircraft}</strong></span>
-                        <span>•</span>
-                        <span>PAX: <strong className="text-emerald-400">{flt.paxLoad}</strong></span>
-                      </div>
-                    </div>
-                  </div>
+              {activeList.map((flt, index) => {
+                const fltMins = parseTimeToMinutes(flt.timeStr);
+                const isPast = fltMins !== null && fltMins + 15 < currentMinutes;
 
-                  <div className="text-right shrink-0">
-                    <div className="font-mono text-xs font-bold text-white bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
-                      {flt.timeStr}
+                return (
+                  <div
+                    key={flt.id || index}
+                    className={`p-3 transition-colors flex items-center justify-between gap-2 ${
+                      isPast ? 'bg-slate-950/60 opacity-60' : 'hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${
+                          isPast
+                            ? 'bg-slate-500'
+                            : activeSection === 'DEPARTURE'
+                            ? 'bg-amber-400 animate-pulse'
+                            : 'bg-blue-400 animate-pulse'
+                        }`}
+                      />
+                      <div className="truncate">
+                        <div className="font-mono font-black text-amber-300 text-xs sm:text-sm tracking-wide truncate">
+                          {flt.formattedDisplay}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-medium flex items-center gap-2 mt-0.5">
+                          <span>A/C: <strong className="text-slate-200">{flt.aircraft}</strong></span>
+                          <span>•</span>
+                          <span>PAX: <strong className="text-emerald-400">{flt.paxLoad}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {onStartReportWithFlight && (
+                        <button
+                          onClick={() => onStartReportWithFlight(flt)}
+                          className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold rounded-lg border border-amber-500/30 transition-all"
+                        >
+                          + REPORT
+                        </button>
+                      )}
+
+                      <div className="font-mono text-xs font-bold text-white bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+                        {flt.timeStr}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -155,3 +281,4 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
     </div>
   );
 };
+

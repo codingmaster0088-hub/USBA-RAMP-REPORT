@@ -268,7 +268,7 @@ export default function App() {
     showToast('New report form initialized', '', 'info');
   };
 
-  // Save Report Action -> Syncs to Firestore in real time
+  // Save Report Action -> Syncs to Firestore in real time with partial data preservation
   const handleSaveReport = async (
     data: RampReportFormData,
     type: ReportType,
@@ -283,17 +283,40 @@ export default function App() {
     }
 
     const id = existingId || `report-${Date.now()}`;
+
+    // Find existing report to merge data safely so no field is lost during incremental edits
+    const existingReport = savedReports.find((r) => r.id === id);
+
+    // Merge existing formData with new updates, removing empty string overwrites if existing had data
+    const mergedFormData: RampReportFormData = existingReport
+      ? {
+          ...existingReport.formData,
+          ...data,
+          station: user.station
+        }
+      : { ...data, station: user.station };
+
+    // Clean undefined or empty overrides if existing had value
+    if (existingReport) {
+      Object.keys(existingReport.formData).forEach((key) => {
+        const k = key as keyof RampReportFormData;
+        if ((!data[k] || data[k] === '') && existingReport.formData[k]) {
+          mergedFormData[k] = existingReport.formData[k];
+        }
+      });
+    }
+
     const newEntry: SavedReport = {
       id,
       type,
       mode,
       flight: `BS-${data.deptFlt}`,
-      date: data.date,
-      route: data.deptRoute || 'N/A',
+      date: data.date || existingReport?.date || '',
+      route: data.deptRoute || existingReport?.route || 'N/A',
       timestamp: new Date().toISOString(),
-      officerName: user.name,
-      officerId: user.id,
-      formData: { ...data, station: user.station }
+      officerName: user.name || existingReport?.officerName || 'RAMP OFFICER',
+      officerId: user.id || existingReport?.officerId || '0000',
+      formData: mergedFormData
     };
 
     setSavedReports((prev) => {
@@ -308,7 +331,11 @@ export default function App() {
 
     try {
       await syncReportToFirestore(newEntry);
-      showToast('Report Saved & Synced Live!', `${newEntry.flight} (${newEntry.route})`, 'success');
+      showToast(
+        existingId ? 'Report Updated & Synced Live!' : 'Report Saved & Synced Live!',
+        `${newEntry.flight} (${newEntry.route})`,
+        'success'
+      );
     } catch (e) {
       console.error('Sync failed:', e);
       showToast('Report Saved Locally', 'Will sync when online', 'info');
