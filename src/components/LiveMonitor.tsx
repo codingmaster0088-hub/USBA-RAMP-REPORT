@@ -48,7 +48,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
             <div className="flex items-center gap-2 mb-1">
               <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/40">
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                LIVE
+                LIVE SYNC
               </span>
               <span className="text-xs text-amber-400 font-mono font-bold flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5" />

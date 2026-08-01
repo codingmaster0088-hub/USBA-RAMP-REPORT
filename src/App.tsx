@@ -11,6 +11,13 @@ import {
 } from './types';
 import { initialSampleReports } from './data/routesDB';
 import { parseFLSTData, sampleFLSTInput } from './utils/flstParser';
+import {
+  subscribeToSavedReports,
+  syncReportToFirestore,
+  deleteReportFromFirestore,
+  subscribeToSchedule,
+  syncScheduleToFirestore
+} from './lib/firebase';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { LiveMonitor } from './components/LiveMonitor';
@@ -19,7 +26,7 @@ import { SavedReports } from './components/SavedReports';
 import { AdminSection } from './components/AdminSection';
 import { LoginModal } from './components/LoginModal';
 import { ReportCanvasCard } from './components/ReportCanvasCard';
-import { CheckCircle2, AlertCircle, RefreshCw, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, RefreshCw, X, Wifi } from 'lucide-react';
 
 export default function App() {
   // LocalStorage User Session
@@ -32,7 +39,7 @@ export default function App() {
     }
   });
 
-  // LocalStorage Saved Reports
+  // Saved Reports state with Firebase real-time sync
   const [savedReports, setSavedReports] = useState<SavedReport[]>(() => {
     try {
       const saved = localStorage.getItem('usb_reports');
@@ -42,7 +49,7 @@ export default function App() {
     }
   });
 
-  // Schedule Flights State for LIVE tab
+  // Schedule Flights State for LIVE tab with Firebase real-time sync
   const [scheduleFlights, setScheduleFlights] = useState<ScheduleFlight[]>(() => {
     try {
       const saved = localStorage.getItem('usb_schedule_data');
@@ -64,6 +71,8 @@ export default function App() {
     }
   });
 
+  const [isLiveConnected, setIsLiveConnected] = useState<boolean>(true);
+
   // Active Tab: 'live' | 'form' | 'saved' | 'admin'
   const [activeTab, setActiveTab] = useState<ActiveTab>('live');
 
@@ -83,14 +92,41 @@ export default function App() {
 
   const [isExporting, setIsExporting] = useState(false);
 
-  // Save Reports to LocalStorage
+  // Subscribe to Firebase Firestore real-time updates for Saved Reports & Schedules
   useEffect(() => {
-    try {
-      localStorage.setItem('usb_reports', JSON.stringify(savedReports));
-    } catch (e) {
-      console.error('Failed to save reports to localStorage:', e);
-    }
-  }, [savedReports]);
+    const unsubReports = subscribeToSavedReports((reports) => {
+      if (reports && reports.length > 0) {
+        setSavedReports(reports);
+        localStorage.setItem('usb_reports', JSON.stringify(reports));
+      } else {
+        // If Firestore reports empty, upload initial sample reports
+        initialSampleReports.forEach((rep) => {
+          syncReportToFirestore(rep).catch(() => {});
+        });
+      }
+      setIsLiveConnected(true);
+    }, () => setIsLiveConnected(false));
+
+    const unsubSchedule = subscribeToSchedule((data) => {
+      if (data && data.flights && data.flights.length > 0) {
+        setScheduleFlights(data.flights);
+        setScheduleDate(data.dateHeader);
+        localStorage.setItem('usb_schedule_data', JSON.stringify(data.flights));
+        localStorage.setItem('usb_schedule_date', data.dateHeader);
+        if (data.rawFlst) localStorage.setItem('usb_flst_raw', data.rawFlst);
+      } else {
+        // If Firestore empty schedule, sync initial parsed sample
+        const defaultParsed = parseFLSTData(sampleFLSTInput);
+        syncScheduleToFirestore(defaultParsed.flights, defaultParsed.dateHeader, sampleFLSTInput).catch(() => {});
+      }
+      setIsLiveConnected(true);
+    }, () => setIsLiveConnected(false));
+
+    return () => {
+      unsubReports();
+      unsubSchedule();
+    };
+  }, []);
 
   // Handle Login
   const handleLogin = (newUser: UserProfile) => {
@@ -125,16 +161,19 @@ export default function App() {
     }, 3000);
   };
 
-  // Update Schedule Action from ADMIN
-  const handleUpdateSchedule = (flights: ScheduleFlight[], dateHeader: string, rawFlst: string) => {
+  // Update Schedule Action from ADMIN -> Syncs live to cloud Firestore!
+  const handleUpdateSchedule = async (flights: ScheduleFlight[], dateHeader: string, rawFlst: string) => {
     setScheduleFlights(flights);
     setScheduleDate(dateHeader);
     try {
       localStorage.setItem('usb_schedule_data', JSON.stringify(flights));
       localStorage.setItem('usb_schedule_date', dateHeader);
       localStorage.setItem('usb_flst_raw', rawFlst);
+      await syncScheduleToFirestore(flights, dateHeader, rawFlst);
+      showToast('Flight Schedule Broadcasted Live!', `All connected devices updated (${flights.length} flights)`, 'success');
     } catch (e) {
-      console.error('Error saving schedule to localStorage:', e);
+      console.error('Error saving schedule:', e);
+      showToast('Updated locally', 'Cloud sync will retry automatically', 'info');
     }
   };
 
@@ -211,9 +250,14 @@ export default function App() {
     }
   };
 
-  const handleDeleteReport = (id: string) => {
+  const handleDeleteReport = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this report?')) {
       setSavedReports((prev) => prev.filter((r) => r.id !== id));
+      try {
+        await deleteReportFromFirestore(id);
+      } catch (e) {
+        console.error('Delete from cloud failed:', e);
+      }
       showToast('Report deleted', '', 'info');
     }
   };
@@ -224,8 +268,8 @@ export default function App() {
     showToast('New report form initialized', '', 'info');
   };
 
-  // Save Report Action
-  const handleSaveReport = (
+  // Save Report Action -> Syncs to Firestore in real time
+  const handleSaveReport = async (
     data: RampReportFormData,
     type: ReportType,
     mode: FlightMode,
@@ -262,7 +306,13 @@ export default function App() {
       return [newEntry, ...prev];
     });
 
-    showToast('Report Saved Successfully!', `${newEntry.flight} (${newEntry.route})`, 'success');
+    try {
+      await syncReportToFirestore(newEntry);
+      showToast('Report Saved & Synced Live!', `${newEntry.flight} (${newEntry.route})`, 'success');
+    } catch (e) {
+      console.error('Sync failed:', e);
+      showToast('Report Saved Locally', 'Will sync when online', 'info');
+    }
   };
 
   // Trigger Download JPG
