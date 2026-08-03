@@ -8,7 +8,9 @@ import {
   StationCode,
   ActiveTab,
   ScheduleFlight,
-  AdminNotice
+  AdminNotice,
+  UserLog,
+  UserActionType
 } from './types';
 import { initialSampleReports } from './data/routesDB';
 import { parseFLSTData, sampleFLSTInput } from './utils/flstParser';
@@ -19,7 +21,9 @@ import {
   subscribeToSchedule,
   syncScheduleToFirestore,
   subscribeToNotices,
-  broadcastNoticeToFirestore
+  broadcastNoticeToFirestore,
+  subscribeToUserLogs,
+  logUserActivityToFirestore
 } from './lib/firebase';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -81,6 +85,9 @@ export default function App() {
   const [notices, setNotices] = useState<AdminNotice[]>([]);
   const [activePopupNotice, setActivePopupNotice] = useState<AdminNotice | null>(null);
 
+  // User Logs State (48h auto-vanish)
+  const [userLogs, setUserLogs] = useState<UserLog[]>([]);
+
   // Active Tab: 'live' | 'form' | 'saved' | 'admin'
   const [activeTab, setActiveTab] = useState<ActiveTab>('live');
 
@@ -100,7 +107,43 @@ export default function App() {
 
   const [isExporting, setIsExporting] = useState(false);
 
-  // Subscribe to Firebase Firestore real-time updates for Saved Reports, Schedules & Notices
+  // Helper function to log user activity
+  const logUserAction = async (
+    action: UserActionType,
+    details: string,
+    overrideUser?: UserProfile | null
+  ) => {
+    const activeUser = overrideUser !== undefined ? overrideUser : user;
+    if (!activeUser) return;
+
+    const now = new Date();
+    const timeStr =
+      now.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      }) + ' LT';
+
+    const newLog: UserLog = {
+      id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: timeStr,
+      createdAt: Date.now(),
+      userName: activeUser.name,
+      userId: activeUser.id,
+      station: activeUser.station,
+      action,
+      details
+    };
+
+    try {
+      await logUserActivityToFirestore(newLog);
+    } catch (err) {
+      console.error('Failed to log activity:', err);
+    }
+  };
+
+  // Subscribe to Firebase Firestore real-time updates for Saved Reports, Schedules, Notices & User Logs
   useEffect(() => {
     const unsubReports = subscribeToSavedReports((reports) => {
       if (reports && reports.length > 0) {
@@ -141,10 +184,15 @@ export default function App() {
       }
     });
 
+    const unsubLogs = subscribeToUserLogs((incomingLogs) => {
+      setUserLogs(incomingLogs);
+    });
+
     return () => {
       unsubReports();
       unsubSchedule();
       unsubNotices();
+      unsubLogs();
     };
   }, []);
 
@@ -153,10 +201,14 @@ export default function App() {
     setUser(newUser);
     localStorage.setItem('usb_user', JSON.stringify(newUser));
     showToast(`Welcome, Officer ${newUser.name}`, `Station: ${newUser.station}`, 'success');
+    logUserAction('LOGIN', `Logged in to system at station ${newUser.station}`, newUser);
   };
 
   // Handle Logout
   const handleLogout = () => {
+    if (user) {
+      logUserAction('LOGOUT', `Logged out from station ${user.station}`);
+    }
     showToast('Logged out successfully', 'Thank you Officer!', 'info');
     setTimeout(() => {
       localStorage.removeItem('usb_user');
@@ -171,6 +223,7 @@ export default function App() {
     setUser(updatedUser);
     localStorage.setItem('usb_user', JSON.stringify(updatedUser));
     showToast(`Station changed to ${station}`, '', 'info');
+    logUserAction('OTHER', `Changed active station to ${station}`, updatedUser);
   };
 
   // Toast Helper
@@ -191,6 +244,7 @@ export default function App() {
       localStorage.setItem('usb_flst_raw', rawFlst);
       await syncScheduleToFirestore(flights, dateHeader, rawFlst);
       showToast('Flight Schedule Broadcasted Live!', `All connected devices updated (${flights.length} flights)`, 'success');
+      logUserAction('UPDATE_SCHEDULE', `Updated flight schedule (${flights.length} flights) for ${dateHeader}`);
     } catch (e) {
       console.error('Error saving schedule:', e);
       showToast('Updated locally', 'Cloud sync will retry automatically', 'info');
@@ -200,17 +254,20 @@ export default function App() {
   // Broadcast Special Notice from Admin
   const handleBroadcastNotice = async (message: string) => {
     if (!user) return;
+    const createdAt = Date.now();
     const newNotice: AdminNotice = {
-      id: `notice-${Date.now()}`,
+      id: `notice-${createdAt}`,
       message,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' LT',
       author: `${user.name} (${user.id})`,
       authorName: user.name,
-      authorId: user.id
+      authorId: user.id,
+      createdAt
     };
 
     await broadcastNoticeToFirestore(newNotice);
     showToast('Special Notice Broadcasted Live!', 'All online officers will receive the notice modal', 'success');
+    logUserAction('BROADCAST_NOTICE', `Broadcasted special notice: "${message.slice(0, 45)}${message.length > 45 ? '...' : ''}"`);
   };
 
   const handleAcknowledgeNotice = () => {
@@ -295,9 +352,14 @@ export default function App() {
 
   const handleDeleteReport = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this report?')) {
+      const targetReport = savedReports.find((r) => r.id === id);
       setSavedReports((prev) => prev.filter((r) => r.id !== id));
       try {
         await deleteReportFromFirestore(id);
+        logUserAction(
+          'DELETE_REPORT',
+          `Deleted report ${targetReport ? targetReport.flight : id}`
+        );
       } catch (e) {
         console.error('Delete from cloud failed:', e);
       }
@@ -378,6 +440,10 @@ export default function App() {
         existingId ? 'Report Updated & Synced Live!' : 'Report Saved & Synced Live!',
         `${newEntry.flight} (${newEntry.route})`,
         'success'
+      );
+      logUserAction(
+        'SAVE_REPORT',
+        `${existingId ? 'Updated' : 'Saved'} turnaround report for ${newEntry.flight} (${newEntry.route})`
       );
     } catch (e) {
       console.error('Sync failed:', e);
@@ -487,6 +553,7 @@ export default function App() {
             user={user}
             scheduleFlights={scheduleFlights}
             scheduleDate={scheduleDate}
+            userLogs={userLogs}
             onUpdateSchedule={handleUpdateSchedule}
             onBroadcastNotice={handleBroadcastNotice}
             showToast={showToast}

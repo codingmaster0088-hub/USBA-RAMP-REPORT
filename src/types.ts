@@ -91,6 +91,27 @@ export interface AdminNotice {
   author: string;
   authorName?: string;
   authorId?: string;
+  createdAt?: number;
+}
+
+export type UserActionType =
+  | 'LOGIN'
+  | 'LOGOUT'
+  | 'SAVE_REPORT'
+  | 'UPDATE_SCHEDULE'
+  | 'BROADCAST_NOTICE'
+  | 'DELETE_REPORT'
+  | 'OTHER';
+
+export interface UserLog {
+  id: string;
+  timestamp: string;
+  createdAt: number;
+  userName: string;
+  userId: string;
+  station: StationCode;
+  action: UserActionType;
+  details: string;
 }
 
 export interface TurnaroundMilestone {

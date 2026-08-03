@@ -9,7 +9,7 @@ import {
   query,
   orderBy
 } from 'firebase/firestore';
-import { SavedReport, ScheduleFlight, AdminNotice } from '../types';
+import { SavedReport, ScheduleFlight, AdminNotice, UserLog } from '../types';
 import config from '../../firebase-applet-config.json';
 
 const app = !getApps().length ? initializeApp(config) : getApp();
@@ -17,6 +17,18 @@ const app = !getApps().length ? initializeApp(config) : getApp();
 export const db = config.firestoreDatabaseId
   ? getFirestore(app, config.firestoreDatabaseId)
   : getFirestore(app);
+
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
+
+// Helper to extract timestamp from notice or log ID/createdAt
+function getCreatedTimestamp(item: { createdAt?: number; id: string }): number {
+  if (item.createdAt) return item.createdAt;
+  const parts = item.id.split('-');
+  const lastPart = parts[parts.length - 1];
+  const parsed = parseInt(lastPart, 10);
+  return !isNaN(parsed) && parsed > 1600000000000 ? parsed : Date.now();
+}
 
 // Real-time listener for Saved Reports across all devices
 export function subscribeToSavedReports(
@@ -119,7 +131,7 @@ export async function syncScheduleToFirestore(
   }
 }
 
-// Real-time listener for Admin Notices
+// Real-time listener for Admin Notices (Auto-vanish after 24 hours)
 export function subscribeToNotices(
   onUpdate: (notices: AdminNotice[]) => void,
   onError?: (err: any) => void
@@ -130,9 +142,23 @@ export function subscribeToNotices(
       q,
       (snapshot) => {
         const notices: AdminNotice[] = [];
+        const now = Date.now();
+
         snapshot.forEach((docSnap) => {
-          notices.push(docSnap.data() as AdminNotice);
+          const item = docSnap.data() as AdminNotice;
+          const createdTs = getCreatedTimestamp(item);
+          const ageMs = now - createdTs;
+
+          if (ageMs <= TWENTY_FOUR_HOURS_MS) {
+            notices.push({ ...item, createdAt: createdTs });
+          } else {
+            // Auto-purge notice from Firestore if older than 24 hours
+            deleteDoc(doc(db, 'notices', item.id)).catch(() => {});
+          }
         });
+
+        // Sort descending by created timestamp
+        notices.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         onUpdate(notices);
       },
       (error) => {
@@ -155,5 +181,56 @@ export async function broadcastNoticeToFirestore(notice: AdminNotice) {
   } catch (err) {
     console.error('Failed to broadcast notice:', err);
     throw err;
+  }
+}
+
+// Real-time listener for User Activity Logs (Auto-vanish after 48 hours)
+export function subscribeToUserLogs(
+  onUpdate: (logs: UserLog[]) => void,
+  onError?: (err: any) => void
+) {
+  try {
+    const q = query(collection(db, 'userLogs'), orderBy('createdAt', 'desc'));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const logs: UserLog[] = [];
+        const now = Date.now();
+
+        snapshot.forEach((docSnap) => {
+          const item = docSnap.data() as UserLog;
+          const createdTs = item.createdAt || getCreatedTimestamp(item);
+          const ageMs = now - createdTs;
+
+          if (ageMs <= FORTY_EIGHT_HOURS_MS) {
+            logs.push({ ...item, createdAt: createdTs });
+          } else {
+            // Auto-purge log from Firestore if older than 48 hours
+            deleteDoc(doc(db, 'userLogs', item.id)).catch(() => {});
+          }
+        });
+
+        logs.sort((a, b) => b.createdAt - a.createdAt);
+        onUpdate(logs);
+      },
+      (error) => {
+        console.error('Error listening to userLogs:', error);
+        if (onError) onError(error);
+      }
+    );
+  } catch (err) {
+    console.error('Failed to subscribe to userLogs:', err);
+    if (onError) onError(err);
+    return () => {};
+  }
+}
+
+// Log User Activity to Firestore
+export async function logUserActivityToFirestore(log: UserLog) {
+  try {
+    const docRef = doc(db, 'userLogs', log.id);
+    await setDoc(docRef, log);
+  } catch (err) {
+    console.error('Failed to log user activity to Firestore:', err);
   }
 }

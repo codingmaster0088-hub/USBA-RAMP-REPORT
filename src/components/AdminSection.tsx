@@ -1,12 +1,30 @@
 import React, { useState } from 'react';
-import { UserProfile, ScheduleFlight } from '../types';
+import { UserProfile, ScheduleFlight, UserLog, UserActionType } from '../types';
 import { parseFLSTData, sampleFLSTInput } from '../utils/flstParser';
-import { ShieldCheck, Lock, Sparkles, Database, CheckCircle2, RefreshCw, Bell, Send } from 'lucide-react';
+import {
+  ShieldCheck,
+  Lock,
+  Sparkles,
+  Database,
+  RefreshCw,
+  Bell,
+  Send,
+  Users,
+  Search,
+  Clock,
+  UserCheck,
+  LogOut,
+  FileText,
+  Trash2,
+  Calendar,
+  Activity
+} from 'lucide-react';
 
 interface AdminSectionProps {
   user: UserProfile;
   scheduleFlights: ScheduleFlight[];
   scheduleDate: string;
+  userLogs?: UserLog[];
   onUpdateSchedule: (flights: ScheduleFlight[], dateHeader: string, rawFlst: string) => void;
   onBroadcastNotice?: (message: string) => Promise<void>;
   showToast: (title: string, subtitle?: string, type?: 'success' | 'info' | 'error') => void;
@@ -16,6 +34,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   user,
   scheduleFlights,
   scheduleDate,
+  userLogs = [],
   onUpdateSchedule,
   onBroadcastNotice,
   showToast
@@ -30,6 +49,10 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
 
   const [noticeMessage, setNoticeMessage] = useState<string>('');
   const [isBroadcasting, setIsBroadcasting] = useState<boolean>(false);
+
+  // User Logs filtering state
+  const [logFilter, setLogFilter] = useState<'ALL' | 'LOGIN_LOGOUT' | 'REPORTS' | 'ADMIN'>('ALL');
+  const [logSearchQuery, setLogSearchQuery] = useState<string>('');
 
   if (!isAdmin) {
     return (
@@ -96,6 +119,83 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
     }
   };
 
+  // Helper function to render log action badge
+  const renderActionBadge = (action: UserActionType) => {
+    switch (action) {
+      case 'LOGIN':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/40">
+            <UserCheck className="w-3 h-3" /> LOGIN
+          </span>
+        );
+      case 'LOGOUT':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-950 text-rose-400 border border-rose-500/40">
+            <LogOut className="w-3 h-3" /> LOGOUT
+          </span>
+        );
+      case 'SAVE_REPORT':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/40">
+            <FileText className="w-3 h-3" /> REPORT SAVED
+          </span>
+        );
+      case 'DELETE_REPORT':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-red-950 text-red-400 border border-red-500/40">
+            <Trash2 className="w-3 h-3" /> REPORT DELETED
+          </span>
+        );
+      case 'UPDATE_SCHEDULE':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/40">
+            <Calendar className="w-3 h-3" /> SCHEDULE UPDATED
+          </span>
+        );
+      case 'BROADCAST_NOTICE':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-500/40">
+            <Bell className="w-3 h-3" /> NOTICE BROADCAST
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+            <Activity className="w-3 h-3" /> ACTION
+          </span>
+        );
+    }
+  };
+
+  // Helper to format remaining time before 48h auto-purge
+  const getRemainingTimeStr = (createdAt: number) => {
+    const fortyEightHoursMs = 48 * 60 * 60 * 1000;
+    const remainingMs = fortyEightHoursMs - (Date.now() - createdAt);
+    if (remainingMs <= 0) return 'Expiring...';
+    const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${minutes}m left`;
+  };
+
+  // Filter user logs
+  const filteredLogs = userLogs.filter((log) => {
+    if (logFilter === 'LOGIN_LOGOUT' && log.action !== 'LOGIN' && log.action !== 'LOGOUT') return false;
+    if (logFilter === 'REPORTS' && log.action !== 'SAVE_REPORT' && log.action !== 'DELETE_REPORT') return false;
+    if (logFilter === 'ADMIN' && log.action !== 'UPDATE_SCHEDULE' && log.action !== 'BROADCAST_NOTICE') return false;
+
+    if (logSearchQuery.trim()) {
+      const q = logSearchQuery.toLowerCase();
+      const matchName = log.userName.toLowerCase().includes(q);
+      const matchId = log.userId.toLowerCase().includes(q);
+      const matchStation = log.station.toLowerCase().includes(q);
+      const matchDetails = log.details.toLowerCase().includes(q);
+      const matchAction = log.action.toLowerCase().includes(q);
+      return matchName || matchId || matchStation || matchDetails || matchAction;
+    }
+
+    return true;
+  });
+
   return (
     <div className="space-y-4 pb-20 fade-in text-slate-100">
       {/* Admin Panel Header */}
@@ -127,6 +227,133 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
             <RefreshCw className="w-3 h-3" />
             Load Sample
           </button>
+        </div>
+      </div>
+
+      {/* USER ACTIVITY LOGS FIELD (48-HOUR AUTO-PURGE) */}
+      <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-4 shadow-xl space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2 flex-wrap gap-2">
+          <label className="text-xs font-extrabold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+            <Users className="w-4 h-4 text-amber-400" />
+            USER ACTIVITY LOGS
+          </label>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+              LIVE REAL-TIME
+            </span>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-amber-400 border border-slate-800">
+              48H AUTO-PURGE ({userLogs.length})
+            </span>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          Monitor login, logout, and report activity for all officers. Each log item will{' '}
+          <strong className="text-amber-300">automatically vanish after 48 hours</strong>.
+        </p>
+
+        {/* Log Filter Chips & Search Bar */}
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+            <input
+              type="text"
+              value={logSearchQuery}
+              onChange={(e) => setLogSearchQuery(e.target.value)}
+              placeholder="Search officer name, ID, station or activity..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-600 outline-none focus:border-amber-400 font-sans"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] font-extrabold no-scrollbar">
+            <button
+              onClick={() => setLogFilter('ALL')}
+              className={`px-2.5 py-1 rounded-lg transition-all ${
+                logFilter === 'ALL'
+                  ? 'bg-amber-500 text-slate-950 font-black'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              ALL ({userLogs.length})
+            </button>
+            <button
+              onClick={() => setLogFilter('LOGIN_LOGOUT')}
+              className={`px-2.5 py-1 rounded-lg transition-all ${
+                logFilter === 'LOGIN_LOGOUT'
+                  ? 'bg-amber-500 text-slate-950 font-black'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              LOGIN/LOGOUT
+            </button>
+            <button
+              onClick={() => setLogFilter('REPORTS')}
+              className={`px-2.5 py-1 rounded-lg transition-all ${
+                logFilter === 'REPORTS'
+                  ? 'bg-amber-500 text-slate-950 font-black'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              REPORTS
+            </button>
+            <button
+              onClick={() => setLogFilter('ADMIN')}
+              className={`px-2.5 py-1 rounded-lg transition-all ${
+                logFilter === 'ADMIN'
+                  ? 'bg-amber-500 text-slate-950 font-black'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              ADMIN ACTIONS
+            </button>
+          </div>
+        </div>
+
+        {/* User Log List Container */}
+        <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-800/80">
+          {filteredLogs.length === 0 ? (
+            <div className="p-6 text-center text-slate-500 space-y-1">
+              <Clock className="w-8 h-8 mx-auto opacity-40 text-slate-600" />
+              <p className="text-xs font-bold text-slate-400 uppercase">No Activity Logs Found</p>
+              <p className="text-[10px] text-slate-500">
+                User login, logout and report actions will automatically record here.
+              </p>
+            </div>
+          ) : (
+            filteredLogs.map((log) => (
+              <div key={log.id} className="p-3 hover:bg-slate-900/60 transition-colors space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {renderActionBadge(log.action)}
+                    <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-900 text-amber-300 border border-slate-800">
+                      {log.station}
+                    </span>
+                  </div>
+
+                  <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-slate-500" />
+                    {log.timestamp}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-0.5">
+                  <div className="text-xs font-bold text-slate-200">
+                    Officer <strong className="text-amber-300">{log.userName}</strong>{' '}
+                    <span className="text-[10px] font-mono text-slate-400">(ID-{log.userId})</span>
+                  </div>
+
+                  <span className="text-[9px] font-mono text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
+                    {getRemainingTimeStr(log.createdAt)}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-300 leading-snug font-mono bg-slate-900/80 p-1.5 rounded border border-slate-800/60">
+                  {log.details}
+                </p>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -173,7 +400,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
         </div>
       </div>
 
-      {/* SPECIAL NOTICE FOR ALL OFFICERS FIELD */}
+      {/* SPECIAL NOTICE FOR ALL OFFICERS FIELD (24-HOUR AUTO-VANISH) */}
       <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-4 shadow-xl space-y-3">
         <div className="flex items-center justify-between border-b border-slate-800 pb-2">
           <label className="text-xs font-extrabold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
@@ -181,12 +408,12 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
             SPECIAL NOTICE INPUT FOR ALL OFFICERS
           </label>
           <span className="text-[10px] text-amber-400/90 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
-            POP-UP BROADCAST
+            24H AUTO-VANISH
           </span>
         </div>
 
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          Post special operational instructions or announcement below. This notice will appear as a <strong className="text-amber-300">live pop-up modal</strong> for all officers when they return or open the app.
+          Post special operational instructions or announcement below. This notice will appear as a <strong className="text-amber-300">live pop-up modal</strong> for all officers and will <strong className="text-amber-300">automatically vanish after 24 hours</strong>.
         </p>
 
         <textarea
