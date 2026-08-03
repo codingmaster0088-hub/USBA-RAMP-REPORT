@@ -39,9 +39,13 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   onBroadcastNotice,
   showToast
 }) => {
-  // Check admin privileges: Name must be RASEL HOSSAIN and USBA ID must be 0088
-  const isAdmin =
-    user.name.trim().toUpperCase() === 'RASEL HOSSAIN' && user.id.trim() === '0088';
+  // Secret Admin PIN authentication state
+  const [adminPin, setAdminPin] = useState('');
+  const [isPinUnlocked, setIsPinUnlocked] = useState<boolean>(() => {
+    return sessionStorage.getItem('usb_admin_unlocked_pin') === '11126';
+  });
+  const [pinError, setPinError] = useState('');
+  const [showPin, setShowPin] = useState(false);
 
   const [flstInput, setFlstInput] = useState<string>(() => {
     return localStorage.getItem('usb_flst_raw') || sampleFLSTInput;
@@ -54,21 +58,88 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   const [logFilter, setLogFilter] = useState<'ALL' | 'LOGIN_LOGOUT' | 'REPORTS' | 'ADMIN'>('ALL');
   const [logSearchQuery, setLogSearchQuery] = useState<string>('');
 
-  if (!isAdmin) {
+  const handleVerifyPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminPin.trim() === '11126') {
+      setIsPinUnlocked(true);
+      sessionStorage.setItem('usb_admin_unlocked_pin', '11126');
+      setPinError('');
+      showToast('Admin Security Verified', 'Welcome to Master Admin Panel', 'success');
+    } else {
+      setPinError('Incorrect Secret Admin PIN. Access Denied!');
+      setAdminPin('');
+      showToast('Access Denied', 'Invalid Secret PIN', 'error');
+    }
+  };
+
+  const handleLockAdmin = () => {
+    setIsPinUnlocked(false);
+    sessionStorage.removeItem('usb_admin_unlocked_pin');
+    setAdminPin('');
+    showToast('Admin Panel Locked', 'PIN required to re-enter', 'info');
+  };
+
+  if (!isPinUnlocked) {
     return (
-      <div className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-6 text-center space-y-4 shadow-2xl fade-in my-auto max-w-lg mx-auto">
-        <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500/10 border border-amber-400/40 flex items-center justify-center text-amber-400 shadow-lg">
+      <div className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-6 text-center space-y-5 shadow-2xl fade-in my-auto max-w-md mx-auto">
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500/10 border border-amber-400/50 flex items-center justify-center text-amber-400 shadow-xl shadow-amber-500/10">
           <Lock className="w-8 h-8" />
         </div>
 
-        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-5 rounded-2xl border border-amber-500/30 text-center shadow-xl space-y-2">
-          <p className="text-sm sm:text-base font-black text-amber-300 tracking-wider uppercase">
-            HI OFFICER, THIS PAGE IS ONLY RESERVED FOR RADOAN RASEL
-          </p>
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold">
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+            ADMIN SECURITY CHECKPOINT
+          </div>
+          <h2 className="text-lg font-black text-white tracking-wide uppercase">
+            RESTRICTED ADMIN ACCESS
+          </h2>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Please return to Live Monitor or Turnaround Report section to perform flight operations.
+            Entering the <strong className="text-amber-300">Secret Admin PIN</strong> is strictly required to unlock control features, broadcasts & activity logs.
           </p>
         </div>
+
+        <form onSubmit={handleVerifyPin} className="space-y-4 pt-2">
+          <div className="space-y-1 text-left">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              ENTER SECRET ADMIN PIN (5-DIGITS)
+            </label>
+            <div className="relative">
+              <input
+                type={showPin ? 'text' : 'password'}
+                maxLength={5}
+                value={adminPin}
+                onChange={(e) => {
+                  setAdminPin(e.target.value);
+                  if (pinError) setPinError('');
+                }}
+                placeholder="•••••"
+                className="w-full bg-slate-950 border border-slate-800 focus:border-amber-400 rounded-xl px-4 py-3 text-center text-lg font-mono font-bold tracking-[0.5em] text-amber-300 outline-none transition-all placeholder:tracking-normal placeholder:text-slate-700"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin(!showPin)}
+                className="absolute right-3 top-3 text-xs text-slate-500 hover:text-amber-300 font-mono font-bold"
+              >
+                {showPin ? 'HIDE' : 'SHOW'}
+              </button>
+            </div>
+            {pinError && (
+              <p className="text-[11px] font-bold text-rose-400 pt-1 text-center font-mono">
+                ⚠️ {pinError}
+              </p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Lock className="w-4 h-4" />
+            UNLOCK ADMIN PANEL
+          </button>
+        </form>
       </div>
     );
   }
@@ -220,13 +291,23 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={handleLoadSample}
-            className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
-          >
-            <RefreshCw className="w-3 h-3" />
-            Load Sample
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleLoadSample}
+              className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Sample
+            </button>
+            <button
+              onClick={handleLockAdmin}
+              title="Lock Admin Panel"
+              className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/40 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <Lock className="w-3 h-3" />
+              Lock
+            </button>
+          </div>
         </div>
       </div>
 
