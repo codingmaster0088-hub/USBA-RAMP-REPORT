@@ -404,20 +404,44 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                   </p>
                 </div>
               ) : (
-                notices.map((notice, idx) => (
-                  <div
-                    key={notice.id || idx}
-                    className="bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/40 text-xs space-y-2 shadow-lg"
-                  >
-                    <p className="text-amber-100 font-semibold leading-relaxed whitespace-pre-wrap">
-                      {notice.message}
-                    </p>
-                    <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono pt-2 border-t border-slate-800">
-                      <span>Author: <strong className="text-amber-400">{notice.author}</strong></span>
-                      <span>{new Date(notice.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                notices.map((notice, idx) => {
+                  let formattedPostingTime = 'Just Now';
+                  if (notice.createdAt && !isNaN(notice.createdAt)) {
+                    const d = new Date(notice.createdAt);
+                    if (!isNaN(d.getTime())) {
+                      formattedPostingTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' LT';
+                    }
+                  } else if (notice.timestamp && !notice.timestamp.toLowerCase().includes('invalid')) {
+                    const d = new Date(notice.timestamp);
+                    if (!isNaN(d.getTime())) {
+                      formattedPostingTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' LT';
+                    } else {
+                      formattedPostingTime = notice.timestamp;
+                    }
+                  } else if (notice.id) {
+                    const parts = notice.id.split('-');
+                    const lastPart = parseInt(parts[parts.length - 1], 10);
+                    if (!isNaN(lastPart) && lastPart > 1600000000000) {
+                      const d = new Date(lastPart);
+                      formattedPostingTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' LT';
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={notice.id || idx}
+                      className="bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/40 text-xs space-y-2 shadow-lg"
+                    >
+                      <p className="text-amber-100 font-semibold leading-relaxed whitespace-pre-wrap">
+                        {notice.message}
+                      </p>
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono pt-2 border-t border-slate-800">
+                        <span>Author: <strong className="text-amber-400">{notice.author}</strong></span>
+                        <span>{formattedPostingTime}</span>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 

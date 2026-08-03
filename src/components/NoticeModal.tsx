@@ -8,6 +8,34 @@ interface NoticeModalProps {
 }
 
 export const NoticeModal: React.FC<NoticeModalProps> = ({ notice, onClose }) => {
+  const getNoticePostingTime = () => {
+    if (notice.createdAt && !isNaN(notice.createdAt)) {
+      const d = new Date(notice.createdAt);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' LT';
+      }
+    }
+
+    if (notice.timestamp && !notice.timestamp.toLowerCase().includes('invalid')) {
+      const d = new Date(notice.timestamp);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' LT';
+      }
+      return notice.timestamp;
+    }
+
+    if (notice.id) {
+      const parts = notice.id.split('-');
+      const lastPart = parseInt(parts[parts.length - 1], 10);
+      if (!isNaN(lastPart) && lastPart > 1600000000000) {
+        const d = new Date(lastPart);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' LT';
+      }
+    }
+
+    return 'Just Now';
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md fade-in">
       <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl p-5 max-w-sm w-full shadow-2xl space-y-4 text-slate-100 relative overflow-hidden animate-pulse-border">
@@ -48,7 +76,7 @@ export const NoticeModal: React.FC<NoticeModalProps> = ({ notice, onClose }) => 
             {notice.message}
           </p>
           <div className="text-[10px] text-slate-500 font-mono text-right pt-1 border-t border-slate-900">
-            Posted: {notice.timestamp}
+            Posted: {getNoticePostingTime()}
           </div>
         </div>
 
