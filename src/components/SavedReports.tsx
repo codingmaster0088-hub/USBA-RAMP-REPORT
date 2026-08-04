@@ -28,18 +28,40 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
   const [filterType, setFilterType] = useState<'ALL' | 'DOMESTIC' | 'INTERNATIONAL'>('ALL');
   const [showOnlyRecent48H, setShowOnlyRecent48H] = useState<boolean>(true);
 
-  // Filter logic: Domestic/Intl + 48 Hours Expiry
+  // Filter logic: Deduplicate by Flight Number + Domestic/Intl + 48 Hours Expiry
   const { filteredReports, recent48Count, totalCount } = useMemo(() => {
     const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
     const nowMs = Date.now();
 
-    const recent = savedReports.filter((rep) => {
+    // Deduplicate reports by normalized flight number, keeping the most recent one
+    const uniqueMap = new Map<string, SavedReport>();
+    const sorted = [...savedReports].sort((a, b) => {
+      const tA = new Date(a.timestamp).getTime() || 0;
+      const tB = new Date(b.timestamp).getTime() || 0;
+      return tB - tA;
+    });
+
+    sorted.forEach((rep) => {
+      const fltClean = (rep.flight || rep.formData?.deptFlt || '')
+        .replace(/^BS-?/i, '')
+        .trim()
+        .toUpperCase();
+      const key = fltClean ? `BS-${fltClean}` : rep.id;
+
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, rep);
+      }
+    });
+
+    const deduplicatedReports = Array.from(uniqueMap.values());
+
+    const recent = deduplicatedReports.filter((rep) => {
       if (!rep.timestamp) return true;
       const repTime = new Date(rep.timestamp).getTime();
       return !isNaN(repTime) ? nowMs - repTime <= FORTY_EIGHT_HOURS_MS : true;
     });
 
-    const activeBase = showOnlyRecent48H ? recent : savedReports;
+    const activeBase = showOnlyRecent48H ? recent : deduplicatedReports;
 
     const matched = activeBase.filter((report) => {
       if (filterType === 'ALL') return true;
@@ -49,7 +71,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
     return {
       filteredReports: matched,
       recent48Count: recent.length,
-      totalCount: savedReports.length
+      totalCount: deduplicatedReports.length
     };
   }, [savedReports, filterType, showOnlyRecent48H]);
 

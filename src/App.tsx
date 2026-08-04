@@ -387,10 +387,21 @@ export default function App() {
       return;
     }
 
-    const id = existingId || `report-${Date.now()}`;
+    const targetFlightClean = (data.deptFlt || '').replace(/^BS-?/i, '').trim().toUpperCase();
+    const flightKey = `BS-${targetFlightClean}`;
 
-    // Find existing report to merge data safely so no field is lost during incremental edits
-    const existingReport = savedReports.find((r) => r.id === id);
+    // Find existing report by existingId OR by flight number so same flight updates in place
+    const existingReport = existingId
+      ? savedReports.find((r) => r.id === existingId)
+      : savedReports.find((r) => {
+          const rFltClean = (r.flight || r.formData?.deptFlt || '')
+            .replace(/^BS-?/i, '')
+            .trim()
+            .toUpperCase();
+          return rFltClean === targetFlightClean;
+        });
+
+    const id = existingReport ? existingReport.id : (existingId || `report-${Date.now()}`);
 
     // Merge existing formData with new updates, removing empty string overwrites if existing had data
     const mergedFormData: RampReportFormData = existingReport
@@ -415,7 +426,7 @@ export default function App() {
       id,
       type,
       mode,
-      flight: `BS-${data.deptFlt}`,
+      flight: flightKey,
       date: data.date || existingReport?.date || '',
       route: data.deptRoute || existingReport?.route || 'N/A',
       timestamp: new Date().toISOString(),
@@ -425,13 +436,14 @@ export default function App() {
     };
 
     setSavedReports((prev) => {
-      const idx = prev.findIndex((r) => r.id === id);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = newEntry;
-        return copy;
-      }
-      return [newEntry, ...prev];
+      const filtered = prev.filter((r) => {
+        const rFltClean = (r.flight || r.formData?.deptFlt || '')
+          .replace(/^BS-?/i, '')
+          .trim()
+          .toUpperCase();
+        return r.id !== id && rFltClean !== targetFlightClean;
+      });
+      return [newEntry, ...filtered];
     });
 
     try {

@@ -41,9 +41,26 @@ export function subscribeToSavedReports(
       q,
       (snapshot) => {
         const reports: SavedReport[] = [];
+        const seenFlights = new Set<string>();
+
         snapshot.forEach((docSnap) => {
-          reports.push(docSnap.data() as SavedReport);
+          const rep = docSnap.data() as SavedReport;
+          const flightNum = (rep.flight || rep.formData?.deptFlt || '')
+            .replace(/^BS-?/i, '')
+            .trim()
+            .toUpperCase();
+
+          const key = flightNum ? `BS-${flightNum}` : rep.id;
+
+          if (!seenFlights.has(key)) {
+            seenFlights.add(key);
+            reports.push(rep);
+          } else {
+            // Auto-purge older duplicate report document from Firestore to keep DB clean
+            deleteDoc(doc(db, 'savedReports', rep.id)).catch(() => {});
+          }
         });
+
         onUpdate(reports);
       },
       (error) => {
