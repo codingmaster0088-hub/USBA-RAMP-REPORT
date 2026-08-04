@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Trash2,
   Edit,
@@ -8,7 +8,7 @@ import {
   Clock,
   ShieldCheck,
   History,
-  UserCheck
+  Timer
 } from 'lucide-react';
 import { SavedReport } from '../types';
 
@@ -19,6 +19,8 @@ interface SavedReportsProps {
   onDownloadJPG: (report: SavedReport) => void;
 }
 
+const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000;
+
 export const SavedReports: React.FC<SavedReportsProps> = ({
   savedReports,
   onEditReport,
@@ -26,13 +28,33 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
   onDownloadJPG
 }) => {
   const [filterType, setFilterType] = useState<'ALL' | 'DOMESTIC' | 'INTERNATIONAL'>('ALL');
-  const [showOnlyRecent48H, setShowOnlyRecent48H] = useState<boolean>(true);
+  const [showOnlyActive20H, setShowOnlyActive20H] = useState<boolean>(true);
+  const [nowMs, setNowMs] = useState<number>(Date.now());
 
-  // Filter logic: Deduplicate by Flight Number + Domestic/Intl + 48 Hours Expiry
-  const { filteredReports, recent48Count, totalCount } = useMemo(() => {
-    const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
-    const nowMs = Date.now();
+  // Update live clock every 10 seconds for precise countdown display
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
 
+  // Helper to calculate remaining time before report auto-vanishes (20 Hours from last save/edit)
+  const getRemainingVanishTime = (timestamp: string) => {
+    const repTime = new Date(timestamp).getTime();
+    if (isNaN(repTime) || repTime <= 0) return '20h 00m left';
+
+    const remainingMs = TWENTY_HOURS_MS - (nowMs - repTime);
+    if (remainingMs <= 0) return 'Expiring...';
+
+    const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    return `${hours}h ${minutes.toString().padStart(2, '0')}m left`;
+  };
+
+  // Filter logic: Deduplicate by Flight Number + Domestic/Intl + 20 Hours Expiry
+  const { filteredReports, recent20Count, totalCount } = useMemo(() => {
     // Deduplicate reports by normalized flight number, keeping the most recent one
     const uniqueMap = new Map<string, SavedReport>();
     const sorted = [...savedReports].sort((a, b) => {
@@ -55,13 +77,13 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
 
     const deduplicatedReports = Array.from(uniqueMap.values());
 
-    const recent = deduplicatedReports.filter((rep) => {
+    const active20H = deduplicatedReports.filter((rep) => {
       if (!rep.timestamp) return true;
       const repTime = new Date(rep.timestamp).getTime();
-      return !isNaN(repTime) ? nowMs - repTime <= FORTY_EIGHT_HOURS_MS : true;
+      return !isNaN(repTime) ? nowMs - repTime <= TWENTY_HOURS_MS : true;
     });
 
-    const activeBase = showOnlyRecent48H ? recent : deduplicatedReports;
+    const activeBase = showOnlyActive20H ? active20H : deduplicatedReports;
 
     const matched = activeBase.filter((report) => {
       if (filterType === 'ALL') return true;
@@ -70,14 +92,14 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
 
     return {
       filteredReports: matched,
-      recent48Count: recent.length,
+      recent20Count: active20H.length,
       totalCount: deduplicatedReports.length
     };
-  }, [savedReports, filterType, showOnlyRecent48H]);
+  }, [savedReports, filterType, showOnlyActive20H, nowMs]);
 
   return (
     <div className="space-y-3 pb-20 fade-in text-slate-100">
-      {/* Header Banner & 48 Hours Switch */}
+      {/* Header Banner & 20 Hours Switch */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-lg space-y-2.5">
         <div className="flex items-center justify-between">
           <div>
@@ -86,7 +108,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
               SAVED TURNAROUND REPORTS ({filteredReports.length})
             </h2>
             <p className="text-[10px] text-slate-400 mt-0.5">
-              Synced live with Cloud Firestore across all officer devices
+              Auto-vanish 20 hours after last save/edit • Live Firestore sync
             </p>
           </div>
 
@@ -118,27 +140,27 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
           </div>
         </div>
 
-        {/* 48-Hours Filter Switch */}
+        {/* 20-Hours Auto-Vanish Filter Switch */}
         <div className="flex items-center justify-between bg-slate-950/80 p-2 rounded-xl border border-slate-800 text-xs">
           <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
-            <Clock className="w-3.5 h-3.5 text-amber-400" />
-            <span>Show: <strong className="text-amber-300">{showOnlyRecent48H ? 'Last 48 Hours' : 'All History'}</strong></span>
+            <Timer className="w-3.5 h-3.5 text-amber-400" />
+            <span>Show: <strong className="text-amber-300">{showOnlyActive20H ? 'Active (< 20H)' : 'All History'}</strong></span>
           </div>
 
           <div className="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[10px]">
             <button
-              onClick={() => setShowOnlyRecent48H(true)}
+              onClick={() => setShowOnlyActive20H(true)}
               className={`px-2 py-1 rounded-md font-bold transition-all flex items-center gap-1 ${
-                showOnlyRecent48H ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400'
+                showOnlyActive20H ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400'
               }`}
             >
               <Clock className="w-3 h-3" />
-              <span>ACTIVE (48H)</span>
+              <span>ACTIVE (20H)</span>
             </button>
             <button
-              onClick={() => setShowOnlyRecent48H(false)}
+              onClick={() => setShowOnlyActive20H(false)}
               className={`px-2 py-1 rounded-md font-bold transition-all flex items-center gap-1 ${
-                !showOnlyRecent48H ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400'
+                !showOnlyActive20H ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400'
               }`}
             >
               <History className="w-3 h-3" />
@@ -154,9 +176,9 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
           <Plane className="w-10 h-10 text-slate-600 mx-auto opacity-50" />
           <p className="text-xs text-slate-300 font-bold">No saved reports found.</p>
           <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-            {showOnlyRecent48H
-              ? 'No active reports created in the last 48 hours. Click "ALL" above to view older reports.'
-              : 'No saved reports.'}
+            {showOnlyActive20H
+              ? 'No active reports created or updated in the last 20 hours.'
+              : 'No saved reports available.'}
           </p>
         </div>
       ) : (
@@ -166,6 +188,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
               hour: '2-digit',
               minute: '2-digit'
             });
+            const remainingCountdown = getRemainingVanishTime(report.timestamp);
 
             return (
               <div
@@ -186,8 +209,19 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
                     </span>
                   </div>
 
-                  <div className="font-mono text-xs text-amber-400 font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                    DEPART: {report.formData?.std || 'N/A'} LT
+                  {/* 20H Live Countdown Badge */}
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      title="Report auto-vanishes 20 hours after creation or last edit"
+                      className="inline-flex items-center gap-1 text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 shadow-sm"
+                    >
+                      <Timer className="w-3 h-3 text-amber-400 animate-pulse" />
+                      <span>Vanish in: {remainingCountdown}</span>
+                    </div>
+
+                    <div className="font-mono text-xs text-amber-400 font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                      DEPART: {report.formData?.std || 'N/A'} LT
+                    </div>
                   </div>
                 </div>
 
@@ -210,7 +244,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
                   <div className="flex items-center gap-1.5 self-end sm:self-auto">
                     <button
                       onClick={() => onDownloadJPG(report)}
-                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] sm:text-xs font-bold flex items-center gap-1 active:scale-95 transition-all"
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] sm:text-xs font-bold flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
                       title="Download JPG"
                     >
                       <Download className="w-3.5 h-3.5 text-amber-400" />
@@ -219,7 +253,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
 
                     <button
                       onClick={() => onEditReport(report.id)}
-                      className="px-2.5 py-1 rounded-lg bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 text-[10px] sm:text-xs font-bold flex items-center gap-1 active:scale-95 transition-all"
+                      className="px-2.5 py-1 rounded-lg bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 text-[10px] sm:text-xs font-bold flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
                       title="Edit Report"
                     >
                       <Edit className="w-3.5 h-3.5 text-blue-400" />
@@ -228,7 +262,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
 
                     <button
                       onClick={() => onDeleteReport(report.id)}
-                      className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/60 text-[10px] sm:text-xs font-bold active:scale-95 transition-all"
+                      className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/60 text-[10px] sm:text-xs font-bold active:scale-95 transition-all cursor-pointer"
                       title="Delete Report"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-red-400" />

@@ -18,6 +18,7 @@ export const db = config.firestoreDatabaseId
   ? getFirestore(app, config.firestoreDatabaseId)
   : getFirestore(app);
 
+const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000; // 20 Hours auto-vanish for Flight Reports
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
 
@@ -30,7 +31,7 @@ function getCreatedTimestamp(item: { createdAt?: number; id: string }): number {
   return !isNaN(parsed) && parsed > 1600000000000 ? parsed : Date.now();
 }
 
-// Real-time listener for Saved Reports across all devices
+// Real-time listener for Saved Reports across all devices (Auto-vanish after 20 hours from last save/edit)
 export function subscribeToSavedReports(
   onUpdate: (reports: SavedReport[]) => void,
   onError?: (err: any) => void
@@ -42,9 +43,21 @@ export function subscribeToSavedReports(
       (snapshot) => {
         const reports: SavedReport[] = [];
         const seenFlights = new Set<string>();
+        const now = Date.now();
 
         snapshot.forEach((docSnap) => {
           const rep = docSnap.data() as SavedReport;
+
+          // Check report age (20 Hours from last modified / timestamp)
+          const repTime = rep.timestamp ? new Date(rep.timestamp).getTime() : 0;
+          const ageMs = !isNaN(repTime) && repTime > 0 ? now - repTime : 0;
+
+          if (ageMs > TWENTY_HOURS_MS) {
+            // Auto-purge report from Firestore if older than 20 hours
+            deleteDoc(doc(db, 'savedReports', rep.id)).catch(() => {});
+            return;
+          }
+
           const flightNum = (rep.flight || rep.formData?.deptFlt || '')
             .replace(/^BS-?/i, '')
             .trim()
@@ -212,6 +225,7 @@ export function subscribeToUserLogs(
       q,
       (snapshot) => {
         const logs: UserLog[] = [];
+        const seenSignatures = new Set<string>();
         const now = Date.now();
 
         snapshot.forEach((docSnap) => {
@@ -220,7 +234,18 @@ export function subscribeToUserLogs(
           const ageMs = now - createdTs;
 
           if (ageMs <= FORTY_EIGHT_HOURS_MS) {
-            logs.push({ ...item, createdAt: createdTs });
+            // Deduplicate logs created within 2 minutes for same user, action and details
+            const timeWindow = Math.floor(createdTs / 120000); // 2 minute bucket
+            const sig = `${item.userId || ''}_${item.action || ''}_${(item.details || '').trim()}_${timeWindow}`;
+
+            if (!seenSignatures.has(sig) && !seenSignatures.has(item.id)) {
+              seenSignatures.add(sig);
+              seenSignatures.add(item.id);
+              logs.push({ ...item, createdAt: createdTs });
+            } else {
+              // Auto-purge duplicate log doc from Firestore
+              deleteDoc(doc(db, 'userLogs', item.id)).catch(() => {});
+            }
           } else {
             // Auto-purge log from Firestore if older than 48 hours
             deleteDoc(doc(db, 'userLogs', item.id)).catch(() => {});
