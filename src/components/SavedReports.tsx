@@ -193,33 +193,52 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
             return (
               <div
                 key={report.id}
-                className="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-md space-y-2.5 hover:border-amber-500/40 transition-all"
+                className={`relative group bg-slate-900/95 border-2 ${
+                  report.type === 'INTERNATIONAL'
+                    ? 'border-amber-500/60 shadow-amber-500/10'
+                    : 'border-cyan-500/60 shadow-cyan-500/10'
+                } hover:border-amber-400 rounded-2xl p-3.5 shadow-xl transition-all space-y-2.5 overflow-hidden backdrop-blur-md`}
               >
+                {/* Left Highlight Accent Bar */}
+                <div
+                  className={`absolute left-0 top-0 bottom-0 w-1.5 ${
+                    report.type === 'INTERNATIONAL'
+                      ? 'bg-gradient-to-b from-amber-400 to-amber-600'
+                      : 'bg-gradient-to-b from-cyan-400 to-blue-600'
+                  }`}
+                />
+
                 {/* Top Info Bar: Flight No, Route, Type, Depart Time */}
-                <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-800/80 pb-2">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono font-black text-amber-300 text-sm sm:text-base tracking-wide">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2 pl-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono font-black text-amber-300 text-base sm:text-lg tracking-wider">
                       {report.flight}
                     </span>
-                    <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800/60 font-mono">
+                    <span className="text-[10px] sm:text-xs font-extrabold px-2.5 py-0.5 rounded-lg bg-blue-950 text-blue-300 border border-blue-700/60 font-mono shadow-sm">
                       {report.route || 'N/A'}
                     </span>
-                    <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    <span
+                      className={`text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider ${
+                        report.type === 'INTERNATIONAL'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                          : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                      }`}
+                    >
                       {report.type}
                     </span>
                   </div>
 
-                  {/* 20H Live Countdown Badge */}
-                  <div className="flex items-center gap-1.5">
+                  {/* 20H Live Countdown Badge & Depart Time */}
+                  <div className="flex flex-wrap items-center gap-2">
                     <div
                       title="Report auto-vanishes 20 hours after creation or last edit"
-                      className="inline-flex items-center gap-1 text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 shadow-sm"
+                      className="inline-flex items-center gap-1.5 text-[10px] font-mono font-extrabold px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 shadow-sm"
                     >
-                      <Timer className="w-3 h-3 text-amber-400 animate-pulse" />
+                      <Timer className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
                       <span>Vanish in: {remainingCountdown}</span>
                     </div>
 
-                    <div className="font-mono text-xs text-amber-400 font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                    <div className="font-mono text-xs text-amber-300 font-black bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 shadow-inner">
                       DEPART: {report.formData?.std || 'N/A'} LT
                     </div>
                   </div>
