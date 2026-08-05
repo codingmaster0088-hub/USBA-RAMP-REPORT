@@ -86,10 +86,12 @@ body.light-mode .export-canvas-subtitle {
   font-weight: 800 !important;
 }
 
+body.light-mode .text-slate-100,
+body.light-mode .text-slate-200,
+body.light-mode .text-slate-300,
 body.light-mode .text-slate-400,
-body.light-mode .text-slate-500,
-body.light-mode .text-slate-300 {
-  color: #334155 !important;
+body.light-mode .text-slate-500 {
+  color: #0f172a !important;
   font-weight: 700 !important;
 }
 

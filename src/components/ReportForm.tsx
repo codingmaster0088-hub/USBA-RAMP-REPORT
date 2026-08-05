@@ -317,14 +317,15 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       updated.status = statusRes.text;
     }
 
-    // Auto Ground Time
-    if (field === 'con' || field === 'co') {
+    // Auto Ground Time (Calculated from Arrival Door Open 'do' to Departure C/OFF 'co')
+    if (field === 'do' || field === 'co' || field === 'con') {
       if (flightMode === 'ROUND') {
-        const gt = calculateGroundTime(
-          field === 'con' ? value : updated.con,
-          field === 'co' ? value : updated.co
-        );
-        updated.ground = gt;
+        const doorOpenTime = field === 'do' ? value : (updated.do || updated.con);
+        const cOffTime = field === 'co' ? value : updated.co;
+        if (doorOpenTime && cOffTime) {
+          const gt = calculateGroundTime(doorOpenTime, cOffTime);
+          updated.ground = gt;
+        }
       }
     }
 
@@ -459,8 +460,9 @@ export const ReportForm: React.FC<ReportFormProps> = ({
             <button
               onClick={() => {
                 setFlightMode('ROUND');
-                if (formData.con && formData.co) {
-                  const gt = calculateGroundTime(formData.con, formData.co);
+                const doorOpenTime = formData.do || formData.con;
+                if (doorOpenTime && formData.co) {
+                  const gt = calculateGroundTime(doorOpenTime, formData.co);
                   setFormData((prev) => ({ ...prev, ground: gt }));
                 }
               }}

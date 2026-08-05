@@ -670,6 +670,7 @@ export default function App() {
         <NoticeModal
           notice={activePopupNotice}
           onClose={handleAcknowledgeNotice}
+          isDarkMode={isDarkMode}
         />
       )}
 
