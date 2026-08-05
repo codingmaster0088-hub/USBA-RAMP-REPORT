@@ -26,6 +26,8 @@ import {
   calculateGroundTime
 } from '../data/routesDB';
 
+const DRAFT_KEY = 'usb_ramp_report_draft';
+
 interface ReportFormProps {
   user: UserProfile;
   initialType: ReportType;
@@ -33,6 +35,7 @@ interface ReportFormProps {
   onSaveReport: (data: RampReportFormData, type: ReportType, mode: FlightMode, reportId?: string) => void;
   onDownloadJPG: (data: RampReportFormData, type: ReportType, mode: FlightMode) => void;
   onNewReport: () => void;
+  isDarkMode?: boolean;
 }
 
 export const ReportForm: React.FC<ReportFormProps> = ({
@@ -41,18 +44,61 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   reportToEdit,
   onSaveReport,
   onDownloadJPG,
-  onNewReport
+  onNewReport,
+  isDarkMode = false
 }) => {
-  const [reportType, setReportType] = useState<ReportType>(
-    reportToEdit ? reportToEdit.type : initialType
-  );
-  const [flightMode, setFlightMode] = useState<FlightMode>(
-    reportToEdit ? reportToEdit.mode : 'ROUND'
-  );
+  const [draftRestoredAt, setDraftRestoredAt] = useState<string | null>(() => {
+    if (reportToEdit) return null;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.savedAt) {
+          const d = new Date(parsed.savedAt);
+          return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' LT';
+        }
+      }
+    } catch (e) {}
+    return null;
+  });
+
+  const [reportType, setReportType] = useState<ReportType>(() => {
+    if (reportToEdit) return reportToEdit.type;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.reportType) return parsed.reportType;
+      }
+    } catch (e) {}
+    return initialType;
+  });
+
+  const [flightMode, setFlightMode] = useState<FlightMode>(() => {
+    if (reportToEdit) return reportToEdit.mode;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.flightMode) return parsed.flightMode;
+      }
+    } catch (e) {}
+    return 'ROUND';
+  });
 
   // Initial Form State
   const [formData, setFormData] = useState<RampReportFormData>(() => {
     if (reportToEdit) return reportToEdit.formData;
+
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.formData) {
+          return parsed.formData;
+        }
+      }
+    } catch (e) {}
 
     const todayStr = new Date()
       .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
@@ -105,6 +151,66 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       setFlightMode(reportToEdit.mode);
     }
   }, [reportToEdit]);
+
+  // Continuous auto-save draft to localStorage whenever formData, reportType, or flightMode changes
+  useEffect(() => {
+    if (reportToEdit) return;
+    const draftPayload = {
+      formData,
+      reportType,
+      flightMode,
+      savedAt: Date.now()
+    };
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draftPayload));
+    } catch (e) {
+      console.error('Failed to save draft:', e);
+    }
+  }, [formData, reportType, flightMode, reportToEdit]);
+
+  // Save draft immediately when switching apps (visibilitychange / blur / beforeunload)
+  useEffect(() => {
+    const saveCurrentDraft = () => {
+      if (reportToEdit) return;
+      const draftPayload = {
+        formData,
+        reportType,
+        flightMode,
+        savedAt: Date.now()
+      };
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftPayload));
+      } catch (e) {}
+    };
+
+    const handleVisibilityChange = () => {
+      saveCurrentDraft();
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', saveCurrentDraft);
+    window.addEventListener('beforeunload', saveCurrentDraft);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', saveCurrentDraft);
+      window.removeEventListener('beforeunload', saveCurrentDraft);
+    };
+  }, [formData, reportType, flightMode, reportToEdit]);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+      setDraftRestoredAt(null);
+    } catch (e) {}
+  };
+
+  const handleResetForm = () => {
+    if (window.confirm('Clear all filled form fields and start a new blank report?')) {
+      clearDraft();
+      onNewReport();
+    }
+  };
 
   // Gate/Bay editability rule for International
   // If gate number has a letter after digits (e.g., C1A, C2A), DOC IN & DOC OUT are NOT editable
@@ -172,6 +278,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       setSkippedModalOpen(true);
       return;
     }
+    clearDraft();
     onSaveReport(formData, reportType, flightMode, reportToEdit?.id);
   };
 
@@ -182,6 +289,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       setSkippedModalOpen(true);
       return;
     }
+    clearDraft();
     // Automatically save report with modified data when download is clicked
     onSaveReport(formData, reportType, flightMode, reportToEdit?.id);
     onDownloadJPG(formData, reportType, flightMode);
@@ -246,19 +354,74 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
   return (
     <div className="space-y-4 pb-24 fade-in">
+      {/* Draft Auto-Saved & Restored Notice Banner */}
+      {draftRestoredAt && !reportToEdit && (
+        <div
+          className={`rounded-2xl p-3.5 border shadow-lg flex items-center justify-between gap-3 ${
+            isDarkMode
+              ? 'bg-gradient-to-r from-emerald-950/80 via-slate-900 to-emerald-950/80 border-emerald-500/40 text-emerald-200'
+              : 'bg-emerald-50 border-2 border-emerald-500 text-emerald-950 shadow-emerald-100'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="relative flex h-3 w-3 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-black text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  ⚡ DRAFT AUTO-RESTORED
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-mono font-bold">
+                  {draftRestoredAt}
+                </span>
+              </div>
+              <p className="text-[11px] opacity-90 leading-tight mt-0.5 font-medium">
+                Your entries were automatically saved when you left the app (e.g. WhatsApp). All fields are preserved!
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleResetForm}
+            className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider active:scale-95 transition-all cursor-pointer shrink-0 border border-red-500 shadow-sm"
+          >
+            CLEAR DRAFT
+          </button>
+        </div>
+      )}
+
       {/* Flight Type & Route Mode Selector */}
-      <div className="space-y-3 bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg">
+      <div
+        className={`space-y-3 rounded-2xl p-3.5 shadow-lg border ${
+          isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300 shadow-slate-200'
+        }`}
+      >
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-xs font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5">
-            <FileText className="w-4 h-4 text-amber-400" />
+          <h2
+            className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
+              isDarkMode ? 'text-white' : 'text-slate-900'
+            }`}
+          >
+            <FileText className="w-4 h-4 text-amber-500" />
             1. SELECT FLIGHT TYPE
           </h2>
-          <button
-            onClick={onNewReport}
-            className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 active:scale-95 transition-all"
-          >
-            RESET FORM
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Real-time auto-saving
+            </span>
+            <button
+              onClick={handleResetForm}
+              className={`text-[10px] font-black px-2.5 py-1 rounded-lg border active:scale-95 transition-all cursor-pointer ${
+                isDarkMode
+                  ? 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700'
+                  : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
+              }`}
+            >
+              RESET FORM
+            </button>
+          </div>
         </div>
 
         {/* Domestic vs International Selector */}

@@ -34,6 +34,7 @@ import { AdminSection } from './components/AdminSection';
 import { LoginModal } from './components/LoginModal';
 import { NoticeModal } from './components/NoticeModal';
 import { ReportCanvasCard } from './components/ReportCanvasCard';
+import { DownloadModal } from './components/DownloadModal';
 import { CheckCircle2, AlertCircle, RefreshCw, X, Wifi } from 'lucide-react';
 
 export default function App() {
@@ -112,14 +113,49 @@ export default function App() {
   const [userLogs, setUserLogs] = useState<UserLog[]>([]);
 
   // Active Tab: 'live' | 'form' | 'saved' | 'admin'
-  const [activeTab, setActiveTab] = useState<ActiveTab>('live');
+  const [activeTab, setActiveTabState] = useState<ActiveTab>(() => {
+    try {
+      const saved = localStorage.getItem('usb_active_tab') as ActiveTab;
+      if (saved && ['live', 'form', 'saved', 'admin'].includes(saved)) {
+        return saved;
+      }
+    } catch (e) {}
+    return 'live';
+  });
+
+  const setActiveTab = (tab: ActiveTab) => {
+    setActiveTabState(tab);
+    try {
+      localStorage.setItem('usb_active_tab', tab);
+    } catch (e) {}
+  };
 
   // Form Initial Sector Mode & Report to Edit
   const [reportType, setReportType] = useState<ReportType>('DOMESTIC');
-  const [reportToEdit, setReportToEdit] = useState<SavedReport | null>(null);
+  const [reportToEdit, setReportToEditState] = useState<SavedReport | null>(() => {
+    try {
+      const saved = localStorage.getItem('usb_report_to_edit');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return null;
+  });
+
+  const setReportToEdit = (rep: SavedReport | null) => {
+    setReportToEditState(rep);
+    try {
+      if (rep) {
+        localStorage.setItem('usb_report_to_edit', JSON.stringify(rep));
+      } else {
+        localStorage.removeItem('usb_report_to_edit');
+      }
+    } catch (e) {}
+  };
 
   // Toast Modal State
   const [toastMessage, setToastMessage] = useState<{ title: string; subtitle?: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  // Download Target Modal State for iOS/Mobile Share Support
+  const [downloadModalTarget, setDownloadModalTarget] = useState<{ dataUrl: string; fileName: string } | null>(null);
 
   // JPG Export Render Trigger
   const [renderExportTarget, setRenderExportTarget] = useState<{
@@ -391,6 +427,10 @@ export default function App() {
   };
 
   const handleNewReport = () => {
+    try {
+      localStorage.removeItem('usb_ramp_report_draft');
+      localStorage.removeItem('usb_report_to_edit');
+    } catch (e) {}
     setReportToEdit(null);
     setActiveTab('form');
     showToast('New report form initialized', '', 'info');
@@ -409,6 +449,12 @@ export default function App() {
       showToast('Flight Number Required', 'Enter Departure Flight Number (e.g. 101)', 'error');
       return;
     }
+
+    try {
+      localStorage.removeItem('usb_ramp_report_draft');
+      localStorage.removeItem('usb_report_to_edit');
+    } catch (e) {}
+    setReportToEdit(null);
 
     const targetFlightClean = (data.deptFlt || '').replace(/^BS-?/i, '').trim().toUpperCase();
     const flightKey = `BS-${targetFlightClean}`;
@@ -514,14 +560,26 @@ export default function App() {
   const handleCaptureComplete = (dataUrl: string) => {
     if (!renderExportTarget || !user) return;
 
-    const link = document.createElement('a');
-    link.download = `RAMP_${user.station}_BS${renderExportTarget.formData.deptFlt}.jpg`;
-    link.href = dataUrl;
-    link.click();
+    const fileName = `RAMP_${user.station}_BS${renderExportTarget.formData.deptFlt}.jpg`;
+
+    // Attempt direct download anchor trigger
+    try {
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      console.error('Direct download click exception:', e);
+    }
+
+    // Always open DownloadModal for iOS Safari/Chrome, WebViews, and desktop share
+    setDownloadModalTarget({ dataUrl, fileName });
 
     setIsExporting(false);
     setRenderExportTarget(null);
-    showToast('JPG Report Downloaded!', link.download, 'success');
+    showToast('JPG Report Ready!', fileName, 'success');
   };
 
   const handleCaptureError = (err: any) => {
@@ -574,6 +632,7 @@ export default function App() {
             onSaveReport={handleSaveReport}
             onDownloadJPG={handleDownloadJPG}
             onNewReport={handleNewReport}
+            isDarkMode={isDarkMode}
           />
         )}
 
@@ -676,6 +735,17 @@ export default function App() {
             onCaptureError={handleCaptureError}
           />
         </>
+      )}
+
+      {/* Download Modal for iOS / Mobile / Web Share */}
+      {downloadModalTarget && (
+        <DownloadModal
+          isOpen={!!downloadModalTarget}
+          onClose={() => setDownloadModalTarget(null)}
+          dataUrl={downloadModalTarget.dataUrl}
+          fileName={downloadModalTarget.fileName}
+          isDarkMode={isDarkMode}
+        />
       )}
     </div>
   );
