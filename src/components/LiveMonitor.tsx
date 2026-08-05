@@ -489,19 +489,45 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
       {/* POP-UP TYPE NOTICES PAGE / MODAL */}
       {showNoticesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md fade-in">
-          <div className="bg-slate-900 border-2 border-amber-500/60 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
+          <div
+            className={`border-2 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 ${
+              isDarkMode
+                ? 'bg-slate-900 border-amber-500/60 text-slate-100'
+                : 'bg-white border-amber-500 text-slate-950 shadow-amber-500/20'
+            }`}
+          >
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 p-4 border-b border-amber-500/40 flex items-center justify-between">
+            <div
+              className={`p-4 border-b flex items-center justify-between ${
+                isDarkMode
+                  ? 'bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-amber-500/40'
+                  : 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 border-amber-600 text-slate-950'
+              }`}
+            >
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400">
+                <div
+                  className={`w-9 h-9 rounded-xl border flex items-center justify-center ${
+                    isDarkMode
+                      ? 'bg-amber-500/20 border-amber-400/40 text-amber-400'
+                      : 'bg-slate-950/20 border-slate-900/30 text-slate-950'
+                  }`}
+                >
                   <Bell className="w-5 h-5 animate-bounce" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-amber-400" />
+                  <h3
+                    className={`text-sm font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                      isDarkMode ? 'text-amber-300' : 'text-slate-950'
+                    }`}
+                  >
+                    <Sparkles className={`w-4 h-4 ${isDarkMode ? 'text-amber-400' : 'text-slate-950'}`} />
                     ADMIN SPECIAL NOTICES ({notices.length})
                   </h3>
-                  <p className="text-[10px] text-slate-400 font-mono">
+                  <p
+                    className={`text-[10px] font-mono ${
+                      isDarkMode ? 'text-slate-400' : 'text-slate-900 font-extrabold'
+                    }`}
+                  >
                     Official Operational Directives & Announcements
                   </p>
                 </div>
@@ -509,19 +535,29 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
 
               <button
                 onClick={() => setShowNoticesModal(false)}
-                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center border border-slate-700 transition-all active:scale-95"
+                className={`w-8 h-8 rounded-xl flex items-center justify-center border transition-all active:scale-95 cursor-pointer ${
+                  isDarkMode
+                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border-slate-700'
+                    : 'bg-slate-200 hover:bg-slate-300 text-slate-800 border-slate-400'
+                }`}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Modal Content - Notices List */}
-            <div className="p-4 space-y-3 overflow-y-auto flex-1 bg-slate-950/60">
+            <div
+              className={`p-4 space-y-3 overflow-y-auto flex-1 ${
+                isDarkMode ? 'bg-slate-950/60' : 'bg-slate-50'
+              }`}
+            >
               {notices.length === 0 ? (
                 <div className="text-center py-10 space-y-2">
-                  <MessageSquare className="w-10 h-10 text-slate-600 mx-auto opacity-50" />
-                  <p className="text-xs text-slate-400 font-bold uppercase">No Active Special Notices</p>
-                  <p className="text-[11px] text-slate-500">
+                  <MessageSquare className="w-10 h-10 text-slate-500 mx-auto opacity-50" />
+                  <p className={`text-xs font-bold uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
+                    No Active Special Notices
+                  </p>
+                  <p className={`text-[11px] ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>
                     There are currently no special operational notices broadcasted by Admin.
                   </p>
                 </div>
@@ -552,9 +588,17 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                   return (
                     <div
                       key={notice.id || idx}
-                      className="bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/40 text-xs space-y-2 shadow-lg relative"
+                      className={`p-4 rounded-xl border text-xs space-y-2 shadow-md relative ${
+                        isDarkMode
+                          ? 'bg-slate-900 border-amber-500/40 text-slate-100'
+                          : 'bg-amber-50/90 border-amber-400/80 text-slate-950'
+                      }`}
                     >
-                      <p className="text-amber-100 font-semibold leading-relaxed whitespace-pre-wrap pr-8">
+                      <p
+                        className={`font-sans font-bold leading-relaxed whitespace-pre-wrap pr-8 ${
+                          isDarkMode ? 'text-slate-100' : 'text-slate-950'
+                        }`}
+                      >
                         {notice.message}
                       </p>
 
@@ -564,16 +608,25 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                             if (onDeleteNotice) onDeleteNotice(notice.id);
                           }}
                           title="Remove Notice (Admin Only)"
-                          className="absolute top-3 right-3 p-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/40 active:scale-95 transition-all cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                          className="absolute top-3 right-3 p-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white border border-rose-400/40 active:scale-95 transition-all cursor-pointer flex items-center gap-1 text-[10px] font-bold shadow-md"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                          <Trash2 className="w-3.5 h-3.5 text-white" />
                           <span className="hidden sm:inline">REMOVE</span>
                         </button>
                       )}
 
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono pt-2 border-t border-slate-800">
-                        <span>Author: <strong className="text-amber-400">{notice.author}</strong></span>
-                        <span>{formattedPostingTime}</span>
+                      <div
+                        className={`flex justify-between items-center text-[10px] font-mono pt-2 border-t ${
+                          isDarkMode ? 'text-slate-400 border-slate-800' : 'text-slate-800 border-amber-200'
+                        }`}
+                      >
+                        <span>
+                          Author:{' '}
+                          <strong className={isDarkMode ? 'text-amber-400' : 'text-amber-900 font-black'}>
+                            {notice.author || notice.authorName || 'ADMIN'}
+                          </strong>
+                        </span>
+                        <span className="font-bold">{formattedPostingTime}</span>
                       </div>
                     </div>
                   );
@@ -582,10 +635,14 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
             </div>
 
             {/* Modal Footer with Close Button */}
-            <div className="p-3.5 bg-slate-900 border-t border-slate-800 flex justify-end">
+            <div
+              className={`p-3.5 border-t flex justify-end ${
+                isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
+              }`}
+            >
               <button
                 onClick={() => setShowNoticesModal(false)}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <X className="w-4 h-4" />
                 <span>CLOSE</span>
