@@ -22,6 +22,7 @@ import {
   syncScheduleToFirestore,
   subscribeToNotices,
   broadcastNoticeToFirestore,
+  deleteNoticeFromFirestore,
   subscribeToUserLogs,
   logUserActivityToFirestore
 } from './lib/firebase';
@@ -329,6 +330,21 @@ export default function App() {
     logUserAction('BROADCAST_NOTICE', `Broadcasted special notice: "${message.slice(0, 45)}${message.length > 45 ? '...' : ''}"`);
   };
 
+  // Delete Special Notice (Admin action)
+  const handleDeleteNotice = async (noticeId: string) => {
+    try {
+      await deleteNoticeFromFirestore(noticeId);
+      if (activePopupNotice?.id === noticeId) {
+        setActivePopupNotice(null);
+      }
+      showToast('Notice Removed', 'Notice deleted successfully', 'info');
+      logUserAction('OTHER', `Deleted broadcast notice (${noticeId})`);
+    } catch (e) {
+      console.error(e);
+      showToast('Delete Failed', 'Could not remove notice', 'error');
+    }
+  };
+
   const handleAcknowledgeNotice = () => {
     if (activePopupNotice) {
       localStorage.setItem(`usb_notice_ack_${activePopupNotice.id}`, 'true');
@@ -624,6 +640,8 @@ export default function App() {
             onStartReportWithFlight={handleStartReportWithFlight}
             onStartReport={handleStartReport}
             isDarkMode={isDarkMode}
+            isAdmin={user?.id === '1425' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126'}
+            onDeleteNotice={handleDeleteNotice}
           />
         )}
 
@@ -658,8 +676,10 @@ export default function App() {
             scheduleFlights={scheduleFlights}
             scheduleDate={scheduleDate}
             userLogs={userLogs}
+            notices={notices}
             onUpdateSchedule={handleUpdateSchedule}
             onBroadcastNotice={handleBroadcastNotice}
+            onDeleteNotice={handleDeleteNotice}
             showToast={showToast}
           />
         )}
@@ -671,6 +691,8 @@ export default function App() {
           notice={activePopupNotice}
           onClose={handleAcknowledgeNotice}
           isDarkMode={isDarkMode}
+          isAdmin={user?.id === '1425' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126'}
+          onDeleteNotice={handleDeleteNotice}
         />
       )}
 

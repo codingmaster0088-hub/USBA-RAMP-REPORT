@@ -1,14 +1,22 @@
 import React from 'react';
-import { Bell, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
+import { Bell, AlertTriangle, X, CheckCircle2, Trash2 } from 'lucide-react';
 import { AdminNotice } from '../types';
 
 interface NoticeModalProps {
   notice: AdminNotice;
   onClose: () => void;
   isDarkMode?: boolean;
+  isAdmin?: boolean;
+  onDeleteNotice?: (id: string) => void;
 }
 
-export const NoticeModal: React.FC<NoticeModalProps> = ({ notice, onClose, isDarkMode = true }) => {
+export const NoticeModal: React.FC<NoticeModalProps> = ({
+  notice,
+  onClose,
+  isDarkMode = true,
+  isAdmin = false,
+  onDeleteNotice
+}) => {
   const getNoticePostingTime = () => {
     if (notice.createdAt && !isNaN(notice.createdAt)) {
       const d = new Date(notice.createdAt);
@@ -95,14 +103,31 @@ export const NoticeModal: React.FC<NoticeModalProps> = ({ notice, onClose, isDar
           </div>
         </div>
 
-        {/* Action Button */}
-        <button
-          onClick={onClose}
-          className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
-        >
-          <CheckCircle2 className="w-4 h-4" />
-          <span>I ACKNOWLEDGE THIS NOTICE</span>
-        </button>
+        {/* Action Buttons */}
+        <div className="space-y-2">
+          <button
+            onClick={onClose}
+            className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>I ACKNOWLEDGE THIS NOTICE</span>
+          </button>
+
+          {(isAdmin || onDeleteNotice) && (
+            <button
+              onClick={() => {
+                if (onDeleteNotice) {
+                  onDeleteNotice(notice.id);
+                }
+                onClose();
+              }}
+              className="w-full py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-rose-600/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 border border-rose-400/30"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>REMOVE NOTICE (ADMIN)</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

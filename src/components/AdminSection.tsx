@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserProfile, ScheduleFlight, UserLog, UserActionType } from '../types';
+import { UserProfile, ScheduleFlight, UserLog, UserActionType, AdminNotice } from '../types';
 import { parseFLSTData, sampleFLSTInput } from '../utils/flstParser';
 import {
   ShieldCheck,
@@ -25,8 +25,10 @@ interface AdminSectionProps {
   scheduleFlights: ScheduleFlight[];
   scheduleDate: string;
   userLogs?: UserLog[];
+  notices?: AdminNotice[];
   onUpdateSchedule: (flights: ScheduleFlight[], dateHeader: string, rawFlst: string) => void;
   onBroadcastNotice?: (message: string) => Promise<void>;
+  onDeleteNotice?: (noticeId: string) => void;
   showToast: (title: string, subtitle?: string, type?: 'success' | 'info' | 'error') => void;
 }
 
@@ -35,8 +37,10 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   scheduleFlights,
   scheduleDate,
   userLogs = [],
+  notices = [],
   onUpdateSchedule,
   onBroadcastNotice,
+  onDeleteNotice,
   showToast
 }) => {
   // Secret Admin PIN authentication state
@@ -519,6 +523,41 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
             <span>{isBroadcasting ? 'BROADCASTING...' : 'BROADCAST NOTICE'}</span>
           </button>
         </div>
+
+        {/* Active Broadcast Notices List with Delete Button for Admin */}
+        {notices.length > 0 && (
+          <div className="pt-3 border-t border-slate-800 space-y-2">
+            <span className="text-[11px] font-extrabold text-amber-300 uppercase tracking-wider block">
+              ACTIVE BROADCASTED NOTICES ({notices.length})
+            </span>
+            <div className="space-y-2">
+              {notices.map((n) => (
+                <div
+                  key={n.id}
+                  className="bg-slate-950 p-3 rounded-xl border border-amber-500/30 flex items-start justify-between gap-3"
+                >
+                  <div className="space-y-1 text-xs text-left">
+                    <p className="text-slate-200 font-bold leading-relaxed whitespace-pre-wrap">
+                      {n.message}
+                    </p>
+                    <div className="text-[10px] font-mono text-slate-500">
+                      Author: <span className="text-amber-400">{n.authorName || n.author || 'Admin'}</span>
+                    </div>
+                  </div>
+                  {onDeleteNotice && (
+                    <button
+                      onClick={() => onDeleteNotice(n.id)}
+                      className="px-2.5 py-1.5 rounded-lg bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-500/40 text-[10px] font-bold shrink-0 transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>REMOVE</span>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

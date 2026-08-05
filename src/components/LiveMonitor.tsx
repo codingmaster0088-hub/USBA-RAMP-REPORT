@@ -13,7 +13,8 @@ import {
   Bell,
   Sparkles,
   X,
-  MessageSquare
+  MessageSquare,
+  Trash2
 } from 'lucide-react';
 
 interface LiveMonitorProps {
@@ -24,6 +25,8 @@ interface LiveMonitorProps {
   onStartReport: (type: ReportType) => void;
   onStartReportWithFlight?: (flt: ScheduleFlight) => void;
   isDarkMode?: boolean;
+  isAdmin?: boolean;
+  onDeleteNotice?: (id: string) => void;
 }
 
 // Parse time string (e.g. "07:00 AM", "14:30", "0915") to total minutes from midnight
@@ -142,7 +145,9 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   scheduleFlights,
   scheduleDate,
   notices = [],
-  isDarkMode = false
+  isDarkMode = false,
+  isAdmin = false,
+  onDeleteNotice
 }) => {
   const [activeSection, setActiveSection] = useState<'DEPARTURE' | 'ARRIVAL'>('DEPARTURE');
   const [showRemainingOnly, setShowRemainingOnly] = useState<boolean>(true);
@@ -547,11 +552,25 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                   return (
                     <div
                       key={notice.id || idx}
-                      className="bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/40 text-xs space-y-2 shadow-lg"
+                      className="bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/40 text-xs space-y-2 shadow-lg relative"
                     >
-                      <p className="text-amber-100 font-semibold leading-relaxed whitespace-pre-wrap">
+                      <p className="text-amber-100 font-semibold leading-relaxed whitespace-pre-wrap pr-8">
                         {notice.message}
                       </p>
+
+                      {(isAdmin || onDeleteNotice) && (
+                        <button
+                          onClick={() => {
+                            if (onDeleteNotice) onDeleteNotice(notice.id);
+                          }}
+                          title="Remove Notice (Admin Only)"
+                          className="absolute top-3 right-3 p-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/40 active:scale-95 transition-all cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                          <span className="hidden sm:inline">REMOVE</span>
+                        </button>
+                      )}
+
                       <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono pt-2 border-t border-slate-800">
                         <span>Author: <strong className="text-amber-400">{notice.author}</strong></span>
                         <span>{formattedPostingTime}</span>

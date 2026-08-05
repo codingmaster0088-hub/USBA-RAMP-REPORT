@@ -214,6 +214,17 @@ export async function broadcastNoticeToFirestore(notice: AdminNotice) {
   }
 }
 
+// Delete Admin Notice from Firestore
+export async function deleteNoticeFromFirestore(id: string) {
+  try {
+    const docRef = doc(db, 'notices', id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.error('Failed to delete notice from Firestore:', err);
+    throw err;
+  }
+}
+
 // Real-time listener for User Activity Logs (Auto-vanish after 48 hours)
 export function subscribeToUserLogs(
   onUpdate: (logs: UserLog[]) => void,
