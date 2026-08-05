@@ -79,27 +79,30 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
             borderBottom: '6px solid #eca400'
           }}
         >
-          <h1
+          <div
+            className="export-canvas-title"
             style={{
               margin: 0,
               fontSize: '55px',
               fontWeight: 900,
-              letterSpacing: '2px'
+              letterSpacing: '2px',
+              color: '#ffffff'
             }}
           >
             {flightTitle}
-          </h1>
-          <h2
+          </div>
+          <div
+            className="export-canvas-subtitle"
             style={{
               margin: '8px 0 0',
               fontSize: '30px',
-              fontWeight: 'normal',
-              opacity: 0.95,
+              fontWeight: 800,
+              color: '#eca400',
               textTransform: 'uppercase'
             }}
           >
             RAMP DEPARTURE REPORT
-          </h2>
+          </div>
         </div>
 
         {/* General Info */}

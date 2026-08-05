@@ -73,6 +73,19 @@ body.light-mode h4 {
   font-weight: 900 !important;
 }
 
+/* Ensure Export Canvas JPG header elements maintain bright high contrast against navy background */
+.export-canvas-title,
+body.light-mode .export-canvas-title {
+  color: #ffffff !important;
+  font-weight: 900 !important;
+}
+
+.export-canvas-subtitle,
+body.light-mode .export-canvas-subtitle {
+  color: #eca400 !important;
+  font-weight: 800 !important;
+}
+
 body.light-mode .text-slate-400,
 body.light-mode .text-slate-500,
 body.light-mode .text-slate-300 {
