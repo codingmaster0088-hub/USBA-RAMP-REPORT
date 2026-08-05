@@ -561,6 +561,7 @@ export default function App() {
             notices={notices}
             onStartReportWithFlight={handleStartReportWithFlight}
             onStartReport={handleStartReport}
+            isDarkMode={isDarkMode}
           />
         )}
 
@@ -614,6 +615,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         savedCount={savedReports.length}
+        isDarkMode={isDarkMode}
       />
 
       {/* Toast Notification */}
