@@ -365,7 +365,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
             }`}
           >
             <span>{activeSection} LIST {showRemainingOnly ? '(UPCOMING / REMAINING)' : '(ALL FLIGHTS)'}</span>
-            <span className={isDarkMode ? 'text-amber-400' : 'text-amber-800 font-black'}>
+            <span className={isDarkMode ? 'text-amber-400' : 'text-slate-900 font-black'}>
               {activeList.length} ITEMS
             </span>
           </div>
@@ -435,7 +435,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                       <div className="truncate">
                         <div
                           className={`font-mono font-black text-xs sm:text-sm tracking-wide truncate ${
-                            isDarkMode ? 'text-amber-300' : 'text-amber-800'
+                            isDarkMode ? 'text-amber-300' : 'text-slate-950 font-black'
                           }`}
                         >
                           {flt.formattedDisplay}

@@ -560,7 +560,11 @@ export default function App() {
   const handleCaptureComplete = (dataUrl: string) => {
     if (!renderExportTarget || !user) return;
 
-    const fileName = `RAMP_${user.station}_BS${renderExportTarget.formData.deptFlt}.jpg`;
+    const rawFlt = (renderExportTarget.formData.deptFlt || renderExportTarget.formData.arrFlt || 'REPORT').replace(/^BS-?/i, '').trim().toUpperCase();
+    const fltNo = rawFlt ? `BS-${rawFlt}` : 'BS-FLIGHT';
+    const routeStr = (renderExportTarget.formData.deptRoute || renderExportTarget.formData.route || renderExportTarget.formData.arrRoute || '').trim().toUpperCase();
+
+    const fileName = routeStr ? `${fltNo} (${routeStr}).jpg` : `${fltNo}.jpg`;
 
     // Attempt direct download anchor trigger
     try {
@@ -643,6 +647,7 @@ export default function App() {
             onEditReport={handleEditReport}
             onDeleteReport={handleDeleteReport}
             onDownloadJPG={handleDownloadFromSaved}
+            isDarkMode={isDarkMode}
           />
         )}
 
