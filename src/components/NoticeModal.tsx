@@ -87,18 +87,18 @@ export const NoticeModal: React.FC<NoticeModalProps> = ({
         <div
           className={`border-2 rounded-2xl p-4 space-y-2 text-left ${
             isDarkMode
-              ? 'bg-slate-950 border-amber-500/40 text-slate-100'
-              : 'bg-amber-50/90 border-amber-400/80 text-slate-950'
+              ? 'bg-slate-950 border-amber-500/60 text-slate-50'
+              : 'bg-amber-50 border-amber-400 text-slate-950 shadow-inner'
           }`}
         >
-          <div className={`flex items-center gap-1.5 text-xs font-black ${isDarkMode ? 'text-amber-300' : 'text-amber-900'}`}>
+          <div className={`flex items-center gap-1.5 text-xs font-black ${isDarkMode ? 'text-amber-300' : 'text-amber-950'}`}>
             <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
             <span>Message from {notice.authorName} ({notice.authorId}):</span>
           </div>
-          <p className={`text-xs leading-relaxed font-sans font-bold whitespace-pre-wrap ${isDarkMode ? 'text-slate-100' : 'text-slate-950'}`}>
+          <p className={`text-xs sm:text-sm leading-relaxed font-sans font-black whitespace-pre-wrap ${isDarkMode ? 'text-slate-50' : 'text-slate-950'}`}>
             {notice.message}
           </p>
-          <div className={`text-[10px] font-mono text-right pt-1.5 border-t font-extrabold ${isDarkMode ? 'text-slate-400 border-slate-800' : 'text-slate-700 border-amber-200'}`}>
+          <div className={`text-[10px] font-mono text-right pt-1.5 border-t font-black ${isDarkMode ? 'text-slate-400 border-slate-800' : 'text-slate-800 border-amber-300'}`}>
             Posted: {getNoticePostingTime()}
           </div>
         </div>

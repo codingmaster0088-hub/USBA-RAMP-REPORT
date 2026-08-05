@@ -65,6 +65,11 @@ export interface RampReportFormData {
   trimSubmitted?: string; // TRIM SUBMITTED
   trimSigned?: string; // TRIM SIGNED
 
+  // Additional Optional Baggage Fields
+  priorityBag?: string; // 14. PRIORITY BAG
+  vipBag?: string; // 15. VIP BAG
+  offloadBag?: string; // 16. OFFLOAD BAG
+
   // Ground Time (Auto calculated if ROUND, "ON GROUND" if DIRECT)
   ground: string;
 

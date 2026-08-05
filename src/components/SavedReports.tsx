@@ -20,7 +20,7 @@ interface SavedReportsProps {
   isDarkMode?: boolean;
 }
 
-const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000;
+const SIXTEEN_HOURS_MS = 16 * 60 * 60 * 1000;
 
 export const SavedReports: React.FC<SavedReportsProps> = ({
   savedReports,
@@ -30,7 +30,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
   isDarkMode = true
 }) => {
   const [filterType, setFilterType] = useState<'ALL' | 'DOMESTIC' | 'INTERNATIONAL'>('ALL');
-  const [showOnlyActive20H, setShowOnlyActive20H] = useState<boolean>(true);
+  const [showOnlyActive16H, setShowOnlyActive16H] = useState<boolean>(true);
   const [nowMs, setNowMs] = useState<number>(Date.now());
 
   // Update live clock every 10 seconds for precise countdown display
@@ -41,12 +41,12 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Helper to calculate remaining time before report auto-vanishes (20 Hours from last save/edit)
+  // Helper to calculate remaining time before report auto-vanishes (16 Hours from last save/edit)
   const getRemainingVanishTime = (timestamp: string) => {
     const repTime = new Date(timestamp).getTime();
-    if (isNaN(repTime) || repTime <= 0) return '20h 00m left';
+    if (isNaN(repTime) || repTime <= 0) return '16h 00m left';
 
-    const remainingMs = TWENTY_HOURS_MS - (nowMs - repTime);
+    const remainingMs = SIXTEEN_HOURS_MS - (nowMs - repTime);
     if (remainingMs <= 0) return 'Expiring...';
 
     const hours = Math.floor(remainingMs / (1000 * 60 * 60));
@@ -55,8 +55,8 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
     return `${hours}h ${minutes.toString().padStart(2, '0')}m left`;
   };
 
-  // Filter logic: Deduplicate by Flight Number + Domestic/Intl + 20 Hours Expiry
-  const { filteredReports, recent20Count, totalCount } = useMemo(() => {
+  // Filter logic: Deduplicate by Flight Number + Domestic/Intl + 16 Hours Expiry
+  const { filteredReports, recent16Count, totalCount } = useMemo(() => {
     // Deduplicate reports by normalized flight number, keeping the most recent one
     const uniqueMap = new Map<string, SavedReport>();
     const sorted = [...savedReports].sort((a, b) => {
@@ -79,13 +79,13 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
 
     const deduplicatedReports = Array.from(uniqueMap.values());
 
-    const active20H = deduplicatedReports.filter((rep) => {
+    const active16H = deduplicatedReports.filter((rep) => {
       if (!rep.timestamp) return true;
       const repTime = new Date(rep.timestamp).getTime();
-      return !isNaN(repTime) ? nowMs - repTime <= TWENTY_HOURS_MS : true;
+      return !isNaN(repTime) ? nowMs - repTime <= SIXTEEN_HOURS_MS : true;
     });
 
-    const activeBase = showOnlyActive20H ? active20H : deduplicatedReports;
+    const activeBase = showOnlyActive16H ? active16H : deduplicatedReports;
 
     const matched = activeBase.filter((report) => {
       if (filterType === 'ALL') return true;
@@ -94,10 +94,10 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
 
     return {
       filteredReports: matched,
-      recent20Count: active20H.length,
+      recent16Count: active16H.length,
       totalCount: deduplicatedReports.length
     };
-  }, [savedReports, filterType, showOnlyActive20H, nowMs]);
+  }, [savedReports, filterType, showOnlyActive16H, nowMs]);
 
   return (
     <div className={`space-y-3 pb-20 fade-in ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
@@ -118,7 +118,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
               SAVED TURNAROUND REPORTS ({filteredReports.length})
             </h2>
             <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-bold'}`}>
-              Auto-vanish 20 hours after last save/edit • Live Firestore sync
+              Auto-vanish 16 hours after last save/edit • Live Firestore sync
             </p>
           </div>
 
@@ -160,7 +160,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
           </div>
         </div>
 
-        {/* 20-Hours Auto-Vanish Filter Switch */}
+        {/* 16-Hours Auto-Vanish Filter Switch */}
         <div
           className={`flex items-center justify-between p-2 rounded-xl border text-xs ${
             isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
@@ -168,7 +168,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
         >
           <div className={`flex items-center gap-1.5 text-[11px] ${isDarkMode ? 'text-slate-300' : 'text-slate-800 font-bold'}`}>
             <Timer className="w-3.5 h-3.5 text-amber-500" />
-            <span>Show: <strong className={isDarkMode ? 'text-amber-300' : 'text-amber-900 font-black'}>{showOnlyActive20H ? 'Active (< 20H)' : 'All History'}</strong></span>
+            <span>Show: <strong className={isDarkMode ? 'text-amber-300' : 'text-amber-900 font-black'}>{showOnlyActive16H ? 'Active (< 16H)' : 'All History'}</strong></span>
           </div>
 
           <div
@@ -177,20 +177,20 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
             }`}
           >
             <button
-              onClick={() => setShowOnlyActive20H(true)}
+              onClick={() => setShowOnlyActive16H(true)}
               className={`px-2 py-1 rounded-md font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                showOnlyActive20H
+                showOnlyActive16H
                   ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
                   : isDarkMode ? 'text-slate-400' : 'text-slate-700'
               }`}
             >
               <Clock className="w-3 h-3" />
-              <span>ACTIVE (20H)</span>
+              <span>ACTIVE (16H)</span>
             </button>
             <button
-              onClick={() => setShowOnlyActive20H(false)}
+              onClick={() => setShowOnlyActive16H(false)}
               className={`px-2 py-1 rounded-md font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                !showOnlyActive20H
+                !showOnlyActive16H
                   ? 'bg-amber-500 text-slate-950 shadow-md font-black'
                   : isDarkMode ? 'text-slate-400' : 'text-slate-700'
               }`}
@@ -214,8 +214,8 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
             No saved reports found.
           </p>
           <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-            {showOnlyActive20H
-              ? 'No active reports created or updated in the last 20 hours.'
+            {showOnlyActive16H
+              ? 'No active reports created or updated in the last 16 hours.'
               : 'No saved reports available.'}
           </p>
         </div>
@@ -288,10 +288,10 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
                     </span>
                   </div>
 
-                  {/* 20H Live Countdown Badge & Depart Time */}
+                  {/* 16H Live Countdown Badge & Depart Time */}
                   <div className="flex flex-wrap items-center gap-2">
                     <div
-                      title="Report auto-vanishes 20 hours after creation or last edit"
+                      title="Report auto-vanishes 16 hours after creation or last edit"
                       className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-black px-2.5 py-1 rounded-full border shadow-sm ${
                         isDarkMode
                           ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'

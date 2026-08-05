@@ -345,6 +345,12 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     handleChange(field, 'OB');
   };
 
+  // Helper: Set E (EARLIER) Preset
+  const setEPreset = (field: keyof RampReportFormData) => {
+    const currentVal = formData[field] || '';
+    handleChange(field, currentVal === 'EARLIER' ? '' : 'EARLIER');
+  };
+
   // Aircraft Registration Formatter on Blur
   const handleRegBlur = () => {
     if (formData.ac) {
@@ -917,10 +923,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
           </div>
         )}
 
-        {/* EXACT 13 TURNAROUND FIELDS REQUESTED BY USER */}
+        {/* TURNAROUND MILESTONES (16 FIELDS) */}
         <div className="space-y-2.5 pt-2 border-t border-slate-800">
           <label className="text-[10px] font-extrabold text-amber-300 uppercase tracking-wider block">
-            TURNAROUND MILESTONES (13 FIELDS)
+            TURNAROUND MILESTONES (16 FIELDS)
           </label>
 
           <div className="grid grid-cols-2 gap-2">
@@ -929,21 +935,35 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
                 1. SECURITY CHECK ST
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formData.securitySt || ''}
-                  onChange={(e) => handleChange('securitySt', e.target.value)}
-                  placeholder="1310"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
-                />
+              <div className="flex gap-1">
                 <button
                   type="button"
-                  onClick={() => setNowTime('securitySt')}
-                  className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                  onClick={() => setEPreset('securitySt')}
+                  className={`px-2 py-1 font-extrabold text-[10px] rounded-lg border transition-all cursor-pointer ${
+                    formData.securitySt === 'EARLIER'
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md'
+                      : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
+                  }`}
+                  title="Set status to EARLIER"
                 >
-                  🕒
+                  E
                 </button>
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={formData.securitySt || ''}
+                    onChange={(e) => handleChange('securitySt', e.target.value)}
+                    placeholder="1310"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNowTime('securitySt')}
+                    className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                  >
+                    🕒
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -952,21 +972,35 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
                 2. SECURITY CHECK END
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formData.securityEnd || ''}
-                  onChange={(e) => handleChange('securityEnd', e.target.value)}
-                  placeholder="1320"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
-                />
+              <div className="flex gap-1">
                 <button
                   type="button"
-                  onClick={() => setNowTime('securityEnd')}
-                  className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                  onClick={() => setEPreset('securityEnd')}
+                  className={`px-2 py-1 font-extrabold text-[10px] rounded-lg border transition-all cursor-pointer ${
+                    formData.securityEnd === 'EARLIER'
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md'
+                      : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
+                  }`}
+                  title="Set status to EARLIER"
                 >
-                  🕒
+                  E
                 </button>
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={formData.securityEnd || ''}
+                    onChange={(e) => handleChange('securityEnd', e.target.value)}
+                    placeholder="1320"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNowTime('securityEnd')}
+                    className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                  >
+                    🕒
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -975,21 +1009,35 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
                 3. CLEANING START
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formData.cleaningSt || ''}
-                  onChange={(e) => handleChange('cleaningSt', e.target.value)}
-                  placeholder="1320"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
-                />
+              <div className="flex gap-1">
                 <button
                   type="button"
-                  onClick={() => setNowTime('cleaningSt')}
-                  className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                  onClick={() => setEPreset('cleaningSt')}
+                  className={`px-2 py-1 font-extrabold text-[10px] rounded-lg border transition-all cursor-pointer ${
+                    formData.cleaningSt === 'EARLIER'
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md'
+                      : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
+                  }`}
+                  title="Set status to EARLIER"
                 >
-                  🕒
+                  E
                 </button>
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={formData.cleaningSt || ''}
+                    onChange={(e) => handleChange('cleaningSt', e.target.value)}
+                    placeholder="1320"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNowTime('cleaningSt')}
+                    className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                  >
+                    🕒
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -998,21 +1046,35 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
                 4. CLEANING END
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formData.cleaningEnd || ''}
-                  onChange={(e) => handleChange('cleaningEnd', e.target.value)}
-                  placeholder="1328"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
-                />
+              <div className="flex gap-1">
                 <button
                   type="button"
-                  onClick={() => setNowTime('cleaningEnd')}
-                  className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                  onClick={() => setEPreset('cleaningEnd')}
+                  className={`px-2 py-1 font-extrabold text-[10px] rounded-lg border transition-all cursor-pointer ${
+                    formData.cleaningEnd === 'EARLIER'
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md'
+                      : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
+                  }`}
+                  title="Set status to EARLIER"
                 >
-                  🕒
+                  E
                 </button>
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={formData.cleaningEnd || ''}
+                    onChange={(e) => handleChange('cleaningEnd', e.target.value)}
+                    placeholder="1328"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNowTime('cleaningEnd')}
+                    className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                  >
+                    🕒
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1237,7 +1299,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
             </div>
 
             {/* 13. TRIM SIGNED */}
-            <div className="col-span-2 sm:col-span-1">
+            <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
                 13. TRIM SIGNED
               </label>
@@ -1257,6 +1319,51 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                   🕒
                 </button>
               </div>
+            </div>
+
+            {/* 14. PRIORITY BAG (OPTIONAL) */}
+            <div>
+              <label className="text-[10px] font-bold text-cyan-300 uppercase mb-1 block">
+                14. PRIORITY BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={formData.priorityBag || ''}
+                onChange={(e) => handleChange('priorityBag', e.target.value)}
+                placeholder="OPTIONAL"
+                className="w-full bg-slate-950 border border-cyan-800/60 rounded-xl px-3 py-2 text-xs text-cyan-300 font-mono font-bold focus:border-cyan-400 outline-none placeholder:text-slate-600 placeholder:font-mono"
+              />
+            </div>
+
+            {/* 15. VIP BAG (OPTIONAL) */}
+            <div>
+              <label className="text-[10px] font-bold text-amber-300 uppercase mb-1 block">
+                15. VIP BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={formData.vipBag || ''}
+                onChange={(e) => handleChange('vipBag', e.target.value)}
+                placeholder="OPTIONAL"
+                className="w-full bg-slate-950 border border-amber-800/60 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono font-bold focus:border-amber-400 outline-none placeholder:text-slate-600 placeholder:font-mono"
+              />
+            </div>
+
+            {/* 16. OFFLOAD BAG (OPTIONAL) */}
+            <div className="col-span-2 sm:col-span-1">
+              <label className="text-[10px] font-bold text-rose-300 uppercase mb-1 block">
+                16. OFFLOAD BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={formData.offloadBag || ''}
+                onChange={(e) => handleChange('offloadBag', e.target.value)}
+                placeholder="OPTIONAL"
+                className="w-full bg-slate-950 border border-rose-800/60 rounded-xl px-3 py-2 text-xs text-rose-300 font-mono font-bold focus:border-rose-400 outline-none placeholder:text-slate-600 placeholder:font-mono"
+              />
             </div>
           </div>
         </div>

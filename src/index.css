@@ -140,3 +140,33 @@ body.light-mode .border-slate-800,
 body.light-mode .border-slate-800\/80 {
   border-color: #cbd5e1 !important;
 }
+
+/* Dedicated Sun Mode Styling for Login Card */
+body.light-mode .login-modal-card {
+  background: #ffffff !important;
+  border-color: #f59e0b !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+}
+
+body.light-mode .login-title {
+  color: #0f172a !important;
+}
+
+body.light-mode .login-subtitle {
+  color: #d97706 !important;
+}
+
+body.light-mode .login-caption {
+  color: #475569 !important;
+}
+
+body.light-mode .login-label {
+  color: #1e293b !important;
+}
+
+body.light-mode .login-modal-card input,
+body.light-mode .login-modal-card select {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+}

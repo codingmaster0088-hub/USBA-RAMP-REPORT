@@ -18,7 +18,7 @@ export const db = config.firestoreDatabaseId
   ? getFirestore(app, config.firestoreDatabaseId)
   : getFirestore(app);
 
-const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000; // 20 Hours auto-vanish for Flight Reports
+const SIXTEEN_HOURS_MS = 16 * 60 * 60 * 1000; // 16 Hours auto-vanish for Flight Reports
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
 
@@ -31,7 +31,7 @@ function getCreatedTimestamp(item: { createdAt?: number; id: string }): number {
   return !isNaN(parsed) && parsed > 1600000000000 ? parsed : Date.now();
 }
 
-// Real-time listener for Saved Reports across all devices (Auto-vanish after 20 hours from last save/edit)
+// Real-time listener for Saved Reports across all devices (Auto-vanish after 16 hours from last save/edit)
 export function subscribeToSavedReports(
   onUpdate: (reports: SavedReport[]) => void,
   onError?: (err: any) => void
@@ -48,12 +48,12 @@ export function subscribeToSavedReports(
         snapshot.forEach((docSnap) => {
           const rep = docSnap.data() as SavedReport;
 
-          // Check report age (20 Hours from last modified / timestamp)
+          // Check report age (16 Hours from last modified / timestamp)
           const repTime = rep.timestamp ? new Date(rep.timestamp).getTime() : 0;
           const ageMs = !isNaN(repTime) && repTime > 0 ? now - repTime : 0;
 
-          if (ageMs > TWENTY_HOURS_MS) {
-            // Auto-purge report from Firestore if older than 20 hours
+          if (ageMs > SIXTEEN_HOURS_MS) {
+            // Auto-purge report from Firestore if older than 16 hours
             deleteDoc(doc(db, 'savedReports', rep.id)).catch(() => {});
             return;
           }

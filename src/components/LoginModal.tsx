@@ -33,7 +33,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin }) => {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-gradient-to-b from-slate-900 via-blue-950 to-slate-950 border border-amber-500/30 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
+      <div className="w-full max-w-sm bg-gradient-to-b from-slate-900 via-blue-950 to-slate-950 dark:from-slate-900 dark:via-blue-950 dark:to-slate-950 border-2 border-amber-500/50 rounded-3xl p-6 shadow-2xl relative overflow-hidden login-modal-card">
         {/* Background Aviation Glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -44,13 +44,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin }) => {
           </div>
 
           <div>
-            <h1 className="text-xl font-black text-white tracking-wider">
+            <h1 className="text-xl font-black text-white tracking-wider login-title">
               US-BANGLA AIRLINES
             </h1>
-            <h2 className="text-xs font-bold tracking-widest text-amber-400 uppercase mt-0.5">
+            <h2 className="text-xs font-black tracking-widest text-amber-400 uppercase mt-0.5 login-subtitle">
               RAMP MONITORING & REPORT SYSTEM
             </h2>
-            <p className="text-[10px] text-slate-400 font-medium italic mt-1">
+            <p className="text-[10px] text-slate-400 font-bold italic mt-1 login-caption">
               Flight Operations & Dispatch HUD
             </p>
           </div>
@@ -65,7 +65,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin }) => {
           )}
 
           <div>
-            <label className="text-[11px] font-bold text-amber-200 uppercase mb-1 flex items-center gap-1.5">
+            <label className="text-[11px] font-extrabold text-amber-200 uppercase mb-1 flex items-center gap-1.5 login-label">
               <User className="w-3.5 h-3.5 text-amber-400" />
               USER NAME
             </label>
@@ -77,12 +77,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin }) => {
                 setError('');
               }}
               placeholder="e.g. RASEL HOSSAIN"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white uppercase placeholder-slate-600 focus:border-amber-400 outline-none"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white uppercase placeholder-slate-500 focus:border-amber-400 outline-none font-bold"
             />
           </div>
 
           <div>
-            <label className="text-[11px] font-bold text-amber-200 uppercase mb-1 flex items-center gap-1.5">
+            <label className="text-[11px] font-extrabold text-amber-200 uppercase mb-1 flex items-center gap-1.5 login-label">
               <Key className="w-3.5 h-3.5 text-amber-400" />
               USBA ID
             </label>
@@ -94,22 +94,22 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin }) => {
                 setError('');
               }}
               placeholder="e.g. 0088"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:border-amber-400 outline-none font-mono"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:border-amber-400 outline-none font-mono font-bold"
             />
           </div>
 
           <div>
-            <label className="text-[11px] font-bold text-amber-200 uppercase mb-1 flex items-center gap-1.5">
+            <label className="text-[11px] font-extrabold text-amber-200 uppercase mb-1 flex items-center gap-1.5 login-label">
               <Building2 className="w-3.5 h-3.5 text-amber-400" />
               STATION
             </label>
             <select
               value={station}
               onChange={(e) => setStation(e.target.value as StationCode)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-amber-300 font-bold focus:border-amber-400 outline-none"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-amber-300 font-extrabold focus:border-amber-400 outline-none"
             >
               {stationList.map((st) => (
-                <option key={st.code} value={st.code} className="bg-slate-900 text-white">
+                <option key={st.code} value={st.code} className="bg-slate-900 text-white font-bold">
                   {st.city} ({st.code}) - {st.name}
                 </option>
               ))}
@@ -118,7 +118,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin }) => {
 
           <button
             type="submit"
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 hover:from-amber-400 hover:to-yellow-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2 mt-2"
+            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 hover:from-amber-400 hover:to-yellow-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer"
           >
             <span>LOGIN SYSTEM</span>
             <ChevronRight className="w-4 h-4 stroke-[3]" />
