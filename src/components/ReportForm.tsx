@@ -1086,10 +1086,15 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               <div className="flex gap-1">
                 <button
                   type="button"
-                  onClick={() => setOBPreset('cateringSt')}
-                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-[10px] rounded-lg border border-slate-700"
+                  onClick={() => setEPreset('cateringSt')}
+                  className={`px-2 py-1 font-extrabold text-[10px] rounded-lg border transition-all cursor-pointer ${
+                    formData.cateringSt === 'EARLIER'
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md'
+                      : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
+                  }`}
+                  title="Set status to EARLIER"
                 >
-                  OB
+                  E
                 </button>
                 <div className="relative flex-1">
                   <input
@@ -1118,10 +1123,15 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               <div className="flex gap-1">
                 <button
                   type="button"
-                  onClick={() => setOBPreset('cateringEnd')}
-                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-[10px] rounded-lg border border-slate-700"
+                  onClick={() => setEPreset('cateringEnd')}
+                  className={`px-2 py-1 font-extrabold text-[10px] rounded-lg border transition-all cursor-pointer ${
+                    formData.cateringEnd === 'EARLIER'
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md'
+                      : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
+                  }`}
+                  title="Set status to EARLIER"
                 >
-                  OB
+                  E
                 </button>
                 <div className="relative flex-1">
                   <input
