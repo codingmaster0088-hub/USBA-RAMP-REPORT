@@ -47,6 +47,29 @@ export default function App() {
     }
   });
 
+  // Theme Mode State (Defaults to false -> High-Sun Ramp Light Mode / White Background)
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    return localStorage.getItem('usb_theme') === 'dark';
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.body.classList.remove('light-mode');
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+      document.body.classList.add('light-mode');
+    }
+  }, [isDarkMode]);
+
+  const handleToggleTheme = () => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('usb_theme', next ? 'dark' : 'light');
+      return next;
+    });
+  };
+
   // Saved Reports state with Firebase real-time sync
   const [savedReports, setSavedReports] = useState<SavedReport[]>(() => {
     try {
@@ -513,7 +536,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none antialiased">
+    <div className={`min-h-screen flex flex-col font-sans select-none antialiased transition-colors ${
+      isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'
+    }`}>
       {/* App Navigation Header */}
       <Header
         user={user}
@@ -521,6 +546,8 @@ export default function App() {
         setActiveTab={setActiveTab}
         onLogout={handleLogout}
         onStationChange={handleStationChange}
+        isDarkMode={isDarkMode}
+        onToggleTheme={handleToggleTheme}
       />
 
       {/* Main Content Area */}

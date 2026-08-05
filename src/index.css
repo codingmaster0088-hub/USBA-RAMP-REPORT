@@ -1,1 +1,120 @@
 @import "tailwindcss";
+
+/* High-Sun Ramp Mode (White Background with High Contrast Text for Outdoor Sunlight) */
+body.light-mode {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+body.light-mode .bg-slate-950 {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+body.light-mode .bg-slate-900,
+body.light-mode .bg-slate-900\/90,
+body.light-mode .bg-slate-900\/95 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
+}
+
+body.light-mode .bg-slate-950\/80,
+body.light-mode .bg-slate-950\/90 {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+body.light-mode input,
+body.light-mode select,
+body.light-mode textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+  font-weight: 700 !important;
+}
+
+body.light-mode input::placeholder,
+body.light-mode textarea::placeholder {
+  color: #64748b !important;
+}
+
+body.light-mode label {
+  color: #1e293b !important;
+  font-weight: 800 !important;
+}
+
+body.light-mode .text-slate-100,
+body.light-mode .text-slate-200,
+body.light-mode .text-slate-300,
+body.light-mode .text-white {
+  color: #0f172a !important;
+}
+
+body.light-mode .text-slate-400,
+body.light-mode .text-slate-500 {
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+
+/* Ensure sticky header and bottom nav maintain dark contrast anchors for easy HUD orientation */
+body.light-mode header,
+body.light-mode nav {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border-color: #1e293b !important;
+}
+
+body.light-mode header .text-white,
+body.light-mode header select option {
+  color: #0f172a !important;
+}
+
+body.light-mode header .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+
+body.light-mode nav .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+/* High Contrast Accent Badges on White BG */
+body.light-mode .text-amber-300,
+body.light-mode .text-amber-400 {
+  color: #b45309 !important; /* Rich amber for sunlight legibility */
+  font-weight: 800 !important;
+}
+
+body.light-mode .text-blue-300,
+body.light-mode .text-blue-400 {
+  color: #1d4ed8 !important; /* Bold blue for sunlight legibility */
+  font-weight: 800 !important;
+}
+
+body.light-mode .text-emerald-300,
+body.light-mode .text-emerald-400 {
+  color: #047857 !important; /* Dark emerald for sunlight legibility */
+  font-weight: 800 !important;
+}
+
+body.light-mode .text-red-300,
+body.light-mode .text-red-400 {
+  color: #b91c1c !important; /* Dark crimson red for sunlight legibility */
+  font-weight: 800 !important;
+}
+
+/* High Contrast Buttons in Light Mode */
+body.light-mode .bg-slate-800,
+body.light-mode .bg-slate-800\/90 {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+body.light-mode .border-slate-800,
+body.light-mode .border-slate-800\/80 {
+  border-color: #cbd5e1 !important;
+}
