@@ -381,7 +381,7 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
           <tbody>
             <style>{`
               .rpt-cell-lbl { padding: 12px 16px; font-size: 22px; font-weight: 800; color: #000000; border-bottom: 2px solid #ddd; text-transform: uppercase; }
-              .rpt-cell-val { padding: 12px 16px; font-size: 28px; font-weight: 900; color: #000000; border-bottom: 2px solid #ddd; text-align: center; font-family: monospace; }
+              .rpt-cell-val { padding: 12px 16px; font-size: 28px; font-weight: 900; color: #000000; border-bottom: 2px solid #ddd; text-align: center; font-family: Arial, Helvetica, sans-serif; letter-spacing: 0.5px; }
             `}</style>
             
             <tr>
@@ -426,43 +426,37 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
               <td className="rpt-cell-val">{formatTimeLT(formData.trimSubmitted)}</td>
             </tr>
 
-            <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>13. TRIM SIGNED</td>
-              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.trimSigned)}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>FLIGHT STATUS</td>
-              <td className="rpt-cell-val">{formData.status || 'ON TIME'}</td>
-            </tr>
-
-            {/* Optional Baggage Fields: 14. PRIORITY BAG, 15. VIP BAG, 16. OFFLOAD BAG */}
+            {/* Item 13 (TRIM SIGNED) and Optional Baggage Fields: 14. PRIORITY BAG, 15. VIP BAG, 16. OFFLOAD BAG */}
             {(() => {
               const pBag = formatBagCount(formData.priorityBag);
               const vBag = formatBagCount(formData.vipBag);
               const oBag = formatBagCount(formData.offloadBag);
 
-              const items: { label: string; val: string }[] = [];
+              const items: { label: string; val: string }[] = [
+                { label: '13. TRIM SIGNED', val: formatTimeLT(formData.trimSigned) }
+              ];
+
               if (pBag) items.push({ label: '14. PRIORITY BAG', val: pBag });
               if (vBag) items.push({ label: '15. VIP BAG', val: vBag });
               if (oBag) items.push({ label: '16. OFFLOAD BAG', val: oBag });
-
-              if (items.length === 0) return null;
 
               const rows = [];
               for (let i = 0; i < items.length; i += 2) {
                 const item1 = items[i];
                 const item2 = items[i + 1];
                 rows.push(
-                  <tr key={`bag-row-${i}`}>
-                    <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>{item1.label}</td>
-                    <td className="rpt-cell-val" style={{ borderRight: item2 ? '3px solid #000' : 'none' }}>{item1.val}</td>
+                  <tr key={`milestone-row-${i}`}>
+                    <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>{item1.label}</td>
+                    <td className="rpt-cell-val" style={{ width: '18%', borderRight: item2 ? '3px solid #000' : 'none' }}>{item1.val}</td>
                     {item2 ? (
                       <>
-                        <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>{item2.label}</td>
-                        <td className="rpt-cell-val">{item2.val}</td>
+                        <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>{item2.label}</td>
+                        <td className="rpt-cell-val" style={{ width: '18%' }}>{item2.val}</td>
                       </>
                     ) : (
                       <>
-                        <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}></td>
-                        <td className="rpt-cell-val"></td>
+                        <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}></td>
+                        <td className="rpt-cell-val" style={{ width: '18%' }}></td>
                       </>
                     )}
                   </tr>
