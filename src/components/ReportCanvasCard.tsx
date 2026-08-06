@@ -499,7 +499,7 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
         >
           {/* Highlighted Reason for Flight Delay Box if flight is delayed */}
           <div style={{ flex: '1', paddingRight: '25px' }}>
-            {(isDelay || formData.delayReason) && (
+            {isDelay && (
               <div
                 style={{
                   background: '#fff3cd',
