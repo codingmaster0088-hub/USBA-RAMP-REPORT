@@ -86,20 +86,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     return 'ROUND';
   });
 
-  // Initial Form State
-  const [formData, setFormData] = useState<RampReportFormData>(() => {
-    if (reportToEdit) return reportToEdit.formData;
-
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.formData) {
-          return parsed.formData;
-        }
-      }
-    } catch (e) {}
-
+  const getInitialFormData = (userStation: string): RampReportFormData => {
     const todayStr = new Date()
       .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
       .toUpperCase();
@@ -136,9 +123,29 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       pax: '',
       trimSubmitted: '',
       trimSigned: '',
+      priorityBag: '',
+      vipBag: '',
+      offloadBag: '',
       ground: '',
-      station: user.station
+      station: userStation as any
     };
+  };
+
+  // Initial Form State
+  const [formData, setFormData] = useState<RampReportFormData>(() => {
+    if (reportToEdit) return reportToEdit.formData;
+
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.formData) {
+          return parsed.formData;
+        }
+      }
+    } catch (e) {}
+
+    return getInitialFormData(user.station);
   });
 
   const [skippedModalOpen, setSkippedModalOpen] = useState<boolean>(false);
@@ -208,6 +215,9 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   const handleResetForm = () => {
     if (window.confirm('Clear all filled form fields and start a new blank report?')) {
       clearDraft();
+      setFormData(getInitialFormData(user.station));
+      setFlightMode('ROUND');
+      setReportType('DOMESTIC');
       onNewReport();
     }
   };
