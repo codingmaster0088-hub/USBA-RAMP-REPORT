@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { SavedReport, ScheduleFlight } from '../types';
 import html2canvas from 'html2canvas';
+import aircraftImage from '../assets/images/us_bangla_real_aircraft_dac_1786384853634.jpg';
 import {
   X,
   BarChart3,
@@ -621,8 +622,8 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                   minHeight: '1697px',
                   backgroundColor: '#ffffff',
                   color: '#0f172a',
-                  fontFamily: 'Arial, Helvetica, sans-serif',
-                  padding: '48px',
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  padding: '40px',
                   borderRadius: '16px',
                   border: '4px solid #f59e0b',
                   boxSizing: 'border-box',
@@ -632,60 +633,83 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                 }}
               >
                 <div>
-                  {/* Official US-Bangla Executive Header (Day Mode) */}
+                  {/* 1. Official US-Bangla Executive Header with Aircraft Tarmac Banner */}
                   <div
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      borderBottom: '3px solid #f59e0b',
-                      paddingBottom: '20px',
-                      marginBottom: '28px'
+                      marginBottom: '28px',
+                      borderRadius: '16px',
+                      overflow: 'hidden',
+                      border: '2px solid #0284c7',
+                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
-                      <div
-                        style={{
-                          width: '58px',
-                          height: '58px',
-                          borderRadius: '14px',
-                          backgroundColor: '#f59e0b',
-                          color: '#030712',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '32px',
-                          fontWeight: '900'
-                        }}
-                      >
-                        ✈
+                    {/* Top Navy Bar */}
+                    <div
+                      style={{
+                        backgroundColor: '#031b4e',
+                        padding: '16px 24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        color: '#ffffff'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div
+                          style={{
+                            width: '52px',
+                            height: '52px',
+                            borderRadius: '14px',
+                            backgroundColor: '#0284c7',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '28px',
+                            fontWeight: '900',
+                            color: '#ffffff',
+                            boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)'
+                          }}
+                        >
+                          ✈
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '30px', fontWeight: '900', color: '#ffffff', letterSpacing: '1px', lineHeight: '1.1' }}>
+                            US-BANGLA AIRLINES
+                          </div>
+                          <div style={{ fontSize: '15px', fontWeight: '800', color: '#f59e0b', letterSpacing: '0.8px', marginTop: '3px' }}>
+                            AIRPORT SERVICE DEPARTURE REPORT
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div style={{ fontSize: '28px', fontWeight: '900', color: '#0f172a', letterSpacing: '1.5px' }}>
-                          US-BANGLA AIRLINES
+
+                      <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '12px' }}>
+                        <div style={{ backgroundColor: '#0f2963', border: '1.5px solid #38bdf8', padding: '6px 16px', borderRadius: '20px', color: '#ffffff', fontWeight: '900', marginBottom: '6px', display: 'inline-block' }}>
+                          STRICTLY CONFIDENTIAL • BOARD REVIEW
                         </div>
-                        <div style={{ fontSize: '15px', fontWeight: '800', color: '#b45309', letterSpacing: '1px', marginTop: '2px' }}>
-                          GROUND HANDLING & RAMP OPERATIONS DIVISION
-                        </div>
+                        <div style={{ color: '#93c5fd', marginTop: '2px' }}>STATION: <strong style={{ color: '#ffffff', fontWeight: '900' }}>{station} (ALL DEPARTURES)</strong></div>
+                        <div style={{ color: '#93c5fd' }}>REPORT PERIOD: <strong style={{ color: '#60a5fa', fontWeight: '900' }}>{selectedDateFilter === 'TODAY' ? todayDateStr : selectedDateFilter === 'PREVIOUS_MONTH' ? prevMonthInfo.label : selectedDateFilter}</strong></div>
                       </div>
                     </div>
 
-                    <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '13px', color: '#334155' }}>
-                      <div style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b', padding: '6px 16px', borderRadius: '8px', color: '#b45309', fontWeight: '900', marginBottom: '6px' }}>
-                        STRICTLY CONFIDENTIAL • BOARD REVIEW
-                      </div>
-                      <div>STATION: <strong style={{ color: '#0f172a' }}>{station} (ALL DEPARTURES)</strong></div>
-                      <div>REPORT PERIOD: <strong style={{ color: '#1d4ed8' }}>{selectedDateFilter === 'TODAY' ? todayDateStr : selectedDateFilter === 'PREVIOUS_MONTH' ? prevMonthInfo.label : selectedDateFilter}</strong></div>
+                    {/* US-Bangla Aircraft Photo Banner */}
+                    <div style={{ width: '100%', height: '220px', position: 'relative', overflow: 'hidden', backgroundColor: '#0f172a' }}>
+                      <img
+                        src={aircraftImage}
+                        alt="US-Bangla Aircraft on Airport Tarmac"
+                        referrerPolicy="no-referrer"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
+                      />
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(3, 27, 78, 0.6) 0%, transparent 60%)' }} />
                     </div>
                   </div>
 
-                  {/* Executive KPI Summary Cards Row (Day Mode) */}
+                  {/* 2. Executive KPI Summary Cards Row (Matching Attachment 1 Exact Layout) */}
                   <div
                     style={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(4, 1fr)',
                       gap: '16px',
-                      marginBottom: '32px'
+                      marginBottom: '28px'
                     }}
                   >
                     {/* KPI 1 */}
@@ -693,18 +717,19 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                       style={{
                         backgroundColor: '#f0fdf4',
                         border: '2px solid #22c55e',
-                        borderRadius: '14px',
-                        padding: '16px',
-                        textAlign: 'center'
+                        borderRadius: '16px',
+                        padding: '20px 16px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)'
                       }}
                     >
-                      <div style={{ fontSize: '12px', fontWeight: '800', color: '#15803d', textTransform: 'uppercase' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '900', color: '#15803d', textTransform: 'uppercase', tracking: '0.5px' }}>
                         ON-TIME PERFORMANCE (OTP)
                       </div>
-                      <div style={{ fontSize: '36px', fontWeight: '900', color: '#16a34a', fontFamily: 'monospace', margin: '6px 0' }}>
+                      <div style={{ fontSize: '42px', fontWeight: '900', color: '#16a34a', fontFamily: 'monospace', margin: '10px 0 6px 0', letterSpacing: '-1px' }}>
                         {otpRate}%
                       </div>
-                      <div style={{ fontSize: '11px', color: '#475569', fontWeight: 'bold' }}>Target ≥85.0%</div>
+                      <div style={{ fontSize: '12px', color: '#475569', fontWeight: '700' }}>Target ≥85.0%</div>
                     </div>
 
                     {/* KPI 2 */}
@@ -712,18 +737,19 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                       style={{
                         backgroundColor: '#eff6ff',
                         border: '2px solid #3b82f6',
-                        borderRadius: '14px',
-                        padding: '16px',
-                        textAlign: 'center'
+                        borderRadius: '16px',
+                        padding: '20px 16px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)'
                       }}
                     >
-                      <div style={{ fontSize: '12px', fontWeight: '800', color: '#1d4ed8', textTransform: 'uppercase' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '900', color: '#1d4ed8', textTransform: 'uppercase', tracking: '0.5px' }}>
                         EVALUATED FLIGHTS
                       </div>
-                      <div style={{ fontSize: '36px', fontWeight: '900', color: '#0f172a', fontFamily: 'monospace', margin: '6px 0' }}>
+                      <div style={{ fontSize: '42px', fontWeight: '900', color: '#0f172a', fontFamily: 'monospace', margin: '10px 0 6px 0', letterSpacing: '-1px' }}>
                         {totalReportsCount}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#1d4ed8', fontWeight: 'bold' }}>Departure Flights (Direct / Turnaround)</div>
+                      <div style={{ fontSize: '12px', color: '#1d4ed8', fontWeight: '700' }}>Departure Flights (Direct / Turnaround)</div>
                     </div>
 
                     {/* KPI 3 */}
@@ -731,18 +757,19 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                       style={{
                         backgroundColor: '#fef2f2',
                         border: '2px solid #ef4444',
-                        borderRadius: '14px',
-                        padding: '16px',
-                        textAlign: 'center'
+                        borderRadius: '16px',
+                        padding: '20px 16px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)'
                       }}
                     >
-                      <div style={{ fontSize: '12px', fontWeight: '800', color: '#b91c1c', textTransform: 'uppercase' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '900', color: '#b91c1c', textTransform: 'uppercase', tracking: '0.5px' }}>
                         DELAYED FLIGHTS
                       </div>
-                      <div style={{ fontSize: '36px', fontWeight: '900', color: '#dc2626', fontFamily: 'monospace', margin: '6px 0' }}>
+                      <div style={{ fontSize: '42px', fontWeight: '900', color: '#dc2626', fontFamily: 'monospace', margin: '10px 0 6px 0', letterSpacing: '-1px' }}>
                         {delayedCount}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#b91c1c', fontWeight: 'bold' }}>Delay Rate: {delayRate}%</div>
+                      <div style={{ fontSize: '12px', color: '#b91c1c', fontWeight: '700' }}>Delay Rate: {delayRate}%</div>
                     </div>
 
                     {/* KPI 4 */}
@@ -750,41 +777,54 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                       style={{
                         backgroundColor: '#fffbeb',
                         border: '2px solid #f59e0b',
-                        borderRadius: '14px',
-                        padding: '16px',
-                        textAlign: 'center'
+                        borderRadius: '16px',
+                        padding: '20px 16px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)'
                       }}
                     >
-                      <div style={{ fontSize: '12px', fontWeight: '800', color: '#b45309', textTransform: 'uppercase' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '900', color: '#b45309', textTransform: 'uppercase', tracking: '0.5px' }}>
                         PUNCTUAL DEPARTURES
                       </div>
-                      <div style={{ fontSize: '36px', fontWeight: '900', color: '#d97706', fontFamily: 'monospace', margin: '6px 0' }}>
+                      <div style={{ fontSize: '42px', fontWeight: '900', color: '#d97706', fontFamily: 'monospace', margin: '10px 0 6px 0', letterSpacing: '-1px' }}>
                         {onTimeCount}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#15803d', fontWeight: 'bold' }}>On-Time or Early</div>
+                      <div style={{ fontSize: '12px', color: '#15803d', fontWeight: '700' }}>On-Time or Early</div>
                     </div>
                   </div>
 
-                  {/* Delay Breakdown Table (Day Mode) */}
-                  <div style={{ marginBottom: '32px' }}>
-                    <div style={{ fontSize: '14px', fontWeight: '900', color: '#b45309', textTransform: 'uppercase', marginBottom: '14px', letterSpacing: '0.5px' }}>
-                      IATA & AIRLINE DELAY REASONS ANALYSIS SUMMARY:
+                  {/* 3. Delay Breakdown Table */}
+                  <div style={{ marginBottom: '28px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid #031b4e' }}>
+                    <div
+                      style={{
+                        backgroundColor: '#031b4e',
+                        color: '#ffffff',
+                        padding: '12px 18px',
+                        fontSize: '15px',
+                        fontWeight: '900',
+                        letterSpacing: '0.5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px'
+                      }}
+                    >
+                      <span>📊</span> IATA & AIRLINE DELAY REASONS ANALYSIS SUMMARY
                     </div>
 
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', fontFamily: 'sans-serif' }}>
                       <thead>
-                        <tr style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>
-                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f172a', width: '6%', textAlign: 'center', fontWeight: '900' }}>#</th>
-                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f172a', textAlign: 'left', fontWeight: '900' }}>DELAY CODE / OPERATIONAL REASON</th>
-                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f172a', textAlign: 'left', fontWeight: '900' }}>AFFECTED FLIGHTS</th>
-                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f172a', width: '12%', textAlign: 'center', fontWeight: '900' }}>COUNT</th>
-                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f172a', width: '12%', textAlign: 'center', fontWeight: '900' }}>SHARE %</th>
+                        <tr style={{ backgroundColor: '#0b2559', color: '#ffffff' }}>
+                          <th style={{ padding: '12px 10px', border: '1px solid #1e3a8a', width: '5%', textAlign: 'center', fontWeight: '900' }}>#</th>
+                          <th style={{ padding: '12px 12px', border: '1px solid #1e3a8a', textAlign: 'left', fontWeight: '900', width: '38%' }}>DELAY CODE / OPERATIONAL REASON</th>
+                          <th style={{ padding: '12px 12px', border: '1px solid #1e3a8a', textAlign: 'left', fontWeight: '900', width: '39%' }}>AFFECTED FLIGHTS</th>
+                          <th style={{ padding: '12px 10px', border: '1px solid #1e3a8a', width: '9%', textAlign: 'center', fontWeight: '900' }}>COUNT</th>
+                          <th style={{ padding: '12px 10px', border: '1px solid #1e3a8a', width: '9%', textAlign: 'center', fontWeight: '900' }}>SHARE %</th>
                         </tr>
                       </thead>
                       <tbody>
                         {delayBreakdown.length === 0 ? (
                           <tr>
-                            <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#16a34a', fontWeight: '900', fontSize: '14px', border: '1.5px solid #cbd5e1', backgroundColor: '#f0fdf4' }}>
+                            <td colSpan={5} style={{ padding: '28px', textAlign: 'center', color: '#16a34a', fontWeight: '900', fontSize: '15px', border: '1px solid #cbd5e1', backgroundColor: '#f0fdf4' }}>
                               PERFECT PERFORMANCE: 100% ON-TIME OPERATIONAL DEPARTURES (ZERO DELAYS)
                             </td>
                           </tr>
@@ -793,19 +833,19 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                             const pct = ((item.count / delayedCount) * 100).toFixed(1);
                             return (
                               <tr key={item.code} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                                <td style={{ padding: '12px 10px', border: '1.5px solid #cbd5e1', textAlign: 'center', fontWeight: '900', color: '#b45309' }}>
+                                <td style={{ padding: '12px 10px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: '900', color: '#d97706', fontSize: '14px' }}>
                                   {idx + 1}
                                 </td>
-                                <td style={{ padding: '12px 10px', border: '1.5px solid #cbd5e1', color: '#0f172a', fontWeight: '800' }}>
+                                <td style={{ padding: '12px 12px', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: '800', fontSize: '13px', lineHeight: '1.4' }}>
                                   {item.code}
                                 </td>
-                                <td style={{ padding: '12px 10px', border: '1.5px solid #cbd5e1', color: '#1e293b', fontWeight: '700', fontFamily: 'monospace' }}>
+                                <td style={{ padding: '12px 12px', border: '1px solid #cbd5e1', color: '#1e293b', fontWeight: '700', fontFamily: 'monospace', fontSize: '12px', lineHeight: '1.4' }}>
                                   {item.flights.join(', ')}
                                 </td>
-                                <td style={{ padding: '12px 10px', border: '1.5px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#b45309', fontSize: '14px' }}>
+                                <td style={{ padding: '12px 10px', border: '1px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#b45309', fontSize: '15px' }}>
                                   {item.count}
                                 </td>
-                                <td style={{ padding: '12px 10px', border: '1.5px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#1d4ed8', fontSize: '14px' }}>
+                                <td style={{ padding: '12px 10px', border: '1px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#1d4ed8', fontSize: '15px' }}>
                                   {pct}%
                                 </td>
                               </tr>
@@ -817,27 +857,38 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                   </div>
                 </div>
 
-                {/* Footer Official Approval & Verification Block (A4 Bottom) */}
+                {/* 4. Footer Official Approval & Verification Bar */}
                 <div
                   style={{
+                    backgroundColor: '#031b4e',
+                    borderRadius: '14px',
+                    padding: '16px 28px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    borderTop: '2px dashed #94a3b8',
-                    paddingTop: '20px',
-                    fontSize: '13px',
-                    color: '#334155',
+                    color: '#ffffff',
+                    fontSize: '12px',
                     fontFamily: 'monospace',
                     marginTop: 'auto'
                   }}
                 >
-                  <div>
-                    PREPARED BY: <strong style={{ color: '#b45309', fontSize: '14px' }}>{adminName}</strong> (ID-{adminId})
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#1e3a8a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
+                      👤
+                    </div>
+                    <div>
+                      <span style={{ color: '#93c5fd' }}>PREPARED BY:</span> <strong style={{ color: '#f59e0b', fontSize: '13px' }}>{adminName}</strong> <span style={{ color: '#93c5fd' }}>(ID-{adminId})</span>
+                    </div>
                   </div>
 
-                  <div style={{ textAlign: 'center', border: '1.5px solid #cbd5e1', padding: '10px 28px', borderRadius: '12px', backgroundColor: '#f8fafc' }}>
-                    <div style={{ color: '#16a34a', fontWeight: '900', fontSize: '12px', letterSpacing: '0.5px' }}>US-BANGLA RAMP HUD VERIFIED</div>
-                    <div style={{ color: '#475569', fontSize: '11px', marginTop: '2px' }}>GEN: {new Date().toLocaleString()}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#0f2963', padding: '8px 20px', borderRadius: '10px', border: '1px solid #2563eb' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#15803d', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 'bold' }}>
+                      ✓
+                    </div>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ color: '#4ade80', fontWeight: '900', fontSize: '12px', letterSpacing: '0.5px' }}>US-BANGLA RAMP HUD VERIFIED</div>
+                      <div style={{ color: '#93c5fd', fontSize: '10px' }}>GEN: {new Date().toLocaleString()}</div>
+                    </div>
                   </div>
                 </div>
 
