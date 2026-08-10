@@ -44,7 +44,28 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
   showToast
 }) => {
   const printCardRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [customHeaderPhoto, setCustomHeaderPhoto] = useState<string | null>(null);
+
+  const handleCustomPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        showToast('Image Too Large', 'Please select an image smaller than 10MB', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        const result = uploadEvent.target?.result as string;
+        if (result) {
+          setCustomHeaderPhoto(result);
+          showToast('Header Photo Updated', 'Your custom aircraft photo is now set for reports!', 'success');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // 1. Helper function: Get today's date formatted as "DD MMM YY" (e.g., "10 AUG 26")
   const formatTodayStr = (): string => {
@@ -308,6 +329,30 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              onChange={handleCustomPhotoUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-xl border border-amber-500/40 shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+              title="Upload your own custom aircraft header image"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>{customHeaderPhoto ? 'CHANGE HEADER PHOTO' : 'UPLOAD HEADER PHOTO'}</span>
+            </button>
+            {customHeaderPhoto && (
+              <button
+                onClick={() => setCustomHeaderPhoto(null)}
+                className="px-2.5 py-2.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 font-bold text-xs rounded-xl border border-rose-500/40 active:scale-95 transition-all cursor-pointer"
+                title="Reset to default aircraft photo"
+              >
+                RESET
+              </button>
+            )}
             <button
               onClick={handleDownloadJPG}
               disabled={isDownloading}
@@ -727,8 +772,8 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                     {/* US-Bangla Airbus A330 Widebody Landing Banner */}
                     <div style={{ width: '100%', height: '250px', position: 'relative', overflow: 'hidden', backgroundColor: '#0f172a' }}>
                       <img
-                        src={aircraftImage}
-                        alt="US-Bangla Airbus A330 Widebody Aircraft Landing"
+                        src={customHeaderPhoto || aircraftImage}
+                        alt="US-Bangla Aircraft Banner"
                         referrerPolicy="no-referrer"
                         style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 45%' }}
                       />
