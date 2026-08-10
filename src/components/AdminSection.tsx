@@ -282,43 +282,44 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
 
   return (
     <div className="space-y-4 pb-20 fade-in text-slate-100">
-      {/* Admin Panel Header */}
-      <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-4 shadow-xl space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-400/40 flex items-center justify-center text-amber-400 font-bold">
-              <ShieldCheck className="w-6 h-6" />
+      {/* Admin Panel Header (matching Photo 2 design) */}
+      <div className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-3.5 shadow-xl space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-amber-500/20 border border-amber-300 shrink-0">
+              ✈
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-black text-white uppercase tracking-wider">
-                  ADMIN CONTROL PANEL
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-base font-black text-amber-400 uppercase tracking-wider">
+                  US-BANGLA
                 </h1>
-                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/40">
-                  VERIFIED ADMIN
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/40 tracking-wider">
+                  RAMP HUD
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-mono">
-                Administrator: <strong className="text-amber-300">{user.name}</strong> (ID-{user.id})
-              </p>
+              <div className="flex items-center gap-1.5 text-[11px] font-mono mt-0.5 flex-wrap">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+                <span className="font-bold text-white uppercase">{user.name}</span>
+                <span className="text-amber-400 font-bold">• ID-{user.id}</span>
+                <span className="text-slate-500 text-[10px] italic">| invented by radoan rasel |</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={handleLoadSample}
-              className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Sample
-            </button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs font-bold">
+              <span>☀️ SUN</span>
+            </div>
+            <div className="px-3 py-1 rounded-xl bg-slate-950 border border-amber-500/60 text-amber-300 font-mono font-bold text-xs flex items-center gap-1">
+              <span>{user.station || 'DAC'}</span>
+            </div>
             <button
               onClick={handleLockAdmin}
               title="Lock Admin Panel"
-              className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/40 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+              className="p-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/40 active:scale-95 transition-all cursor-pointer"
             >
-              <Lock className="w-3 h-3" />
-              Lock
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
