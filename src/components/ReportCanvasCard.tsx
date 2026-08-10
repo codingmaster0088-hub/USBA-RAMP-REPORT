@@ -517,7 +517,7 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
                     marginBottom: '6px'
                   }}
                 >
-                  ⚠️ REASON FOR FLIGHT DELAY:
+                  ⚠️ DELAY CODE:
                 </div>
                 <div
                   style={{
@@ -528,7 +528,7 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
                     whiteSpace: 'pre-wrap'
                   }}
                 >
-                  {formData.delayReason || 'DELAY REASON NOT SPECIFIED'}
+                  {formData.delayReason || 'DELAY CODE NOT SPECIFIED'}
                 </div>
               </div>
             )}

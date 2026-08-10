@@ -25,6 +25,7 @@ import {
   calculateFlightStatus,
   calculateGroundTime
 } from '../data/routesDB';
+import { DELAY_CODES } from '../constants/delayCodes';
 
 const DRAFT_KEY = 'usb_ramp_report_draft';
 
@@ -275,7 +276,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
     // Delay Reason if Flight Status is DELAY
     if (formData.status?.includes('DELAY')) {
-      if (!formData.delayReason?.trim()) skipped.push('REASON FOR FLIGHT DELAY');
+      if (!formData.delayReason?.trim()) skipped.push('DELAY CODE');
     }
 
     return skipped;
@@ -914,20 +915,55 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               {formData.status}
             </div>
 
-            {/* ADDITIONAL DELAY REASON INPUT BOX FOR DELAYED FLIGHTS */}
+            {/* ADDITIONAL DELAY CODE SELECT DROPDOWN FOR DELAYED FLIGHTS */}
             {formData.status.includes('DELAY') && (
-              <div className="bg-red-950/50 border border-red-500/60 rounded-xl p-3 space-y-1.5 animate-in fade-in">
+              <div className="bg-red-950/50 border border-red-500/60 rounded-xl p-3 space-y-2 animate-in fade-in">
                 <label className="text-xs font-black text-red-300 uppercase tracking-wider flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 text-red-400" />
-                  REASON FOR FLIGHT DELAY *
+                  DELAY CODE *
                 </label>
-                <textarea
-                  rows={2}
+                <select
                   value={formData.delayReason || ''}
                   onChange={(e) => handleChange('delayReason', e.target.value)}
-                  placeholder="Write reason for flight delay e.g. Late Arrival of Inbound Aircraft / ATC Clearance / Technical Inspection..."
-                  className="w-full bg-slate-950 border border-red-500/50 rounded-xl p-2.5 text-xs text-amber-200 font-sans outline-none focus:border-red-400 leading-relaxed placeholder:text-slate-500"
-                />
+                  className="w-full bg-slate-950 border border-red-500/50 rounded-xl p-2.5 text-xs text-amber-200 font-medium font-sans outline-none focus:border-red-400 leading-relaxed cursor-pointer"
+                >
+                  <option value="" className="bg-slate-900 text-slate-400">
+                    -- SELECT DELAY CODE --
+                  </option>
+                  {DELAY_CODES.map((group) => (
+                    <optgroup
+                      key={group.category}
+                      label={group.category}
+                      className="bg-slate-900 text-amber-400 font-bold"
+                    >
+                      {group.codes.map((code) => (
+                        <option
+                          key={code}
+                          value={code}
+                          className="bg-slate-950 text-slate-100 font-normal py-1"
+                        >
+                          {code}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+
+                {/* PROMINENT DISPLAY OF SELECTED DELAY CODE */}
+                {formData.delayReason ? (
+                  <div className="p-2.5 bg-amber-500/15 border border-amber-500/40 rounded-xl text-amber-200 text-xs leading-relaxed font-medium">
+                    <span className="text-amber-400 font-extrabold block text-[10px] uppercase tracking-wider mb-1">
+                      SELECTED DELAY CODE:
+                    </span>
+                    <p className="text-amber-100 font-bold text-xs bg-slate-950/80 p-2 rounded-lg border border-amber-500/30 break-words">
+                      {formData.delayReason}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-red-400/80 italic pl-1">
+                    Please select a delay code from the list above.
+                  </p>
+                )}
               </div>
             )}
           </div>

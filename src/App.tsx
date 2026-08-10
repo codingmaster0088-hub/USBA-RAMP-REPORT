@@ -677,6 +677,7 @@ export default function App() {
             scheduleDate={scheduleDate}
             userLogs={userLogs}
             notices={notices}
+            savedReports={savedReports}
             onUpdateSchedule={handleUpdateSchedule}
             onBroadcastNotice={handleBroadcastNotice}
             onDeleteNotice={handleDeleteNotice}
