@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { SavedReport, ScheduleFlight } from '../types';
 import html2canvas from 'html2canvas';
-import aircraftImage from '../assets/images/us_bangla_real_aircraft_dac_1786384853634.jpg';
+import aircraftImage from '../assets/images/us_bangla_real_hd_plane_1786386727381.jpg';
 import {
   X,
   BarChart3,
@@ -116,8 +116,25 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
     ])
   ).sort();
 
-  // 4. Default Date Selection is "TODAY"
+  // 4. Date Selection & Calendar Picker State
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>('TODAY');
+  const [calendarDate, setCalendarDate] = useState<string>(new Date().toISOString().split('T')[0]);
+
+  // Helper to convert YYYY-MM-DD (e.g. 2026-08-10) to "10 AUG 26"
+  const formatIsoToDDMMMYY = (isoStr: string) => {
+    if (!isoStr) return '';
+    const parts = isoStr.split('-');
+    if (parts.length !== 3) return isoStr;
+    const y = Number(parts[0]);
+    const m = Number(parts[1]) - 1;
+    const d = Number(parts[2]);
+    const dateObj = new Date(y, m, d);
+    if (isNaN(dateObj.getTime())) return isoStr;
+    const dayStr = String(d).padStart(2, '0');
+    const monthStr = dateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    const yearShort = String(y).slice(-2);
+    return `${dayStr} ${monthStr} ${yearShort}`;
+  };
 
   // Filter reports based on selected date mode
   const filteredReports = valid30DaysReports.filter((r) => {
@@ -136,7 +153,18 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
         rDateObj.getFullYear() === prevMonthInfo.year
       );
     }
-    // Specific date selected
+    if (selectedDateFilter === 'CUSTOM_CALENDAR') {
+      if (!calendarDate) return true;
+      const [y, m, d] = calendarDate.split('-').map(Number);
+      const targetDate = new Date(y, m - 1, d);
+      const formattedDDMMMYY = formatIsoToDDMMMYY(calendarDate);
+      return (
+        isSameDay(rDateObj, targetDate) ||
+        rDateStr.toUpperCase().includes(formattedDDMMMYY) ||
+        rDateStr.includes(calendarDate)
+      );
+    }
+    // Specific date selected from list
     return rDateStr === selectedDateFilter;
   });
 
@@ -300,43 +328,48 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
         {/* MODAL BODY CONTENT */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6 text-slate-100 flex-1 bg-slate-950/60">
           
-          {/* CONTROL & DATE FILTER SELECTION BAR */}
+          {/* CONTROL & DATE FILTER SELECTION BAR WITH SINGLE UNIFIED DATE PICKER BOX */}
           <div className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-4 shadow-xl">
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2 text-amber-400">
-                <Calendar className="w-5 h-5" />
-                <span className="text-xs font-black uppercase text-slate-200 tracking-wider">
-                  SELECT REPORT PERIOD:
+                <Calendar className="w-5 h-5 text-amber-400" />
+                <span className="text-xs font-black uppercase text-amber-300 tracking-wider font-mono">
+                  SELECT REPORT DATE:
                 </span>
               </div>
 
-              <div className="relative">
-                <select
-                  value={selectedDateFilter}
-                  onChange={(e) => setSelectedDateFilter(e.target.value)}
-                  className="bg-slate-950 border-2 border-amber-500/60 rounded-xl pl-3 pr-8 py-2 text-xs text-amber-300 font-mono font-black outline-none focus:border-amber-400 cursor-pointer shadow-inner appearance-none"
-                >
-                  <option value="TODAY">TODAY ({todayDateStr}) - [DEFAULT]</option>
-                  <option value="PREVIOUS_MONTH">PREVIOUS MONTH SUMMARY ({prevMonthInfo.shortMonth} {prevMonthInfo.year}) [AUTO-SAVED]</option>
-                  <option value="LAST_30_DAYS">FULL 30-DAY SUMMARY ({valid30DaysReports.length} FLIGHTS)</option>
-                  {uniqueDatesIn30Days.map((d) => (
-                    <option key={d} value={d}>
-                      MANUAL DATE: {d}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-4 h-4 text-amber-400 absolute right-2.5 top-2.5 pointer-events-none" />
+              {/* SINGLE UNIFIED DATE PICKER BOX */}
+              <div className="flex items-center gap-2.5 bg-slate-950 border-2 border-amber-400 rounded-xl px-4 py-2 shadow-inner hover:border-amber-300 focus-within:border-amber-300 transition-all">
+                <input
+                  type="date"
+                  value={calendarDate}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    setCalendarDate(newDate);
+                    setSelectedDateFilter('CUSTOM_CALENDAR');
+                  }}
+                  className="bg-transparent text-sm text-amber-300 font-mono font-black outline-none cursor-pointer scheme-dark"
+                />
+                <span className="text-xs font-black text-amber-400 font-mono bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-md tracking-wider">
+                  {formatIsoToDDMMMYY(calendarDate) || todayDateStr}
+                </span>
               </div>
 
-              {selectedDateFilter === 'TODAY' && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              {selectedDateFilter === 'TODAY' ? (
+                <span className="text-[10px] font-black px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 tracking-wider">
                   LIVE TODAY VIEW
                 </span>
-              )}
-              {selectedDateFilter === 'PREVIOUS_MONTH' && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  AUTO MONTHLY ARCHIVE
-                </span>
+              ) : (
+                <button
+                  onClick={() => {
+                    const todayIso = new Date().toISOString().split('T')[0];
+                    setCalendarDate(todayIso);
+                    setSelectedDateFilter('TODAY');
+                  }}
+                  className="text-[10px] font-black px-3 py-1 rounded-full bg-slate-800 hover:bg-amber-500/20 text-amber-300 border border-amber-500/40 transition-all cursor-pointer"
+                >
+                  LOAD TODAY ({todayDateStr})
+                </button>
               )}
             </div>
 
@@ -636,18 +669,18 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                   {/* 1. Official US-Bangla Executive Header with Aircraft Tarmac Banner */}
                   <div
                     style={{
-                      marginBottom: '28px',
+                      marginBottom: '24px',
                       borderRadius: '16px',
                       overflow: 'hidden',
-                      border: '2px solid #0284c7',
-                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)'
+                      border: '2px solid #031b4e',
+                      boxShadow: '0 8px 20px rgba(3, 27, 78, 0.12)'
                     }}
                   >
                     {/* Top Navy Bar */}
                     <div
                       style={{
                         backgroundColor: '#031b4e',
-                        padding: '16px 24px',
+                        padding: '18px 26px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
@@ -657,8 +690,8 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <div
                           style={{
-                            width: '52px',
-                            height: '52px',
+                            width: '54px',
+                            height: '54px',
                             borderRadius: '14px',
                             backgroundColor: '#0284c7',
                             display: 'flex',
@@ -673,10 +706,10 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                           ✈
                         </div>
                         <div>
-                          <div style={{ fontSize: '30px', fontWeight: '900', color: '#ffffff', letterSpacing: '1px', lineHeight: '1.1' }}>
+                          <div style={{ fontSize: '32px', fontWeight: '900', color: '#ffffff', letterSpacing: '1px', lineHeight: '1.1' }}>
                             US-BANGLA AIRLINES
                           </div>
-                          <div style={{ fontSize: '15px', fontWeight: '800', color: '#f59e0b', letterSpacing: '0.8px', marginTop: '3px' }}>
+                          <div style={{ fontSize: '15px', fontWeight: '800', color: '#f59e0b', letterSpacing: '1px', marginTop: '4px' }}>
                             AIRPORT SERVICE DEPARTURE REPORT
                           </div>
                         </div>
@@ -684,22 +717,30 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
 
                       <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '12px' }}>
                         <div style={{ backgroundColor: '#0f2963', border: '1.5px solid #38bdf8', padding: '6px 16px', borderRadius: '20px', color: '#ffffff', fontWeight: '900', marginBottom: '6px', display: 'inline-block' }}>
-                          STRICTLY CONFIDENTIAL • BOARD REVIEW
+                          STRICTLY CONFIDENTIAL • MANAGEMENT REVIEW
                         </div>
                         <div style={{ color: '#93c5fd', marginTop: '2px' }}>STATION: <strong style={{ color: '#ffffff', fontWeight: '900' }}>{station} (ALL DEPARTURES)</strong></div>
-                        <div style={{ color: '#93c5fd' }}>REPORT PERIOD: <strong style={{ color: '#60a5fa', fontWeight: '900' }}>{selectedDateFilter === 'TODAY' ? todayDateStr : selectedDateFilter === 'PREVIOUS_MONTH' ? prevMonthInfo.label : selectedDateFilter}</strong></div>
+                        <div style={{ color: '#93c5fd' }}>REPORT PERIOD: <strong style={{ color: '#60a5fa', fontWeight: '900' }}>{selectedDateFilter === 'TODAY' ? todayDateStr : selectedDateFilter === 'CUSTOM_CALENDAR' ? formatIsoToDDMMMYY(calendarDate) : selectedDateFilter === 'PREVIOUS_MONTH' ? prevMonthInfo.label : selectedDateFilter}</strong></div>
                       </div>
                     </div>
 
-                    {/* US-Bangla Aircraft Photo Banner */}
-                    <div style={{ width: '100%', height: '220px', position: 'relative', overflow: 'hidden', backgroundColor: '#0f172a' }}>
+                    {/* US-Bangla Airbus A330 Widebody Landing Banner */}
+                    <div style={{ width: '100%', height: '250px', position: 'relative', overflow: 'hidden', backgroundColor: '#0f172a' }}>
                       <img
                         src={aircraftImage}
-                        alt="US-Bangla Aircraft on Airport Tarmac"
+                        alt="US-Bangla Airbus A330 Widebody Aircraft Landing"
                         referrerPolicy="no-referrer"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 45%' }}
                       />
-                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(3, 27, 78, 0.6) 0%, transparent 60%)' }} />
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(3, 27, 78, 0.7) 0%, transparent 65%)' }} />
+                      <div style={{ position: 'absolute', bottom: '12px', left: '20px', right: '20px', display: 'flex', itemsAlign: 'center', justifyContent: 'space-between', color: '#ffffff', fontFamily: 'sans-serif', fontSize: '11px', fontWeight: '800', letterSpacing: '0.5px' }}>
+                        <span style={{ backgroundColor: 'rgba(3, 27, 78, 0.85)', padding: '4px 12px', borderRadius: '6px', border: '1px solid #38bdf8' }}>
+                          US-BANGLA AIRLINES FLEET • HAZRAT SHAHJALAL INT'L AIRPORT (DAC)
+                        </span>
+                        <span style={{ backgroundColor: 'rgba(15, 23, 42, 0.85)', padding: '4px 12px', borderRadius: '6px', border: '1px solid #f59e0b', color: '#f59e0b' }}>
+                          LIVE RAMP & DEPARTURE HUD METRICS
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -811,20 +852,20 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                       <span>📊</span> IATA & AIRLINE DELAY REASONS ANALYSIS SUMMARY
                     </div>
 
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', fontFamily: 'sans-serif' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', fontFamily: 'sans-serif' }}>
                       <thead>
-                        <tr style={{ backgroundColor: '#0b2559', color: '#ffffff' }}>
-                          <th style={{ padding: '12px 10px', border: '1px solid #1e3a8a', width: '5%', textAlign: 'center', fontWeight: '900' }}>#</th>
-                          <th style={{ padding: '12px 12px', border: '1px solid #1e3a8a', textAlign: 'left', fontWeight: '900', width: '38%' }}>DELAY CODE / OPERATIONAL REASON</th>
-                          <th style={{ padding: '12px 12px', border: '1px solid #1e3a8a', textAlign: 'left', fontWeight: '900', width: '39%' }}>AFFECTED FLIGHTS</th>
-                          <th style={{ padding: '12px 10px', border: '1px solid #1e3a8a', width: '9%', textAlign: 'center', fontWeight: '900' }}>COUNT</th>
-                          <th style={{ padding: '12px 10px', border: '1px solid #1e3a8a', width: '9%', textAlign: 'center', fontWeight: '900' }}>SHARE %</th>
+                        <tr style={{ backgroundColor: '#031b4e', color: '#ffffff' }}>
+                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f2963', width: '6%', textAlign: 'center', fontWeight: '900', fontSize: '14px' }}>#</th>
+                          <th style={{ padding: '12px 12px', border: '1.5px solid #0f2963', textAlign: 'left', fontWeight: '900', width: '38%', fontSize: '14px' }}>DELAY CODE / OPERATIONAL REASON</th>
+                          <th style={{ padding: '12px 12px', border: '1.5px solid #0f2963', textAlign: 'left', fontWeight: '900', width: '38%', fontSize: '14px' }}>AFFECTED FLIGHTS</th>
+                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f2963', width: '9%', textAlign: 'center', fontWeight: '900', fontSize: '14px' }}>COUNT</th>
+                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f2963', width: '9%', textAlign: 'center', fontWeight: '900', fontSize: '14px' }}>SHARE %</th>
                         </tr>
                       </thead>
                       <tbody>
                         {delayBreakdown.length === 0 ? (
                           <tr>
-                            <td colSpan={5} style={{ padding: '28px', textAlign: 'center', color: '#16a34a', fontWeight: '900', fontSize: '15px', border: '1px solid #cbd5e1', backgroundColor: '#f0fdf4' }}>
+                            <td colSpan={5} style={{ padding: '28px', textAlign: 'center', color: '#15803d', fontWeight: '900', fontSize: '16px', border: '1.5px solid #cbd5e1', backgroundColor: '#f0fdf4' }}>
                               PERFECT PERFORMANCE: 100% ON-TIME OPERATIONAL DEPARTURES (ZERO DELAYS)
                             </td>
                           </tr>
@@ -832,20 +873,20 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                           delayBreakdown.map((item, idx) => {
                             const pct = ((item.count / delayedCount) * 100).toFixed(1);
                             return (
-                              <tr key={item.code} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                                <td style={{ padding: '12px 10px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: '900', color: '#d97706', fontSize: '14px' }}>
+                              <tr key={item.code} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f1f5f9' }}>
+                                <td style={{ padding: '12px 10px', border: '1.5px solid #94a3b8', textAlign: 'center', fontWeight: '900', color: '#b45309', fontSize: '15px' }}>
                                   {idx + 1}
                                 </td>
-                                <td style={{ padding: '12px 12px', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: '800', fontSize: '13px', lineHeight: '1.4' }}>
+                                <td style={{ padding: '12px 12px', border: '1.5px solid #94a3b8', color: '#000000', fontWeight: '900', fontSize: '14px', lineHeight: '1.4' }}>
                                   {item.code}
                                 </td>
-                                <td style={{ padding: '12px 12px', border: '1px solid #cbd5e1', color: '#1e293b', fontWeight: '700', fontFamily: 'monospace', fontSize: '12px', lineHeight: '1.4' }}>
+                                <td style={{ padding: '12px 12px', border: '1.5px solid #94a3b8', color: '#031b4e', fontWeight: '900', fontFamily: 'monospace', fontSize: '13px', lineHeight: '1.4' }}>
                                   {item.flights.join(', ')}
                                 </td>
-                                <td style={{ padding: '12px 10px', border: '1px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#b45309', fontSize: '15px' }}>
+                                <td style={{ padding: '12px 10px', border: '1.5px solid #94a3b8', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#dc2626', fontSize: '16px' }}>
                                   {item.count}
                                 </td>
-                                <td style={{ padding: '12px 10px', border: '1px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#1d4ed8', fontSize: '15px' }}>
+                                <td style={{ padding: '12px 10px', border: '1.5px solid #94a3b8', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#1d4ed8', fontSize: '16px' }}>
                                   {pct}%
                                 </td>
                               </tr>
@@ -855,9 +896,34 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                       </tbody>
                     </table>
                   </div>
+
+                  {/* 4. Executive Operational Assessment Box for C-Suite Board */}
+                  <div
+                    style={{
+                      backgroundColor: '#f8fafc',
+                      border: '1.5px solid #cbd5e1',
+                      borderLeft: '5px solid #0284c7',
+                      borderRadius: '12px',
+                      padding: '16px 20px',
+                      marginBottom: '24px'
+                    }}
+                  >
+                    <div style={{ fontSize: '13px', fontWeight: '900', color: '#031b4e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>📋</span> EXECUTIVE RAMP PERFORMANCE & PUNCTUALITY BRIEFING
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#334155', lineHeight: '1.6', fontFamily: 'sans-serif' }}>
+                      During the period <strong style={{ color: '#0f172a' }}>{selectedDateFilter === 'TODAY' ? todayDateStr : selectedDateFilter === 'CUSTOM_CALENDAR' ? formatIsoToDDMMMYY(calendarDate) : selectedDateFilter}</strong>, Station <strong style={{ color: '#0f172a' }}>{station}</strong> handled <strong style={{ color: '#0284c7' }}>{totalReportsCount} departure turnarounds</strong>. 
+                      Station On-Time Performance (OTP) was recorded at <strong style={{ color: '#16a34a' }}>{otpRate}%</strong> with <strong style={{ color: '#16a34a' }}>{onTimeCount} punctual flights</strong> and <strong style={{ color: '#dc2626' }}>{delayedCount} delayed departures</strong>. 
+                      {delayedCount > 0 ? (
+                        <span> Top delay impact was caused by <strong style={{ color: '#b45309' }}>{topDelayItem?.code}</strong> affecting {topDelayItem?.count} flight(s).</span>
+                      ) : (
+                        <span> Ground operational efficiency was 100% on schedule with zero ramp delays recorded.</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                {/* 4. Footer Official Approval & Verification Bar */}
+                {/* 5. Footer Official Approval & Verification Bar */}
                 <div
                   style={{
                     backgroundColor: '#031b4e',
