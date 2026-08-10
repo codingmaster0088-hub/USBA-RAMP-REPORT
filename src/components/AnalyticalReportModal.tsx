@@ -224,12 +224,14 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
       const link = document.createElement('a');
       const dateLabel =
         selectedDateFilter === 'TODAY'
-          ? `TODAY_${todayDateStr.replace(/\s+/g, '_')}`
+          ? todayDateStr
           : selectedDateFilter === 'PREVIOUS_MONTH'
-          ? `FULL_MONTH_${prevMonthInfo.shortMonth}_${prevMonthInfo.year}`
-          : selectedDateFilter.replace(/\s+/g, '_');
+          ? `${prevMonthInfo.shortMonth} ${prevMonthInfo.year}`
+          : selectedDateFilter === 'LAST_30_DAYS'
+          ? 'LAST 30 DAYS'
+          : selectedDateFilter;
 
-      link.download = `US-BANGLA_Executive_Analytical_Report_${station}_${dateLabel}.jpg`;
+      link.download = `ANALYTICAL-${dateLabel}.jpg`;
       link.href = imageURI;
       document.body.appendChild(link);
       link.click();
@@ -382,7 +384,7 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                 <span className="text-3xl sm:text-4xl font-black text-white font-mono tracking-tight">
                   {totalReportsCount}
                 </span>
-                <span className="text-xs font-bold text-slate-400 font-sans">Turnaround Flights</span>
+                <span className="text-xs font-bold text-slate-400 font-sans">Departure Flights (Direct / Turnaround)</span>
               </div>
               <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400 font-mono pt-2 border-t border-slate-800">
                 <span>Punctual: <strong className="text-emerald-400">{onTimeCount}</strong></span>
@@ -615,239 +617,227 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
               <div
                 ref={printCardRef}
                 style={{
-                  width: '1100px',
+                  width: '1200px',
+                  minHeight: '1697px',
                   backgroundColor: '#ffffff',
                   color: '#0f172a',
                   fontFamily: 'Arial, Helvetica, sans-serif',
-                  padding: '36px',
-                  borderRadius: '20px',
+                  padding: '48px',
+                  borderRadius: '16px',
                   border: '4px solid #f59e0b',
-                  boxSizing: 'border-box'
+                  boxSizing: 'border-box',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
                 }}
               >
-                {/* Official US-Bangla Executive Header (Day Mode) */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    borderBottom: '3px solid #f59e0b',
-                    paddingBottom: '20px',
-                    marginBottom: '24px'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div>
+                  {/* Official US-Bangla Executive Header (Day Mode) */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      borderBottom: '3px solid #f59e0b',
+                      paddingBottom: '20px',
+                      marginBottom: '28px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+                      <div
+                        style={{
+                          width: '58px',
+                          height: '58px',
+                          borderRadius: '14px',
+                          backgroundColor: '#f59e0b',
+                          color: '#030712',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '32px',
+                          fontWeight: '900'
+                        }}
+                      >
+                        ✈
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '28px', fontWeight: '900', color: '#0f172a', letterSpacing: '1.5px' }}>
+                          US-BANGLA AIRLINES
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: '800', color: '#b45309', letterSpacing: '1px', marginTop: '2px' }}>
+                          GROUND HANDLING & RAMP OPERATIONS DIVISION
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '13px', color: '#334155' }}>
+                      <div style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b', padding: '6px 16px', borderRadius: '8px', color: '#b45309', fontWeight: '900', marginBottom: '6px' }}>
+                        STRICTLY CONFIDENTIAL • BOARD REVIEW
+                      </div>
+                      <div>STATION: <strong style={{ color: '#0f172a' }}>{station} (ALL DEPARTURES)</strong></div>
+                      <div>REPORT PERIOD: <strong style={{ color: '#1d4ed8' }}>{selectedDateFilter === 'TODAY' ? todayDateStr : selectedDateFilter === 'PREVIOUS_MONTH' ? prevMonthInfo.label : selectedDateFilter}</strong></div>
+                    </div>
+                  </div>
+
+                  {/* Executive KPI Summary Cards Row (Day Mode) */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(4, 1fr)',
+                      gap: '16px',
+                      marginBottom: '32px'
+                    }}
+                  >
+                    {/* KPI 1 */}
                     <div
                       style={{
-                        width: '54px',
-                        height: '54px',
-                        borderRadius: '12px',
-                        backgroundColor: '#f59e0b',
-                        color: '#030712',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '28px',
-                        fontWeight: '900'
+                        backgroundColor: '#f0fdf4',
+                        border: '2px solid #22c55e',
+                        borderRadius: '14px',
+                        padding: '16px',
+                        textAlign: 'center'
                       }}
                     >
-                      ✈
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '26px', fontWeight: '900', color: '#0f172a', letterSpacing: '1.5px' }}>
-                        US-BANGLA AIRLINES
+                      <div style={{ fontSize: '12px', fontWeight: '800', color: '#15803d', textTransform: 'uppercase' }}>
+                        ON-TIME PERFORMANCE (OTP)
                       </div>
-                      <div style={{ fontSize: '15px', fontWeight: '800', color: '#b45309', letterSpacing: '1px', marginTop: '2px' }}>
-                        GROUND HANDLING & RAMP OPERATIONS DIVISION
+                      <div style={{ fontSize: '36px', fontWeight: '900', color: '#16a34a', fontFamily: 'monospace', margin: '6px 0' }}>
+                        {otpRate}%
                       </div>
+                      <div style={{ fontSize: '11px', color: '#475569', fontWeight: 'bold' }}>Target ≥85.0%</div>
+                    </div>
+
+                    {/* KPI 2 */}
+                    <div
+                      style={{
+                        backgroundColor: '#eff6ff',
+                        border: '2px solid #3b82f6',
+                        borderRadius: '14px',
+                        padding: '16px',
+                        textAlign: 'center'
+                      }}
+                    >
+                      <div style={{ fontSize: '12px', fontWeight: '800', color: '#1d4ed8', textTransform: 'uppercase' }}>
+                        EVALUATED FLIGHTS
+                      </div>
+                      <div style={{ fontSize: '36px', fontWeight: '900', color: '#0f172a', fontFamily: 'monospace', margin: '6px 0' }}>
+                        {totalReportsCount}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#1d4ed8', fontWeight: 'bold' }}>Departure Flights (Direct / Turnaround)</div>
+                    </div>
+
+                    {/* KPI 3 */}
+                    <div
+                      style={{
+                        backgroundColor: '#fef2f2',
+                        border: '2px solid #ef4444',
+                        borderRadius: '14px',
+                        padding: '16px',
+                        textAlign: 'center'
+                      }}
+                    >
+                      <div style={{ fontSize: '12px', fontWeight: '800', color: '#b91c1c', textTransform: 'uppercase' }}>
+                        DELAYED FLIGHTS
+                      </div>
+                      <div style={{ fontSize: '36px', fontWeight: '900', color: '#dc2626', fontFamily: 'monospace', margin: '6px 0' }}>
+                        {delayedCount}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#b91c1c', fontWeight: 'bold' }}>Delay Rate: {delayRate}%</div>
+                    </div>
+
+                    {/* KPI 4 */}
+                    <div
+                      style={{
+                        backgroundColor: '#fffbeb',
+                        border: '2px solid #f59e0b',
+                        borderRadius: '14px',
+                        padding: '16px',
+                        textAlign: 'center'
+                      }}
+                    >
+                      <div style={{ fontSize: '12px', fontWeight: '800', color: '#b45309', textTransform: 'uppercase' }}>
+                        PUNCTUAL DEPARTURES
+                      </div>
+                      <div style={{ fontSize: '36px', fontWeight: '900', color: '#d97706', fontFamily: 'monospace', margin: '6px 0' }}>
+                        {onTimeCount}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#15803d', fontWeight: 'bold' }}>On-Time or Early</div>
                     </div>
                   </div>
 
-                  <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '12px', color: '#334155' }}>
-                    <div style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b', padding: '6px 14px', borderRadius: '8px', color: '#b45309', fontWeight: '900', marginBottom: '6px' }}>
-                      STRICTLY CONFIDENTIAL • BOARD REVIEW
+                  {/* Delay Breakdown Table (Day Mode) */}
+                  <div style={{ marginBottom: '32px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: '900', color: '#b45309', textTransform: 'uppercase', marginBottom: '14px', letterSpacing: '0.5px' }}>
+                      IATA & AIRLINE DELAY REASONS ANALYSIS SUMMARY:
                     </div>
-                    <div>STATION: <strong style={{ color: '#0f172a' }}>{station}</strong></div>
-                    <div>REPORT PERIOD: <strong style={{ color: '#1d4ed8' }}>{selectedDateFilter === 'TODAY' ? todayDateStr : selectedDateFilter === 'PREVIOUS_MONTH' ? prevMonthInfo.label : selectedDateFilter}</strong></div>
-                  </div>
-                </div>
 
-                {/* Executive KPI Summary Cards Row (Day Mode) */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(4, 1fr)',
-                    gap: '14px',
-                    marginBottom: '24px'
-                  }}
-                >
-                  {/* KPI 1 */}
-                  <div
-                    style={{
-                      backgroundColor: '#f0fdf4',
-                      border: '2px solid #22c55e',
-                      borderRadius: '12px',
-                      padding: '14px',
-                      textAlign: 'center'
-                    }}
-                  >
-                    <div style={{ fontSize: '11px', fontWeight: '800', color: '#15803d', textTransform: 'uppercase' }}>
-                      ON-TIME PERFORMANCE (OTP)
-                    </div>
-                    <div style={{ fontSize: '32px', fontWeight: '900', color: '#16a34a', fontFamily: 'monospace', margin: '4px 0' }}>
-                      {otpRate}%
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#475569', fontWeight: 'bold' }}>Target ≥85.0%</div>
-                  </div>
-
-                  {/* KPI 2 */}
-                  <div
-                    style={{
-                      backgroundColor: '#eff6ff',
-                      border: '2px solid #3b82f6',
-                      borderRadius: '12px',
-                      padding: '14px',
-                      textAlign: 'center'
-                    }}
-                  >
-                    <div style={{ fontSize: '11px', fontWeight: '800', color: '#1d4ed8', textTransform: 'uppercase' }}>
-                      EVALUATED FLIGHTS
-                    </div>
-                    <div style={{ fontSize: '32px', fontWeight: '900', color: '#0f172a', fontFamily: 'monospace', margin: '4px 0' }}>
-                      {totalReportsCount}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#475569', fontWeight: 'bold' }}>Turnaround Operations</div>
-                  </div>
-
-                  {/* KPI 3 */}
-                  <div
-                    style={{
-                      backgroundColor: '#fef2f2',
-                      border: '2px solid #ef4444',
-                      borderRadius: '12px',
-                      padding: '14px',
-                      textAlign: 'center'
-                    }}
-                  >
-                    <div style={{ fontSize: '11px', fontWeight: '800', color: '#b91c1c', textTransform: 'uppercase' }}>
-                      DELAYED FLIGHTS
-                    </div>
-                    <div style={{ fontSize: '32px', fontWeight: '900', color: '#dc2626', fontFamily: 'monospace', margin: '4px 0' }}>
-                      {delayedCount}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#b91c1c', fontWeight: 'bold' }}>Delay Rate: {delayRate}%</div>
-                  </div>
-
-                  {/* KPI 4 */}
-                  <div
-                    style={{
-                      backgroundColor: '#fffbeb',
-                      border: '2px solid #f59e0b',
-                      borderRadius: '12px',
-                      padding: '14px',
-                      textAlign: 'center'
-                    }}
-                  >
-                    <div style={{ fontSize: '11px', fontWeight: '800', color: '#b45309', textTransform: 'uppercase' }}>
-                      PUNCTUAL DEPARTURES
-                    </div>
-                    <div style={{ fontSize: '32px', fontWeight: '900', color: '#d97706', fontFamily: 'monospace', margin: '4px 0' }}>
-                      {onTimeCount}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#15803d', fontWeight: 'bold' }}>On-Time or Early</div>
-                  </div>
-                </div>
-
-                {/* Automated Executive Summary Paragraph (Day Mode) */}
-                <div
-                  style={{
-                    backgroundColor: '#fffbeb',
-                    borderLeft: '4px solid #d97706',
-                    border: '1px solid #fde68a',
-                    borderLeftWidth: '4px',
-                    borderRadius: '8px',
-                    padding: '14px 18px',
-                    marginBottom: '24px',
-                    fontSize: '12px',
-                    lineHeight: '1.6',
-                    color: '#1e293b'
-                  }}
-                >
-                  <strong style={{ color: '#b45309' }}>EXECUTIVE BRIEFING SUMMARY:</strong> Station <strong>{station}</strong> conducted <strong>{totalReportsCount} turnaround flight operations</strong> during {selectedDateFilter === 'TODAY' ? `Today (${todayDateStr})` : selectedDateFilter === 'PREVIOUS_MONTH' ? prevMonthInfo.label : selectedDateFilter}. The station achieved an overall On-Time Performance (OTP) rate of <strong style={{ color: '#16a34a' }}>{otpRate}%</strong>. {delayedCount > 0 ? `Primary delay factors were dominated by ${topDelayItem?.code || 'Inbound Rotation'}, accounting for ${topDelayItem && delayedCount > 0 ? ((topDelayItem.count / delayedCount) * 100).toFixed(1) : 0}% of recorded delays.` : 'Zero operational delays were recorded during this period.'}
-                </div>
-
-                {/* Delay Breakdown Table (Day Mode) */}
-                <div style={{ marginBottom: '24px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#b45309', textTransform: 'uppercase', marginBottom: '10px', letterSpacing: '0.5px' }}>
-                    IATA & AIRLINE DELAY REASONS ANALYSIS SUMMARY:
-                  </div>
-
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', fontFamily: 'sans-serif' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>
-                        <th style={{ padding: '10px', border: '1px solid #0f172a', width: '6%', textAlign: 'center' }}>#</th>
-                        <th style={{ padding: '10px', border: '1px solid #0f172a', textAlign: 'left' }}>DELAY CODE / OPERATIONAL REASON</th>
-                        <th style={{ padding: '10px', border: '1px solid #0f172a', textAlign: 'left' }}>AFFECTED FLIGHTS</th>
-                        <th style={{ padding: '10px', border: '1px solid #0f172a', width: '12%', textAlign: 'center' }}>COUNT</th>
-                        <th style={{ padding: '10px', border: '1px solid #0f172a', width: '12%', textAlign: 'center' }}>SHARE %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {delayBreakdown.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} style={{ padding: '18px', textAlign: 'center', color: '#16a34a', fontWeight: 'bold', border: '1px solid #e2e8f0', backgroundColor: '#f0fdf4' }}>
-                            PERFECT PERFORMANCE: 100% ON-TIME OPERATIONAL DEPARTURES (ZERO DELAYS)
-                          </td>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', fontFamily: 'sans-serif' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>
+                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f172a', width: '6%', textAlign: 'center', fontWeight: '900' }}>#</th>
+                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f172a', textAlign: 'left', fontWeight: '900' }}>DELAY CODE / OPERATIONAL REASON</th>
+                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f172a', textAlign: 'left', fontWeight: '900' }}>AFFECTED FLIGHTS</th>
+                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f172a', width: '12%', textAlign: 'center', fontWeight: '900' }}>COUNT</th>
+                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f172a', width: '12%', textAlign: 'center', fontWeight: '900' }}>SHARE %</th>
                         </tr>
-                      ) : (
-                        delayBreakdown.map((item, idx) => {
-                          const pct = ((item.count / delayedCount) * 100).toFixed(1);
-                          return (
-                            <tr key={item.code} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                              <td style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: 'bold', color: '#d97706' }}>
-                                {idx + 1}
-                              </td>
-                              <td style={{ padding: '10px', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: 'bold' }}>
-                                {item.code}
-                              </td>
-                              <td style={{ padding: '10px', border: '1px solid #cbd5e1', color: '#334155', fontFamily: 'monospace' }}>
-                                {item.flights.join(', ')}
-                              </td>
-                              <td style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: 'bold', color: '#b45309' }}>
-                                {item.count}
-                              </td>
-                              <td style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: 'bold', color: '#1d4ed8' }}>
-                                {pct}%
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {delayBreakdown.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#16a34a', fontWeight: '900', fontSize: '14px', border: '1.5px solid #cbd5e1', backgroundColor: '#f0fdf4' }}>
+                              PERFECT PERFORMANCE: 100% ON-TIME OPERATIONAL DEPARTURES (ZERO DELAYS)
+                            </td>
+                          </tr>
+                        ) : (
+                          delayBreakdown.map((item, idx) => {
+                            const pct = ((item.count / delayedCount) * 100).toFixed(1);
+                            return (
+                              <tr key={item.code} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                                <td style={{ padding: '12px 10px', border: '1.5px solid #cbd5e1', textAlign: 'center', fontWeight: '900', color: '#b45309' }}>
+                                  {idx + 1}
+                                </td>
+                                <td style={{ padding: '12px 10px', border: '1.5px solid #cbd5e1', color: '#0f172a', fontWeight: '800' }}>
+                                  {item.code}
+                                </td>
+                                <td style={{ padding: '12px 10px', border: '1.5px solid #cbd5e1', color: '#1e293b', fontWeight: '700', fontFamily: 'monospace' }}>
+                                  {item.flights.join(', ')}
+                                </td>
+                                <td style={{ padding: '12px 10px', border: '1.5px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#b45309', fontSize: '14px' }}>
+                                  {item.count}
+                                </td>
+                                <td style={{ padding: '12px 10px', border: '1.5px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#1d4ed8', fontSize: '14px' }}>
+                                  {pct}%
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
-                {/* Footer Official Approval & Verification Block (Day Mode - Only Prepared By & Gen Time) */}
+                {/* Footer Official Approval & Verification Block (A4 Bottom) */}
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    borderTop: '2px dashed #cbd5e1',
-                    paddingTop: '16px',
-                    fontSize: '11px',
-                    color: '#475569',
-                    fontFamily: 'monospace'
+                    borderTop: '2px dashed #94a3b8',
+                    paddingTop: '20px',
+                    fontSize: '13px',
+                    color: '#334155',
+                    fontFamily: 'monospace',
+                    marginTop: 'auto'
                   }}
                 >
                   <div>
-                    PREPARED BY: <strong style={{ color: '#b45309' }}>{adminName}</strong> (ID-{adminId})<br />
-                    <span style={{ color: '#64748b' }}>RAMP OFFICER / STATION ADMIN</span>
+                    PREPARED BY: <strong style={{ color: '#b45309', fontSize: '14px' }}>{adminName}</strong> (ID-{adminId})
                   </div>
 
-                  <div style={{ textAlign: 'center', border: '1px solid #cbd5e1', padding: '8px 24px', borderRadius: '10px', backgroundColor: '#f8fafc' }}>
-                    <div style={{ color: '#16a34a', fontWeight: 'bold', fontSize: '11px' }}>US-BANGLA RAMP HUD VERIFIED</div>
-                    <div style={{ color: '#475569', fontSize: '10px' }}>GEN: {new Date().toLocaleString()}</div>
+                  <div style={{ textAlign: 'center', border: '1.5px solid #cbd5e1', padding: '10px 28px', borderRadius: '12px', backgroundColor: '#f8fafc' }}>
+                    <div style={{ color: '#16a34a', fontWeight: '900', fontSize: '12px', letterSpacing: '0.5px' }}>US-BANGLA RAMP HUD VERIFIED</div>
+                    <div style={{ color: '#475569', fontSize: '11px', marginTop: '2px' }}>GEN: {new Date().toLocaleString()}</div>
                   </div>
                 </div>
 
