@@ -543,30 +543,31 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
             </div>
           </div>
 
-          {/* AI / AUTOMATED EXECUTIVE BRIEFING TEXT BOX */}
+          {/* REPORT REMARKS TEXT BOX */}
           <div className="bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 border border-amber-500/40 rounded-2xl p-4 sm:p-5 shadow-xl space-y-2">
             <div className="flex items-center gap-2 text-amber-400 text-xs font-black uppercase tracking-wider">
               <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-              <span>AUTOMATED EXECUTIVE PERFORMANCE BRIEFING</span>
+              <span>REPORT REMARKS:</span>
             </div>
-            <p className="text-xs text-slate-200 leading-relaxed font-sans">
-              Station <strong className="text-amber-300 font-bold">{station}</strong> recorded{' '}
-              <strong className="text-white font-bold">{totalReportsCount} flight turnaround operations</strong> during the selected period ({selectedDateFilter === 'TODAY' ? `Today ${todayDateStr}` : selectedDateFilter === 'PREVIOUS_MONTH' ? prevMonthInfo.label : selectedDateFilter}).
-              The overall On-Time Performance (OTP) stands at{' '}
-              <strong className="text-emerald-400 font-bold">{otpRate}%</strong> with {onTimeCount} punctual departures and {delayedCount} recorded delay(s).{' '}
-              {delayedCount > 0 ? (
+            <div className="text-xs text-slate-200 leading-relaxed font-sans space-y-1.5">
+              {topDelayItem ? (
                 <>
-                  The primary operational bottleneck was identified as{' '}
-                  <strong className="text-amber-300 font-bold">{topDelayItem?.code}</strong>, representing{' '}
-                  <strong className="text-amber-300 font-bold">
-                    {topDelayItem && delayedCount > 0 ? ((topDelayItem.count / delayedCount) * 100).toFixed(1) : 0}%
-                  </strong>{' '}
-                  of overall station delays.
+                  <p>
+                    <strong className="text-amber-300">• Most Used Delay Code:</strong> {topDelayItem.code}
+                  </p>
+                  <p>
+                    <strong className="text-amber-300">• Used Today:</strong> {topDelayItem.count} time(s) ({((topDelayItem.count / delayedCount) * 100).toFixed(1)}% of total delays)
+                  </p>
+                  <p>
+                    <strong className="text-amber-300">• Affected Flight(s):</strong> {topDelayItem.flights.join(', ')}
+                  </p>
                 </>
               ) : (
-                'Zero operational delays were registered during this period, achieving 100% ground ramp operational efficiency.'
+                <p className="text-emerald-400 font-bold">
+                  ✓ 100% On-Time Performance! Zero operational delays recorded for this period.
+                </p>
               )}
-            </p>
+            </div>
           </div>
 
           {/* CATEGORIZED DELAY PARETO & DETAILED BREAKDOWN */}
@@ -973,7 +974,7 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                     </table>
                   </div>
 
-                  {/* 4. Executive Operational Assessment Box for C-Suite Board */}
+                  {/* 4. Report Remarks Section */}
                   <div
                     style={{
                       backgroundColor: '#f8fafc',
@@ -984,16 +985,29 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                       marginBottom: '24px'
                     }}
                   >
-                    <div style={{ fontSize: '13px', fontWeight: '900', color: '#031b4e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>📋</span> EXECUTIVE RAMP PERFORMANCE & PUNCTUALITY BRIEFING
+                    <div style={{ fontSize: '13px', fontWeight: '900', color: '#031b4e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>📋</span> REPORT REMARKS:
                     </div>
                     <div style={{ fontSize: '12px', color: '#334155', lineHeight: '1.6', fontFamily: 'sans-serif' }}>
-                      During the period <strong style={{ color: '#0f172a' }}>{selectedDateFilter === 'TODAY' ? todayDateStr : selectedDateFilter === 'CUSTOM_CALENDAR' ? formatIsoToDDMMMYY(calendarDate) : selectedDateFilter}</strong>, Station <strong style={{ color: '#0f172a' }}>{station}</strong> handled <strong style={{ color: '#0284c7' }}>{totalReportsCount} departure turnarounds</strong>. 
-                      Station On-Time Performance (OTP) was recorded at <strong style={{ color: '#16a34a' }}>{otpRate}%</strong> with <strong style={{ color: '#16a34a' }}>{onTimeCount} punctual flights</strong> and <strong style={{ color: '#dc2626' }}>{delayedCount} delayed departures</strong>. 
-                      {delayedCount > 0 ? (
-                        <span> Top delay impact was caused by <strong style={{ color: '#b45309' }}>{topDelayItem?.code}</strong> affecting {topDelayItem?.count} flight(s).</span>
+                      {topDelayItem ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div>
+                            <strong style={{ color: '#0f172a' }}>• Most Used Delay Code:</strong>{' '}
+                            <span style={{ color: '#b45309', fontWeight: '800' }}>{topDelayItem.code}</span>
+                          </div>
+                          <div>
+                            <strong style={{ color: '#0f172a' }}>• Frequency Today:</strong> Used{' '}
+                            <strong style={{ color: '#dc2626' }}>{topDelayItem.count} time(s)</strong> today ({((topDelayItem.count / delayedCount) * 100).toFixed(1)}% of total station delays).
+                          </div>
+                          <div>
+                            <strong style={{ color: '#0f172a' }}>• Affected Flight(s):</strong>{' '}
+                            <span style={{ color: '#031b4e', fontWeight: '800', fontFamily: 'monospace' }}>{topDelayItem.flights.join(', ')}</span>
+                          </div>
+                        </div>
                       ) : (
-                        <span> Ground operational efficiency was 100% on schedule with zero ramp delays recorded.</span>
+                        <div style={{ color: '#16a34a', fontWeight: '800' }}>
+                          ✓ Ground operational efficiency was 100% on schedule with zero ramp delays recorded during this period.
+                        </div>
                       )}
                     </div>
                   </div>
