@@ -205,18 +205,38 @@ export default function App() {
 
   // Subscribe to Firebase Firestore real-time updates for Saved Reports, Schedules, Notices & User Logs
   useEffect(() => {
-    const unsubReports = subscribeToSavedReports((reports) => {
-      if (reports && reports.length > 0) {
-        setSavedReports(reports);
-        localStorage.setItem('usb_reports', JSON.stringify(reports));
-      } else {
-        // If Firestore reports empty, upload initial sample reports
-        initialSampleReports.forEach((rep) => {
-          syncReportToFirestore(rep).catch(() => {});
+    const unsubReports = subscribeToSavedReports(
+      (reports) => {
+        let combinedReports = reports ? [...reports] : [];
+
+        // Ensure all initial/submitted sample reports exist in Firestore and state
+        initialSampleReports.forEach((sampleRep) => {
+          const sampleFlt = (sampleRep.flight || sampleRep.formData?.deptFlt || '')
+            .replace(/BS-?/i, '')
+            .trim();
+          
+          const exists = combinedReports.some((r) => {
+            const rFlt = (r.flight || r.formData?.deptFlt || '')
+              .replace(/BS-?/i, '')
+              .trim();
+            return rFlt === sampleFlt;
+          });
+
+          if (!exists) {
+            combinedReports.push(sampleRep);
+            // Sync to Firestore DB so all users/devices see it in real-time
+            syncReportToFirestore(sampleRep).catch((err) => {
+              console.error(`Failed to seed report ${sampleRep.flight} to Firestore:`, err);
+            });
+          }
         });
-      }
-      setIsLiveConnected(true);
-    }, () => setIsLiveConnected(false));
+
+        setSavedReports(combinedReports);
+        localStorage.setItem('usb_reports', JSON.stringify(combinedReports));
+        setIsLiveConnected(true);
+      },
+      () => setIsLiveConnected(false)
+    );
 
     const unsubSchedule = subscribeToSchedule((data) => {
       if (data && data.flights && data.flights.length > 0) {
