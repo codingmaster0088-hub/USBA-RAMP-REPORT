@@ -189,12 +189,36 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
     return rDateStr === selectedDateFilter;
   });
 
-  // Calculate Key Operational Metrics
-  const totalReportsCount = filteredReports.length;
+  // Helper to deduplicate reports by flight number + date, taking the LATEST saved report
+  const dedupeReportsLatest = (reports: SavedReport[]) => {
+    const map = new Map<string, SavedReport>();
+    reports.forEach((r) => {
+      const fltNum = (r.formData?.deptFlt || r.flight || '').replace(/^BS-?/i, '').trim().toUpperCase();
+      const dt = (r.formData?.date || r.date || '').trim().toUpperCase();
+      const key = `${fltNum}_${dt}`;
+      // Since reports array is in chronological order, later entries overwrite earlier ones
+      map.set(key, r);
+    });
+    return Array.from(map.values());
+  };
 
-  const delayedReports = filteredReports.filter(
-    (r) => r.formData.status?.includes('DELAY') || Boolean(r.formData.delayReason?.trim())
-  );
+  const dedupedFilteredReports = dedupeReportsLatest(filteredReports);
+
+  // Helper to check if a flight report is strictly delayed
+  const isReportDelayed = (r: SavedReport): boolean => {
+    const status = (r.formData?.status || '').toUpperCase();
+    // If status explicitly contains EARLY or ON TIME / ON-TIME, it is NOT delayed
+    if (status.includes('EARLY') || status.includes('ON TIME') || status.includes('ON-TIME')) {
+      return false;
+    }
+    // Must contain DELAY to be counted as delayed
+    return status.includes('DELAY');
+  };
+
+  // Calculate Key Operational Metrics
+  const totalReportsCount = dedupedFilteredReports.length;
+
+  const delayedReports = dedupedFilteredReports.filter(isReportDelayed);
   const delayedCount = delayedReports.length;
   const onTimeCount = Math.max(0, totalReportsCount - delayedCount);
 
@@ -673,7 +697,7 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                         <td className="p-2.5 font-bold text-amber-300">BS-{r.formData.deptFlt || 'XXX'}</td>
                         <td className="p-2.5 text-slate-300">{r.formData.deptRoute || 'N/A'}</td>
                         <td className="p-2.5 text-slate-400">{r.formData.ac || 'N/A'}</td>
-                        <td className="p-2.5 text-slate-400">{r.formData.std} / {r.formData.ab || r.formData.airborne || 'N/A'}</td>
+                        <td className="p-2.5 text-slate-400">{r.formData.std} / {r.formData.ab || 'N/A'}</td>
                         <td className="p-2.5">
                           <span className="px-2 py-0.5 rounded bg-rose-950 text-rose-300 font-bold border border-rose-500/40 text-[10px]">
                             {r.formData.status || 'DELAYED'}

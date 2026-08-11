@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserProfile, ScheduleFlight, UserLog, UserActionType, AdminNotice, SavedReport } from '../types';
 import { parseFLSTData, sampleFLSTInput } from '../utils/flstParser';
 import { AnalyticalReportModal } from './AnalyticalReportModal';
+import { CompleteFlightModal } from './CompleteFlightModal';
 import {
   ShieldCheck,
   Lock,
@@ -21,7 +22,8 @@ import {
   Activity,
   BarChart3,
   X,
-  ChevronRight
+  ChevronRight,
+  FileCheck2
 } from 'lucide-react';
 
 interface AdminSectionProps {
@@ -57,8 +59,10 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   const [pinError, setPinError] = useState('');
   const [showPin, setShowPin] = useState(false);
 
-  // Active Admin Modal Popup State ('LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'ANALYTICAL_REPORT' | null)
-  const [activeModal, setActiveModal] = useState<'LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'ANALYTICAL_REPORT' | null>(null);
+  // Active Admin Modal Popup State ('LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'ANALYTICAL_REPORT' | 'COMPLETE_FLIGHT' | null)
+  const [activeModal, setActiveModal] = useState<
+    'LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'ANALYTICAL_REPORT' | 'COMPLETE_FLIGHT' | null
+  >(null);
 
   const [flstInput, setFlstInput] = useState<string>(() => {
     return localStorage.getItem('usb_flst_raw') || sampleFLSTInput;
@@ -330,7 +334,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
         <label className="text-xs font-black text-amber-300 uppercase tracking-wider block pl-1">
           SELECT ADMIN ACTION MODULE:
         </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
           {/* 1. LOG CHECK BUTTON */}
           <button
             onClick={() => setActiveModal('LOG_CHECK')}
@@ -431,6 +435,32 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
               </div>
               <p className="text-[11px] text-slate-400 leading-snug mt-1">
                 Day-wise delay code statistics, breakdown & downloadable JPG report.
+              </p>
+            </div>
+          </button>
+
+          {/* 5. COMPLETE FLIGHT BUTTON */}
+          <button
+            onClick={() => setActiveModal('COMPLETE_FLIGHT')}
+            className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
+              activeModal === 'COMPLETE_FLIGHT' ? 'border-amber-400 bg-amber-500/10' : 'border-amber-500/50 hover:border-amber-400'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors shadow-md">
+                <FileCheck2 className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-amber-400 border border-slate-800">
+                RECONCILE
+              </span>
+            </div>
+            <div>
+              <div className="text-xs font-black text-white group-hover:text-amber-300 uppercase tracking-wide flex items-center justify-between">
+                <span>5. COMPLETE FLIGHT</span>
+                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-300 transition-transform group-hover:translate-x-0.5" />
+              </div>
+              <p className="text-[11px] text-slate-400 leading-snug mt-1">
+                Reconcile FLST schedule vs generated reports to detect missing flights.
               </p>
             </div>
           </button>
@@ -757,6 +787,16 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
           adminId={user.id}
           onClose={() => setActiveModal(null)}
           showToast={showToast}
+        />
+      )}
+
+      {/* POPUP WINDOW MODAL 5: COMPLETE FLIGHT RECONCILIATION */}
+      {activeModal === 'COMPLETE_FLIGHT' && (
+        <CompleteFlightModal
+          scheduleFlights={scheduleFlights}
+          savedReports={savedReports}
+          scheduleDate={scheduleDate}
+          onClose={() => setActiveModal(null)}
         />
       )}
     </div>

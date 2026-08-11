@@ -294,9 +294,18 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     if (!formData.trimSubmitted?.trim()) skipped.push('12. TRIM SUBMITTED');
     if (!formData.trimSigned?.trim()) skipped.push('13. TRIM SIGNED');
 
-    // Delay Reason if Flight Status is DELAY
-    if (formData.status?.includes('DELAY')) {
-      if (!formData.delayReason?.trim()) skipped.push('DELAY CODE');
+    // Delay Reason if Flight Status is strictly DELAY
+    const statusUpper = (formData.status || '').toUpperCase();
+    const isDelayedStatus =
+      statusUpper.includes('DELAY') &&
+      !statusUpper.includes('EARLY') &&
+      !statusUpper.includes('ON TIME') &&
+      !statusUpper.includes('ON-TIME');
+
+    if (isDelayedStatus) {
+      if (!formData.delayReason?.trim()) {
+        skipped.push('DELAY REASON / DELAY CODE (MANDATORY FOR DELAYED FLIGHTS)');
+      }
     }
 
     return skipped;
