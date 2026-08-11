@@ -38,10 +38,21 @@ import { ReportCanvasCard } from './components/ReportCanvasCard';
 import { DownloadModal } from './components/DownloadModal';
 import { CheckCircle2, AlertCircle, RefreshCw, X, Wifi } from 'lucide-react';
 
+const FIVE_HOURS_MS = 5 * 60 * 60 * 1000; // 5 hours in milliseconds
+
 export default function App() {
-  // LocalStorage User Session
+  // LocalStorage User Session with 5-Hour Inactivity Check
   const [user, setUser] = useState<UserProfile | null>(() => {
     try {
+      const lastAct = localStorage.getItem('usb_last_activity');
+      if (lastAct) {
+        const lastTime = parseInt(lastAct, 10);
+        if (!isNaN(lastTime) && Date.now() - lastTime >= FIVE_HOURS_MS) {
+          localStorage.removeItem('usb_user');
+          localStorage.removeItem('usb_last_activity');
+          return null;
+        }
+      }
       const saved = localStorage.getItem('usb_user');
       return saved ? JSON.parse(saved) : null;
     } catch {
@@ -276,12 +287,69 @@ export default function App() {
     };
   }, []);
 
-  // Handle Login
+  // Show Toast after login auto-reload
+  useEffect(() => {
+    const pendingToast = sessionStorage.getItem('usb_show_login_toast');
+    if (pendingToast) {
+      try {
+        const { name, station } = JSON.parse(pendingToast);
+        showToast(`Welcome, Officer ${name}`, `Station: ${station}`, 'success');
+      } catch (e) {}
+      sessionStorage.removeItem('usb_show_login_toast');
+    }
+  }, []);
+
+  // 5-Hour Inactivity Activity Listener & Auto-Logout Monitor
+  useEffect(() => {
+    if (!user) return;
+
+    // Set initial activity timestamp on mount/login
+    const now = Date.now();
+    localStorage.setItem('usb_last_activity', now.toString());
+
+    let lastSavedTime = now;
+    const registerActivity = () => {
+      const current = Date.now();
+      if (current - lastSavedTime > 10000) { // Throttle updates to once every 10 seconds
+        lastSavedTime = current;
+        localStorage.setItem('usb_last_activity', current.toString());
+      }
+    };
+
+    const activityEvents = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
+    activityEvents.forEach((evt) => window.addEventListener(evt, registerActivity, { passive: true }));
+
+    // Periodic check every 30 seconds for 5-hour timeout
+    const inactivityCheckInterval = setInterval(() => {
+      const lastAct = localStorage.getItem('usb_last_activity');
+      if (lastAct) {
+        const lastTime = parseInt(lastAct, 10);
+        if (!isNaN(lastTime) && Date.now() - lastTime >= FIVE_HOURS_MS) {
+          logUserAction('LOGOUT', `Auto-logged out due to 5 hours of inactivity from station ${user.station}`);
+          localStorage.removeItem('usb_user');
+          localStorage.removeItem('usb_last_activity');
+          setUser(null);
+          showToast('Session Expired', 'Auto logged out due to 5 hours of inactivity', 'info');
+        }
+      }
+    }, 30000);
+
+    return () => {
+      activityEvents.forEach((evt) => window.removeEventListener(evt, registerActivity));
+      clearInterval(inactivityCheckInterval);
+    };
+  }, [user]);
+
+  // Handle Login (Saves credentials, logs activity, and auto-reloads page for latest web bundle)
   const handleLogin = (newUser: UserProfile) => {
     setUser(newUser);
     localStorage.setItem('usb_user', JSON.stringify(newUser));
-    showToast(`Welcome, Officer ${newUser.name}`, `Station: ${newUser.station}`, 'success');
+    localStorage.setItem('usb_last_activity', Date.now().toString());
+    sessionStorage.setItem('usb_show_login_toast', JSON.stringify({ name: newUser.name, station: newUser.station }));
     logUserAction('LOGIN', `Logged in to system at station ${newUser.station}`, newUser);
+    
+    // Auto-refresh page to ensure user gets latest code update without manual refresh
+    window.location.reload();
   };
 
   // Handle Logout
@@ -292,6 +360,7 @@ export default function App() {
     showToast('Logged out successfully', 'Thank you Officer!', 'info');
     setTimeout(() => {
       localStorage.removeItem('usb_user');
+      localStorage.removeItem('usb_last_activity');
       setUser(null);
     }, 1000);
   };
