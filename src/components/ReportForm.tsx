@@ -10,7 +10,11 @@ import {
   Unlock,
   AlertTriangle,
   AlertCircle,
-  X
+  X,
+  Search,
+  Check,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import {
   RampReportFormData,
@@ -151,6 +155,22 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
   const [skippedModalOpen, setSkippedModalOpen] = useState<boolean>(false);
   const [skippedFieldsList, setSkippedFieldsList] = useState<string[]>([]);
+  const [delaySearch, setDelaySearch] = useState<string>('');
+
+  // Parse currently selected delay codes array from formData.delayReason string
+  const selectedDelayCodes = formData.delayReason
+    ? formData.delayReason.split('; ').map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  const toggleDelayCode = (code: string) => {
+    let updated: string[];
+    if (selectedDelayCodes.includes(code)) {
+      updated = selectedDelayCodes.filter((c) => c !== code);
+    } else {
+      updated = [...selectedDelayCodes, code];
+    }
+    handleChange('delayReason', updated.join('; '));
+  };
 
   useEffect(() => {
     if (reportToEdit) {
@@ -915,53 +935,145 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               {formData.status}
             </div>
 
-            {/* ADDITIONAL DELAY CODE SELECT DROPDOWN FOR DELAYED FLIGHTS */}
+            {/* MULTI-SELECT CHECKBOX (TIK BOX) DELAY CODE SELECTOR FOR DELAYED FLIGHTS */}
             {formData.status.includes('DELAY') && (
-              <div className="bg-red-950/50 border border-red-500/60 rounded-xl p-3 space-y-2 animate-in fade-in">
-                <label className="text-xs font-black text-red-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-red-400" />
-                  DELAY CODE *
-                </label>
-                <select
-                  value={formData.delayReason || ''}
-                  onChange={(e) => handleChange('delayReason', e.target.value)}
-                  className="w-full bg-slate-950 border border-red-500/50 rounded-xl p-2.5 text-xs text-amber-200 font-medium font-sans outline-none focus:border-red-400 leading-relaxed cursor-pointer"
-                >
-                  <option value="" className="bg-slate-900 text-slate-400">
-                    -- SELECT DELAY CODE --
-                  </option>
-                  {DELAY_CODES.map((group) => (
-                    <optgroup
-                      key={group.category}
-                      label={group.category}
-                      className="bg-slate-900 text-amber-400 font-bold"
-                    >
-                      {group.codes.map((code) => (
-                        <option
-                          key={code}
-                          value={code}
-                          className="bg-slate-950 text-slate-100 font-normal py-1"
-                        >
-                          {code}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-
-                {/* PROMINENT DISPLAY OF SELECTED DELAY CODE */}
-                {formData.delayReason ? (
-                  <div className="p-2.5 bg-amber-500/15 border border-amber-500/40 rounded-xl text-amber-200 text-xs leading-relaxed font-medium">
-                    <span className="text-amber-400 font-extrabold block text-[10px] uppercase tracking-wider mb-1">
-                      SELECTED DELAY CODE:
+              <div className="bg-red-950/60 border-2 border-red-500/70 rounded-2xl p-3.5 space-y-3 animate-in fade-in shadow-xl">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <label className="text-xs font-black text-red-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-red-400" />
+                    SELECT DELAY REASONS (CHECK / TIK BOX FOR 1, 2 OR MORE) *
+                  </label>
+                  {selectedDelayCodes.length > 0 && (
+                    <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
+                      {selectedDelayCodes.length} REASON{selectedDelayCodes.length > 1 ? 'S' : ''} CHECKED
                     </span>
-                    <p className="text-amber-100 font-bold text-xs bg-slate-950/80 p-2 rounded-lg border border-amber-500/30 break-words">
-                      {formData.delayReason}
-                    </p>
+                  )}
+                </div>
+
+                {/* Quick Search Input */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-amber-400 absolute left-3 top-2.5 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={delaySearch}
+                    onChange={(e) => setDelaySearch(e.target.value)}
+                    placeholder="Search delay code number or keyword (e.g. 11, 23, late, cargo...)"
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-xl pl-9 pr-8 py-2 text-xs text-amber-200 placeholder-slate-500 outline-none font-mono"
+                  />
+                  {delaySearch && (
+                    <button
+                      type="button"
+                      onClick={() => setDelaySearch('')}
+                      className="absolute right-2.5 top-2 text-slate-400 hover:text-white text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Checkbox (Tik Box) List */}
+                <div className="max-h-64 overflow-y-auto space-y-2.5 pr-1 custom-scrollbar bg-slate-950/90 rounded-xl p-2.5 border border-slate-800">
+                  {DELAY_CODES.map((group) => {
+                    const filteredCodes = group.codes.filter((c) =>
+                      delaySearch
+                        ? c.toLowerCase().includes(delaySearch.toLowerCase()) ||
+                          group.category.toLowerCase().includes(delaySearch.toLowerCase())
+                        : true
+                    );
+                    if (filteredCodes.length === 0) return null;
+
+                    return (
+                      <div key={group.category} className="space-y-1">
+                        <div className="text-[11px] font-black text-amber-400 uppercase tracking-wider bg-slate-900/90 px-2.5 py-1 rounded border-l-2 border-amber-400 font-mono sticky top-0 z-10">
+                          {group.category}
+                        </div>
+                        <div className="space-y-1 pl-1">
+                          {filteredCodes.map((code) => {
+                            const isChecked = selectedDelayCodes.includes(code);
+                            return (
+                              <div
+                                key={code}
+                                onClick={() => toggleDelayCode(code)}
+                                className={`flex items-start gap-2.5 p-2 rounded-lg cursor-pointer transition-all border ${
+                                  isChecked
+                                    ? 'bg-amber-500/20 border-amber-500/60 text-amber-100 font-bold shadow-sm'
+                                    : 'bg-slate-900/40 border-slate-800/80 text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                                }`}
+                              >
+                                <div className="mt-0.5 flex-shrink-0">
+                                  {isChecked ? (
+                                    <div className="w-4 h-4 bg-amber-400 text-slate-950 rounded flex items-center justify-center font-black text-xs shadow-inner">
+                                      ✓
+                                    </div>
+                                  ) : (
+                                    <div className="w-4 h-4 border-2 border-slate-600 rounded bg-slate-950 hover:border-amber-400" />
+                                  )}
+                                </div>
+                                <span className="text-xs font-sans leading-relaxed">
+                                  {code}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* SELECTED CODES SUMMARY BOX */}
+                {selectedDelayCodes.length > 0 ? (
+                  <div className="p-3 bg-slate-950 border border-amber-500/50 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-amber-400 font-black text-[11px] uppercase tracking-wider font-mono">
+                        SELECTED DELAY REASONS ({selectedDelayCodes.length}):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleChange('delayReason', '')}
+                        className="text-[10px] text-red-400 hover:text-red-300 font-bold uppercase underline cursor-pointer"
+                      >
+                        CLEAR ALL
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {selectedDelayCodes.map((c, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between gap-2 p-2 bg-amber-500/15 border border-amber-500/40 rounded-lg text-xs text-amber-200"
+                        >
+                          <span className="font-bold text-xs leading-snug">
+                            {i + 1}. {c}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleDelayCode(c)}
+                            className="text-amber-400 hover:text-red-400 font-black px-1.5 py-0.5 rounded bg-slate-900 text-xs border border-amber-500/30"
+                            title="Remove this code"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* EDITABLE TEXT AREA */}
+                    <div className="pt-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block font-mono">
+                        COMBINED DELAY REASON TEXT:
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.delayReason || ''}
+                        onChange={(e) => handleChange('delayReason', e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-amber-200 font-mono focus:border-amber-400 outline-none"
+                      />
+                    </div>
                   </div>
                 ) : (
-                  <p className="text-[11px] text-red-400/80 italic pl-1">
-                    Please select a delay code from the list above.
+                  <p className="text-[11px] text-red-300/90 italic pl-1 font-medium">
+                    ⚠️ Please check (tik box) at least 1 or 2 delay reasons from the list above.
                   </p>
                 )}
               </div>

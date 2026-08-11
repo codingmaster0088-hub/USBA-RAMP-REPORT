@@ -205,13 +205,20 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
   const delayCodeMap: Record<string, { code: string; count: number; flights: string[] }> = {};
 
   delayedReports.forEach((r) => {
-    const code = r.formData.delayReason?.trim() || 'UNSPECIFIED DELAY CODE';
+    const rawReason = r.formData.delayReason?.trim() || 'UNSPECIFIED DELAY CODE';
+    const splitCodes = rawReason.split(';').map((s) => s.trim()).filter(Boolean);
+    const codes = splitCodes.length > 0 ? splitCodes : ['UNSPECIFIED DELAY CODE'];
     const fltName = `BS-${r.formData.deptFlt || 'XXX'} (${r.formData.deptRoute || 'ROUTE'})`;
-    if (!delayCodeMap[code]) {
-      delayCodeMap[code] = { code, count: 0, flights: [] };
-    }
-    delayCodeMap[code].count += 1;
-    delayCodeMap[code].flights.push(fltName);
+
+    codes.forEach((code) => {
+      if (!delayCodeMap[code]) {
+        delayCodeMap[code] = { code, count: 0, flights: [] };
+      }
+      delayCodeMap[code].count += 1;
+      if (!delayCodeMap[code].flights.includes(fltName)) {
+        delayCodeMap[code].flights.push(fltName);
+      }
+    });
   });
 
   const delayBreakdown = Object.values(delayCodeMap).sort((a, b) => b.count - a.count);
