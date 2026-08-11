@@ -137,9 +137,37 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
     ])
   ).sort();
 
-  // 4. Date Selection & Calendar Picker State
+  // 4. Date Selection & Calendar Picker State & Flight Scope State
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>('TODAY');
   const [calendarDate, setCalendarDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [flightScopeFilter, setFlightScopeFilter] = useState<'ALL' | 'DOMESTIC' | 'INTERNATIONAL'>('ALL');
+
+  // Helper to check if a saved report is Domestic
+  const isDomesticReport = (r: SavedReport): boolean => {
+    if (r.type) {
+      const t = r.type.toUpperCase();
+      if (t === 'DOMESTIC') return true;
+      if (t === 'INTERNATIONAL') return false;
+    }
+    const route = (r.formData?.deptRoute || r.route || '').toUpperCase();
+    const domesticStations = ['DAC', 'CGP', 'ZYL', 'CXB', 'RJH', 'SPD', 'JSR', 'BZL'];
+    const parts = route.split('-');
+    if (parts.length === 2) {
+      const from = parts[0].trim();
+      const to = parts[1].trim();
+      if (domesticStations.includes(from) && domesticStations.includes(to)) {
+        return true;
+      }
+    }
+    const fltStr = (r.formData?.deptFlt || r.flight || '').replace(/[^0-9]/g, '');
+    const fltNum = parseInt(fltStr, 10);
+    if (fltNum) {
+      if ((fltNum >= 101 && fltNum <= 200) || (fltNum >= 501 && fltNum <= 599)) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   // Helper to convert YYYY-MM-DD (e.g. 2026-08-10) to "10 AUG 26"
   const formatIsoToDDMMMYY = (isoStr: string) => {
@@ -204,6 +232,13 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
 
   const dedupedFilteredReports = dedupeReportsLatest(filteredReports);
 
+  // Filter reports by flight scope (ALL / DOMESTIC / INTERNATIONAL)
+  const scopeFilteredReports = dedupedFilteredReports.filter((r) => {
+    if (flightScopeFilter === 'DOMESTIC') return isDomesticReport(r);
+    if (flightScopeFilter === 'INTERNATIONAL') return !isDomesticReport(r);
+    return true;
+  });
+
   // Helper to check if a flight report is strictly delayed
   const isReportDelayed = (r: SavedReport): boolean => {
     const status = (r.formData?.status || '').toUpperCase();
@@ -216,9 +251,9 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
   };
 
   // Calculate Key Operational Metrics
-  const totalReportsCount = dedupedFilteredReports.length;
+  const totalReportsCount = scopeFilteredReports.length;
 
-  const delayedReports = dedupedFilteredReports.filter(isReportDelayed);
+  const delayedReports = scopeFilteredReports.filter(isReportDelayed);
   const delayedCount = delayedReports.length;
   const onTimeCount = Math.max(0, totalReportsCount - delayedCount);
 
@@ -406,7 +441,7 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
         {/* MODAL BODY CONTENT */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6 text-slate-100 flex-1 bg-slate-950/60">
           
-          {/* CONTROL & DATE FILTER SELECTION BAR WITH SINGLE UNIFIED DATE PICKER BOX */}
+          {/* CONTROL & DATE FILTER SELECTION BAR WITH SINGLE UNIFIED DATE PICKER BOX & SCOPE SELECTION */}
           <div className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-4 shadow-xl">
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2 text-amber-400">
@@ -449,6 +484,46 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                   LOAD TODAY ({todayDateStr})
                 </button>
               )}
+            </div>
+
+            {/* SEPARATE ACTION BUTTONS: ALL, INTERNATIONAL, DOMESTIC */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-black uppercase text-amber-300 tracking-wider font-mono flex items-center gap-1.5">
+                <Plane className="w-4 h-4 text-amber-400" />
+                SCOPE:
+              </span>
+              <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-amber-500/40 shadow-inner">
+                <button
+                  onClick={() => setFlightScopeFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                    flightScopeFilter === 'ALL'
+                      ? 'bg-amber-400 text-slate-950 shadow-md font-extrabold scale-105'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <span>✈️</span> ALL
+                </button>
+                <button
+                  onClick={() => setFlightScopeFilter('DOMESTIC')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                    flightScopeFilter === 'DOMESTIC'
+                      ? 'bg-emerald-400 text-slate-950 shadow-md font-extrabold scale-105'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <span>🇧🇩</span> DOMESTIC
+                </button>
+                <button
+                  onClick={() => setFlightScopeFilter('INTERNATIONAL')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                    flightScopeFilter === 'INTERNATIONAL'
+                      ? 'bg-sky-400 text-slate-950 shadow-md font-extrabold scale-105'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <span>🌐</span> INTERNATIONAL
+                </button>
+              </div>
             </div>
 
             <div className="text-xs font-mono text-slate-400 flex items-center gap-3">
@@ -815,7 +890,11 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                         <div style={{ backgroundColor: '#0f2963', border: '1.5px solid #38bdf8', padding: '6px 16px', borderRadius: '20px', color: '#ffffff', fontWeight: '900', marginBottom: '6px', display: 'inline-block' }}>
                           STRICTLY CONFIDENTIAL • MANAGEMENT REVIEW
                         </div>
-                        <div style={{ color: '#93c5fd', marginTop: '2px' }}>STATION: <strong style={{ color: '#ffffff', fontWeight: '900' }}>{station} (ALL DEPARTURES)</strong></div>
+                        <div style={{ color: '#93c5fd', marginTop: '2px' }}>
+                          STATION: <strong style={{ color: '#ffffff', fontWeight: '900' }}>
+                            {station} ({flightScopeFilter === 'DOMESTIC' ? 'DOMESTIC DEPARTURES' : flightScopeFilter === 'INTERNATIONAL' ? 'INTERNATIONAL DEPARTURES' : 'ALL DEPARTURES'})
+                          </strong>
+                        </div>
                         <div style={{ color: '#93c5fd' }}>REPORT PERIOD: <strong style={{ color: '#60a5fa', fontWeight: '900' }}>{selectedDateFilter === 'TODAY' ? todayDateStr : selectedDateFilter === 'CUSTOM_CALENDAR' ? formatIsoToDDMMMYY(calendarDate) : selectedDateFilter === 'PREVIOUS_MONTH' ? prevMonthInfo.label : selectedDateFilter}</strong></div>
                       </div>
                     </div>
@@ -948,20 +1027,20 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                       <span>📊</span> IATA & AIRLINE DELAY REASONS ANALYSIS SUMMARY
                     </div>
 
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', fontFamily: 'sans-serif' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '15px', fontFamily: 'sans-serif' }}>
                       <thead>
                         <tr style={{ backgroundColor: '#031b4e', color: '#ffffff' }}>
-                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f2963', width: '6%', textAlign: 'center', fontWeight: '900', fontSize: '14px' }}>#</th>
-                          <th style={{ padding: '12px 12px', border: '1.5px solid #0f2963', textAlign: 'left', fontWeight: '900', width: '38%', fontSize: '14px' }}>DELAY CODE / OPERATIONAL REASON</th>
-                          <th style={{ padding: '12px 12px', border: '1.5px solid #0f2963', textAlign: 'left', fontWeight: '900', width: '38%', fontSize: '14px' }}>AFFECTED FLIGHTS</th>
-                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f2963', width: '9%', textAlign: 'center', fontWeight: '900', fontSize: '14px' }}>COUNT</th>
-                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f2963', width: '9%', textAlign: 'center', fontWeight: '900', fontSize: '14px' }}>SHARE %</th>
+                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f2963', width: '6%', textAlign: 'center', fontWeight: '900', fontSize: '15px' }}>#</th>
+                          <th style={{ padding: '12px 12px', border: '1.5px solid #0f2963', textAlign: 'left', fontWeight: '900', width: '38%', fontSize: '15px' }}>DELAY CODE / OPERATIONAL REASON</th>
+                          <th style={{ padding: '12px 12px', border: '1.5px solid #0f2963', textAlign: 'left', fontWeight: '900', width: '38%', fontSize: '15px' }}>AFFECTED FLIGHTS</th>
+                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f2963', width: '9%', textAlign: 'center', fontWeight: '900', fontSize: '15px' }}>COUNT</th>
+                          <th style={{ padding: '12px 10px', border: '1.5px solid #0f2963', width: '9%', textAlign: 'center', fontWeight: '900', fontSize: '15px' }}>SHARE %</th>
                         </tr>
                       </thead>
                       <tbody>
                         {delayBreakdown.length === 0 ? (
                           <tr>
-                            <td colSpan={5} style={{ padding: '28px', textAlign: 'center', color: '#15803d', fontWeight: '900', fontSize: '16px', border: '1.5px solid #cbd5e1', backgroundColor: '#f0fdf4' }}>
+                            <td colSpan={5} style={{ padding: '28px', textAlign: 'center', color: '#15803d', fontWeight: '900', fontSize: '17px', border: '1.5px solid #cbd5e1', backgroundColor: '#f0fdf4' }}>
                               PERFECT PERFORMANCE: 100% ON-TIME OPERATIONAL DEPARTURES (ZERO DELAYS)
                             </td>
                           </tr>
@@ -970,19 +1049,19 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                             const pct = ((item.count / delayedCount) * 100).toFixed(1);
                             return (
                               <tr key={item.code} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f1f5f9' }}>
-                                <td style={{ padding: '12px 10px', border: '1.5px solid #94a3b8', textAlign: 'center', fontWeight: '900', color: '#b45309', fontSize: '15px' }}>
+                                <td style={{ padding: '12px 10px', border: '1.5px solid #94a3b8', textAlign: 'center', fontWeight: '900', color: '#b45309', fontSize: '16px' }}>
                                   {idx + 1}
                                 </td>
-                                <td style={{ padding: '12px 12px', border: '1.5px solid #94a3b8', color: '#000000', fontWeight: '900', fontSize: '14px', lineHeight: '1.4' }}>
+                                <td style={{ padding: '12px 12px', border: '1.5px solid #94a3b8', color: '#000000', fontWeight: '900', fontSize: '15px', lineHeight: '1.4' }}>
                                   {item.code}
                                 </td>
-                                <td style={{ padding: '12px 12px', border: '1.5px solid #94a3b8', color: '#031b4e', fontWeight: '900', fontFamily: 'monospace', fontSize: '13px', lineHeight: '1.4' }}>
+                                <td style={{ padding: '12px 12px', border: '1.5px solid #94a3b8', color: '#031b4e', fontWeight: '900', fontFamily: 'monospace', fontSize: '15px', lineHeight: '1.4' }}>
                                   {item.flights.join(', ')}
                                 </td>
-                                <td style={{ padding: '12px 10px', border: '1.5px solid #94a3b8', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#dc2626', fontSize: '16px' }}>
+                                <td style={{ padding: '12px 10px', border: '1.5px solid #94a3b8', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#dc2626', fontSize: '17px' }}>
                                   {item.count}
                                 </td>
-                                <td style={{ padding: '12px 10px', border: '1.5px solid #94a3b8', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#1d4ed8', fontSize: '16px' }}>
+                                <td style={{ padding: '12px 10px', border: '1.5px solid #94a3b8', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#1d4ed8', fontSize: '17px' }}>
                                   {pct}%
                                 </td>
                               </tr>
@@ -997,52 +1076,52 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                   <div
                     style={{
                       backgroundColor: '#f8fafc',
-                      border: '1.5px solid #cbd5e1',
-                      borderLeft: '5px solid #0284c7',
+                      border: '2px solid #94a3b8',
+                      borderLeft: '6px solid #0284c7',
                       borderRadius: '12px',
-                      padding: '16px 20px',
+                      padding: '18px 22px',
                       marginBottom: '24px'
                     }}
                   >
-                    <div style={{ fontSize: '13px', fontWeight: '900', color: '#031b4e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ fontSize: '16px', fontWeight: '900', color: '#031b4e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span>📋</span> REPORT REMARKS:
                     </div>
-                    <div style={{ fontSize: '12px', color: '#334155', lineHeight: '1.6', fontFamily: 'sans-serif' }}>
+                    <div style={{ fontSize: '15px', color: '#0f172a', lineHeight: '1.6', fontFamily: 'sans-serif', fontWeight: '800' }}>
                       {topDelayItems.length > 0 ? (
                         topDelayItems.length === 1 ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <div>
-                              <strong style={{ color: '#0f172a' }}>• Most Used Delay Code:</strong>{' '}
-                              <span style={{ color: '#b45309', fontWeight: '800' }}>{topDelayItems[0].code}</span>
+                              <strong style={{ color: '#0f172a', fontWeight: '900', fontSize: '15px' }}>• Most Used Delay Code:</strong>{' '}
+                              <span style={{ color: '#b45309', fontWeight: '900', fontSize: '16px' }}>{topDelayItems[0].code}</span>
                             </div>
                             <div>
-                              <strong style={{ color: '#0f172a' }}>• Frequency Today:</strong> Used{' '}
-                              <strong style={{ color: '#dc2626' }}>{topDelayItems[0].count} time(s)</strong> today ({((topDelayItems[0].count / delayedCount) * 100).toFixed(1)}% of total station delays).
+                              <strong style={{ color: '#0f172a', fontWeight: '900', fontSize: '15px' }}>• Frequency Today:</strong> Used{' '}
+                              <strong style={{ color: '#dc2626', fontWeight: '900', fontSize: '16px' }}>{topDelayItems[0].count} time(s)</strong> today ({((topDelayItems[0].count / delayedCount) * 100).toFixed(1)}% of total station delays).
                             </div>
                             <div>
-                              <strong style={{ color: '#0f172a' }}>• Affected Flight(s):</strong>{' '}
-                              <span style={{ color: '#031b4e', fontWeight: '800', fontFamily: 'monospace' }}>{topDelayItems[0].flights.join(', ')}</span>
+                              <strong style={{ color: '#0f172a', fontWeight: '900', fontSize: '15px' }}>• Affected Flight(s):</strong>{' '}
+                              <span style={{ color: '#031b4e', fontWeight: '900', fontFamily: 'monospace', fontSize: '16px' }}>{topDelayItems[0].flights.join(', ')}</span>
                             </div>
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             <div>
-                              <strong style={{ color: '#0f172a' }}>• Most Used Delay Codes ({topDelayItems.length} Codes Tied for Top Frequency):</strong>
+                              <strong style={{ color: '#0f172a', fontWeight: '900', fontSize: '15px' }}>• Most Used Delay Codes ({topDelayItems.length} Codes Tied for Top Frequency):</strong>
                             </div>
                             {topDelayItems.map((item, idx) => {
                               const pct = ((item.count / delayedCount) * 100).toFixed(1);
                               return (
-                                <div key={item.code} style={{ paddingLeft: '12px', borderLeft: '3px solid #b45309', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <div key={item.code} style={{ paddingLeft: '14px', borderLeft: '4px solid #b45309', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                   <div>
-                                    <strong style={{ color: '#b45309' }}>Code #{idx + 1}:</strong>{' '}
-                                    <span style={{ color: '#0f172a', fontWeight: '800' }}>{item.code}</span>
+                                    <strong style={{ color: '#b45309', fontWeight: '900', fontSize: '15px' }}>Code #{idx + 1}:</strong>{' '}
+                                    <span style={{ color: '#0f172a', fontWeight: '900', fontSize: '16px' }}>{item.code}</span>
                                   </div>
-                                  <div style={{ fontSize: '11.5px' }}>
-                                    <strong>• Frequency Today:</strong> Used <strong style={{ color: '#dc2626' }}>{item.count} time(s)</strong> ({pct}% of total station delays).
+                                  <div style={{ fontSize: '14px' }}>
+                                    <strong style={{ fontWeight: '900' }}>• Frequency Today:</strong> Used <strong style={{ color: '#dc2626', fontWeight: '900', fontSize: '15px' }}>{item.count} time(s)</strong> ({pct}% of total station delays).
                                   </div>
-                                  <div style={{ fontSize: '11.5px' }}>
-                                    <strong>• Affected Flight(s):</strong>{' '}
-                                    <span style={{ color: '#031b4e', fontWeight: '800', fontFamily: 'monospace' }}>{item.flights.join(', ')}</span>
+                                  <div style={{ fontSize: '14px' }}>
+                                    <strong style={{ fontWeight: '900' }}>• Affected Flight(s):</strong>{' '}
+                                    <span style={{ color: '#031b4e', fontWeight: '900', fontFamily: 'monospace', fontSize: '15px' }}>{item.flights.join(', ')}</span>
                                   </div>
                                 </div>
                               );
@@ -1050,7 +1129,7 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                           </div>
                         )
                       ) : (
-                        <div style={{ color: '#16a34a', fontWeight: '800' }}>
+                        <div style={{ color: '#16a34a', fontWeight: '900', fontSize: '16px' }}>
                           ✓ Ground operational efficiency was 100% on schedule with zero ramp delays recorded during this period.
                         </div>
                       )}
