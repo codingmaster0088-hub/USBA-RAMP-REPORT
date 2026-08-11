@@ -1066,19 +1066,6 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                         </div>
                       ))}
                     </div>
-
-                    {/* EDITABLE TEXT AREA */}
-                    <div className="pt-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block font-mono">
-                        COMBINED DELAY REASON TEXT:
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.delayReason || ''}
-                        onChange={(e) => handleChange('delayReason', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-amber-200 font-mono focus:border-amber-400 outline-none"
-                      />
-                    </div>
                   </div>
                 ) : (
                   <p className="text-[11px] text-red-300/90 italic pl-1 font-medium">

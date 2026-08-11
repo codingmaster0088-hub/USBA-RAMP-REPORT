@@ -246,6 +246,8 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
   });
 
   const delayBreakdown = Object.values(delayCodeMap).sort((a, b) => b.count - a.count);
+  const maxDelayCount = delayBreakdown.length > 0 ? delayBreakdown[0].count : 0;
+  const topDelayItems = delayBreakdown.filter((item) => item.count === maxDelayCount && item.count > 0);
   const topDelayItem = delayBreakdown.length > 0 ? delayBreakdown[0] : null;
 
   // IATA / Airline Categorized Delay Pareto Breakdown
@@ -533,11 +535,15 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
               </div>
               <div className="mt-2">
                 <p className="text-xs font-black text-amber-200 line-clamp-2 leading-snug">
-                  {topDelayItem ? topDelayItem.code : 'ZERO DELAYS REGISTERED'}
+                  {topDelayItems.length > 1
+                    ? `${topDelayItems.length} CODES TIED FOR TOP FREQUENCY`
+                    : topDelayItem
+                    ? topDelayItem.code
+                    : 'ZERO DELAYS REGISTERED'}
                 </p>
               </div>
               <div className="mt-3 pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-amber-400/90 font-mono">
-                <span>Impact: {topDelayItem ? `${topDelayItem.count} Flight(s)` : 'N/A'}</span>
+                <span>Impact: {topDelayItem ? `${topDelayItem.count} Flight(s) Each` : 'N/A'}</span>
                 <span>{topDelayItem && delayedCount > 0 ? `${((topDelayItem.count / delayedCount) * 100).toFixed(0)}% Share` : ''}</span>
               </div>
             </div>
@@ -549,19 +555,32 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
               <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
               <span>REPORT REMARKS:</span>
             </div>
-            <div className="text-xs text-slate-200 leading-relaxed font-sans space-y-1.5">
-              {topDelayItem ? (
-                <>
-                  <p>
-                    <strong className="text-amber-300">• Most Used Delay Code:</strong> {topDelayItem.code}
-                  </p>
-                  <p>
-                    <strong className="text-amber-300">• Used Today:</strong> {topDelayItem.count} time(s) ({((topDelayItem.count / delayedCount) * 100).toFixed(1)}% of total delays)
-                  </p>
-                  <p>
-                    <strong className="text-amber-300">• Affected Flight(s):</strong> {topDelayItem.flights.join(', ')}
-                  </p>
-                </>
+            <div className="text-xs text-slate-200 leading-relaxed font-sans space-y-2">
+              {topDelayItems.length > 0 ? (
+                topDelayItems.length === 1 ? (
+                  <>
+                    <p>
+                      <strong className="text-amber-300">• Most Used Delay Code:</strong> {topDelayItems[0].code}
+                    </p>
+                    <p>
+                      <strong className="text-amber-300">• Used Today:</strong> {topDelayItems[0].count} time(s) ({((topDelayItems[0].count / delayedCount) * 100).toFixed(1)}% of total delays)
+                    </p>
+                    <p>
+                      <strong className="text-amber-300">• Affected Flight(s):</strong> {topDelayItems[0].flights.join(', ')}
+                    </p>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="font-bold text-amber-300">• Most Used Delay Codes ({topDelayItems.length} Codes Tied for Top Frequency):</p>
+                    {topDelayItems.map((item, idx) => (
+                      <div key={item.code} className="pl-3 border-l-2 border-amber-500/60 space-y-0.5">
+                        <p className="font-semibold text-amber-200">Code #{idx + 1}: {item.code}</p>
+                        <p className="text-[11px] text-slate-300">• Frequency: Used {item.count} time(s) ({((item.count / delayedCount) * 100).toFixed(1)}% of total delays)</p>
+                        <p className="text-[11px] text-slate-300">• Affected Flights: <span className="font-mono text-amber-300 font-bold">{item.flights.join(', ')}</span></p>
+                      </div>
+                    ))}
+                  </div>
+                )
               ) : (
                 <p className="text-emerald-400 font-bold">
                   ✓ 100% On-Time Performance! Zero operational delays recorded for this period.
@@ -989,21 +1008,47 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                       <span>📋</span> REPORT REMARKS:
                     </div>
                     <div style={{ fontSize: '12px', color: '#334155', lineHeight: '1.6', fontFamily: 'sans-serif' }}>
-                      {topDelayItem ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div>
-                            <strong style={{ color: '#0f172a' }}>• Most Used Delay Code:</strong>{' '}
-                            <span style={{ color: '#b45309', fontWeight: '800' }}>{topDelayItem.code}</span>
+                      {topDelayItems.length > 0 ? (
+                        topDelayItems.length === 1 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div>
+                              <strong style={{ color: '#0f172a' }}>• Most Used Delay Code:</strong>{' '}
+                              <span style={{ color: '#b45309', fontWeight: '800' }}>{topDelayItems[0].code}</span>
+                            </div>
+                            <div>
+                              <strong style={{ color: '#0f172a' }}>• Frequency Today:</strong> Used{' '}
+                              <strong style={{ color: '#dc2626' }}>{topDelayItems[0].count} time(s)</strong> today ({((topDelayItems[0].count / delayedCount) * 100).toFixed(1)}% of total station delays).
+                            </div>
+                            <div>
+                              <strong style={{ color: '#0f172a' }}>• Affected Flight(s):</strong>{' '}
+                              <span style={{ color: '#031b4e', fontWeight: '800', fontFamily: 'monospace' }}>{topDelayItems[0].flights.join(', ')}</span>
+                            </div>
                           </div>
-                          <div>
-                            <strong style={{ color: '#0f172a' }}>• Frequency Today:</strong> Used{' '}
-                            <strong style={{ color: '#dc2626' }}>{topDelayItem.count} time(s)</strong> today ({((topDelayItem.count / delayedCount) * 100).toFixed(1)}% of total station delays).
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div>
+                              <strong style={{ color: '#0f172a' }}>• Most Used Delay Codes ({topDelayItems.length} Codes Tied for Top Frequency):</strong>
+                            </div>
+                            {topDelayItems.map((item, idx) => {
+                              const pct = ((item.count / delayedCount) * 100).toFixed(1);
+                              return (
+                                <div key={item.code} style={{ paddingLeft: '12px', borderLeft: '3px solid #b45309', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <div>
+                                    <strong style={{ color: '#b45309' }}>Code #{idx + 1}:</strong>{' '}
+                                    <span style={{ color: '#0f172a', fontWeight: '800' }}>{item.code}</span>
+                                  </div>
+                                  <div style={{ fontSize: '11.5px' }}>
+                                    <strong>• Frequency Today:</strong> Used <strong style={{ color: '#dc2626' }}>{item.count} time(s)</strong> ({pct}% of total station delays).
+                                  </div>
+                                  <div style={{ fontSize: '11.5px' }}>
+                                    <strong>• Affected Flight(s):</strong>{' '}
+                                    <span style={{ color: '#031b4e', fontWeight: '800', fontFamily: 'monospace' }}>{item.flights.join(', ')}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                          <div>
-                            <strong style={{ color: '#0f172a' }}>• Affected Flight(s):</strong>{' '}
-                            <span style={{ color: '#031b4e', fontWeight: '800', fontFamily: 'monospace' }}>{topDelayItem.flights.join(', ')}</span>
-                          </div>
-                        </div>
+                        )
                       ) : (
                         <div style={{ color: '#16a34a', fontWeight: '800' }}>
                           ✓ Ground operational efficiency was 100% on schedule with zero ramp delays recorded during this period.
