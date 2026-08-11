@@ -31,7 +31,7 @@ function getCreatedTimestamp(item: { createdAt?: number; id: string }): number {
   return !isNaN(parsed) && parsed > 1600000000000 ? parsed : Date.now();
 }
 
-// Real-time listener for Saved Reports across all devices (Auto-vanish after 20 hours from last save/edit)
+// Real-time listener for Saved Reports across all devices
 export function subscribeToSavedReports(
   onUpdate: (reports: SavedReport[]) => void,
   onError?: (err: any) => void
@@ -42,35 +42,23 @@ export function subscribeToSavedReports(
       q,
       (snapshot) => {
         const reports: SavedReport[] = [];
-        const seenFlights = new Set<string>();
-        const now = Date.now();
+        const seenKeys = new Set<string>();
 
         snapshot.forEach((docSnap) => {
           const rep = docSnap.data() as SavedReport;
 
-          // Check report age (20 Hours from last modified / timestamp)
-          const repTime = rep.timestamp ? new Date(rep.timestamp).getTime() : 0;
-          const ageMs = !isNaN(repTime) && repTime > 0 ? now - repTime : 0;
-
-          if (ageMs > TWENTY_HOURS_MS) {
-            // Auto-purge report from Firestore if older than 20 hours
-            deleteDoc(doc(db, 'savedReports', rep.id)).catch(() => {});
-            return;
-          }
-
-          const flightNum = (rep.flight || rep.formData?.deptFlt || '')
+          // Unique key combining flight, date, and document ID to avoid deleting valid reports
+          const flightNum = (rep.flight || rep.formData?.deptFlt || rep.formData?.arvFlt || '')
             .replace(/^BS-?/i, '')
             .trim()
             .toUpperCase();
 
-          const key = flightNum ? `BS-${flightNum}` : rep.id;
+          const rDate = (rep.formData?.date || rep.date || '').trim().toUpperCase();
+          const key = rep.id || `BS-${flightNum}-${rDate}`;
 
-          if (!seenFlights.has(key)) {
-            seenFlights.add(key);
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
             reports.push(rep);
-          } else {
-            // Auto-purge older duplicate report document from Firestore to keep DB clean
-            deleteDoc(doc(db, 'savedReports', rep.id)).catch(() => {});
           }
         });
 

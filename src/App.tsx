@@ -459,10 +459,16 @@ export default function App() {
     mode: FlightMode,
     existingId?: string
   ) => {
-    if (!user) return;
+    const activeUser = user || {
+      id: '0000',
+      name: 'RAMP OFFICER',
+      station: data.station || 'DAC',
+      pin: '0000',
+      role: 'OFFICER' as const
+    };
 
-    if (!data.deptFlt) {
-      showToast('Flight Number Required', 'Enter Departure Flight Number (e.g. 101)', 'error');
+    if (!data.deptFlt && !data.arvFlt) {
+      showToast('Flight Number Required', 'Enter Departure or Arrival Flight Number', 'error');
       return;
     }
 
@@ -493,9 +499,9 @@ export default function App() {
       ? {
           ...existingReport.formData,
           ...data,
-          station: user.station
+          station: activeUser.station
         }
-      : { ...data, station: user.station };
+      : { ...data, station: activeUser.station };
 
     // Clean undefined or empty overrides if existing had value
     if (existingReport) {
@@ -515,8 +521,8 @@ export default function App() {
       date: data.date || existingReport?.date || '',
       route: data.deptRoute || existingReport?.route || 'N/A',
       timestamp: new Date().toISOString(),
-      officerName: user.name || existingReport?.officerName || 'RAMP OFFICER',
-      officerId: user.id || existingReport?.officerId || '0000',
+      officerName: activeUser.name || existingReport?.officerName || 'RAMP OFFICER',
+      officerId: activeUser.id || existingReport?.officerId || '0000',
       formData: mergedFormData
     };
 
