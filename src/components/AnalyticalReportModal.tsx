@@ -142,30 +142,49 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
   const [calendarDate, setCalendarDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [flightScopeFilter, setFlightScopeFilter] = useState<'ALL' | 'DOMESTIC' | 'INTERNATIONAL'>('ALL');
 
-  // Helper to check if a saved report is Domestic
+  // Helper to check if a saved report is Domestic based strictly on destination/route station codes & flight numbers
   const isDomesticReport = (r: SavedReport): boolean => {
+    // 1. Gather all route & sector strings
+    const routeText = `${r.formData?.deptRoute || ''} ${r.formData?.arvRoute || ''} ${r.route || ''} ${r.flight || ''}`.toUpperCase();
+
+    // Official domestic stations set: DAC, CGP, ZYL, CXB, RJH, SPD, JSR, BZL
+    const domesticStations = new Set(['DAC', 'CGP', 'ZYL', 'CXB', 'RJH', 'SPD', 'JSR', 'BZL']);
+
+    // Extract all 3-letter IATA station codes from route/flight string
+    const extractedCodes = routeText.match(/\b[A-Z]{3}\b/g) || [];
+
+    // If ANY extracted 3-letter code is NOT in domesticStations (e.g. CAN, BKK, KUL, CCU, MAA, MCT, MLE, RUH, JED, AUH, DXB, SHJ, SIN, DOH)
+    // then this is STRICTLY an INTERNATIONAL flight!
+    const nonDomesticCodes = extractedCodes.filter((code) => !domesticStations.has(code));
+    if (nonDomesticCodes.length > 0) {
+      return false; // Strictly International!
+    }
+
+    // If we extracted codes and ALL of them are domestic stations, then it's STRICTLY a DOMESTIC flight!
+    const domesticCodesFound = extractedCodes.filter((code) => domesticStations.has(code));
+    if (domesticCodesFound.length >= 1) {
+      return true; // Strictly Domestic!
+    }
+
+    // 2. Check flight number if no 3-letter station codes were found in route string
+    const fltStr = (r.formData?.deptFlt || r.formData?.arvFlt || r.flight || '').replace(/[^0-9]/g, '');
+    const fltNum = parseInt(fltStr, 10);
+    if (fltNum) {
+      // US-Bangla Domestic Flight range: 101-200 and 501-599
+      if ((fltNum >= 101 && fltNum <= 200) || (fltNum >= 501 && fltNum <= 599)) {
+        return true;
+      } else {
+        return false; // Flight numbers outside domestic range (e.g. 201-399) are International
+      }
+    }
+
+    // 3. Fallback to report type if route/flight is completely absent
     if (r.type) {
       const t = r.type.toUpperCase();
       if (t === 'DOMESTIC') return true;
       if (t === 'INTERNATIONAL') return false;
     }
-    const route = (r.formData?.deptRoute || r.route || '').toUpperCase();
-    const domesticStations = ['DAC', 'CGP', 'ZYL', 'CXB', 'RJH', 'SPD', 'JSR', 'BZL'];
-    const parts = route.split('-');
-    if (parts.length === 2) {
-      const from = parts[0].trim();
-      const to = parts[1].trim();
-      if (domesticStations.includes(from) && domesticStations.includes(to)) {
-        return true;
-      }
-    }
-    const fltStr = (r.formData?.deptFlt || r.flight || '').replace(/[^0-9]/g, '');
-    const fltNum = parseInt(fltStr, 10);
-    if (fltNum) {
-      if ((fltNum >= 101 && fltNum <= 200) || (fltNum >= 501 && fltNum <= 599)) {
-        return true;
-      }
-    }
+
     return false;
   };
 
