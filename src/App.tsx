@@ -87,7 +87,26 @@ export default function App() {
   const [savedReports, setSavedReports] = useState<SavedReport[]>(() => {
     try {
       const saved = localStorage.getItem('usb_reports');
-      return saved ? JSON.parse(saved) : initialSampleReports;
+      if (saved) {
+        const parsed: SavedReport[] = JSON.parse(saved);
+        const existingIds = new Set(parsed.map((r) => r.id));
+        const existingFlightNums = new Set(
+          parsed.map((r) => (r.flight || r.formData?.deptFlt || '').replace(/[^0-9]/g, ''))
+        );
+
+        const missingSamples = initialSampleReports.filter((s) => {
+          const num = (s.flight || s.formData?.deptFlt || '').replace(/[^0-9]/g, '');
+          return !existingIds.has(s.id) && !existingFlightNums.has(num);
+        });
+
+        if (missingSamples.length > 0) {
+          const merged = [...parsed, ...missingSamples];
+          localStorage.setItem('usb_reports', JSON.stringify(merged));
+          return merged;
+        }
+        return parsed;
+      }
+      return initialSampleReports;
     } catch {
       return initialSampleReports;
     }
