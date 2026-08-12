@@ -37,106 +37,119 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
   const departureSchedule = scheduleFlights.filter((f) => f.isDeparture !== false);
   const targetFlights = departureSchedule.length > 0 ? departureSchedule : scheduleFlights;
 
-  // Helper to test if a saved report belongs to today's schedule date
-  const isReportDateMatchingSchedule = (r: SavedReport, scheduleDateStr: string): boolean => {
-    const rDateString = (r.formData?.date || r.date || '').trim().toUpperCase();
-    const rTimestamp = r.timestamp || '';
-    const rCreatedAt = r.createdAt;
-
-    const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-
-    // Helper to parse day (1-31) and month (JAN-DEC or 1-12)
-    const parseDayMonth = (str: string) => {
-      if (!str) return null;
-      const cleanStr = str.trim().toUpperCase();
-
-      // 1. ISO format e.g. "2026-08-11" or "2026/08/11" (Must check FIRST before numeric DD/MM/YYYY)
-      const isoMatch = cleanStr.match(/\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
-      if (isoMatch) {
-        const mIdx = parseInt(isoMatch[2], 10) - 1;
-        return {
-          day: parseInt(isoMatch[3], 10),
-          month: monthNames[mIdx] || ''
-        };
-      }
-
-      // 2. Alpha month format: "11AUG", "11 AUG", "11-AUG-2026", "11 AUG 26"
-      const alphaMatch = cleanStr.match(/\b(\d{1,2})\s*[-/]?\s*([A-Za-z]{3})\b/i);
-      if (alphaMatch) {
-        return {
-          day: parseInt(alphaMatch[1], 10),
-          month: alphaMatch[2].toUpperCase()
-        };
-      }
-
-      // 3. Numeric DD/MM/YYYY e.g. "11/08/2026" or "11-08-26"
-      const numericMatch = cleanStr.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/);
-      if (numericMatch) {
-        const mIdx = parseInt(numericMatch[2], 10) - 1;
-        return {
-          day: parseInt(numericMatch[1], 10),
-          month: monthNames[mIdx] || ''
-        };
-      }
-
-      return null;
-    };
-
-    let target = parseDayMonth(scheduleDateStr);
-
-    // Fallback: If scheduleDate is not parsed, use today's actual date
-    if (!target) {
-      const today = new Date();
-      target = {
-        day: today.getDate(),
-        month: monthNames[today.getMonth()]
-      };
-    }
-
-    // Check 1: Parsed report date string matches target
-    const rParsed = parseDayMonth(rDateString);
-    if (rParsed && target) {
-      if (rParsed.day === target.day && rParsed.month === target.month) {
-        return true;
-      }
-    }
-
-    // Check 2: Try rTimestamp Date
-    if (rTimestamp && target) {
-      const t = new Date(rTimestamp);
-      if (!isNaN(t.getTime())) {
-        if (t.getDate() === target.day && monthNames[t.getMonth()] === target.month) {
-          return true;
-        }
-      }
-    }
-
-    // Check 3: Try rCreatedAt timestamp
-    if (rCreatedAt && target) {
-      const t = new Date(rCreatedAt);
-      if (!isNaN(t.getTime())) {
-        if (t.getDate() === target.day && monthNames[t.getMonth()] === target.month) {
-          return true;
-        }
-      }
-    }
-
-    // Check 4: Fallback for empty/today strings
-    if (!rDateString || rDateString.includes('TODAY')) {
-      return true;
-    }
-
-    return false;
-  };
-
-  // Helper to normalize flight numbers for matching e.g. "BS-343", "343", "BS 343" -> "343"
+  // Helper to extract clean flight number e.g. "BS-103", "103", "BS 103", "0103" -> "103"
   const cleanFlightNum = (str: string) => {
     if (!str) return '';
+    const digitsOnly = str.replace(/BS/gi, '').replace(/[^0-9]/g, '');
+    if (digitsOnly) {
+      return parseInt(digitsOnly, 10).toString(); // Converts "0103" -> "103"
+    }
     return str.replace(/BS/gi, '').replace(/[^0-9a-zA-Z]/g, '').trim().toUpperCase();
   };
 
+  // Helper to extract day and month for 100% robust date matching across formats (e.g. "12 AUG 2026", "12 AUG 26", "12AUG 02", "2026-08-12")
+  const parseDayMonthKey = (str: string): string => {
+    if (!str) return '';
+    const cleanStr = str.trim().toUpperCase();
+    const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+    if (cleanStr.includes('TODAY')) {
+      const d = new Date();
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = monthNames[d.getMonth()];
+      return `${day}${month}`;
+    }
+
+    // 1. Alpha Month e.g. "12 AUG 2026", "12 AUG 26", "12AUG26", "12AUG 02", "12-AUG-2026"
+    const alphaMatch = cleanStr.match(/\b(\d{1,2})\s*[-/]?\s*([A-Za-z]{3})\b/i);
+    if (alphaMatch) {
+      const day = String(parseInt(alphaMatch[1], 10)).padStart(2, '0');
+      const month = alphaMatch[2].toUpperCase();
+      return `${day}${month}`;
+    }
+
+    // 2. ISO Format YYYY-MM-DD e.g. 2026-08-12
+    const isoMatch = cleanStr.match(/\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
+    if (isoMatch) {
+      const mIdx = parseInt(isoMatch[2], 10) - 1;
+      const day = String(parseInt(isoMatch[3], 10)).padStart(2, '0');
+      const month = monthNames[mIdx] || 'JAN';
+      return `${day}${month}`;
+    }
+
+    // 3. Numeric DD/MM/YYYY or DD-MM-YY e.g. 12/08/2026
+    const numMatch = cleanStr.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/);
+    if (numMatch) {
+      const day = String(parseInt(numMatch[1], 10)).padStart(2, '0');
+      const mIdx = parseInt(numMatch[2], 10) - 1;
+      const month = monthNames[mIdx] || 'JAN';
+      return `${day}${month}`;
+    }
+
+    return cleanStr.replace(/[^0-9A-Z]/g, '').slice(0, 5);
+  };
+
+  // Helper to test if a saved report belongs to today's schedule date
+  const isReportDateMatchingSchedule = (r: SavedReport, scheduleDateStr: string): boolean => {
+    if (!scheduleDateStr) return true;
+
+    const rDateString = (r.formData?.date || r.date || '').trim();
+    if (!rDateString || rDateString.toUpperCase().includes('TODAY') || scheduleDateStr.toUpperCase().includes('TODAY')) {
+      return true;
+    }
+
+    const dmSchedule = parseDayMonthKey(scheduleDateStr);
+    const dmReport = parseDayMonthKey(rDateString);
+
+    if (dmSchedule && dmReport && dmSchedule === dmReport) {
+      return true;
+    }
+
+    // Check timestamps (r.timestamp or r.createdAt)
+    const timestamps = [r.timestamp, r.createdAt].filter(Boolean);
+    for (const ts of timestamps) {
+      const t = new Date(ts as string);
+      if (!isNaN(t.getTime())) {
+        const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        const tsDay = String(t.getDate()).padStart(2, '0');
+        const tsMonth = monthNames[t.getMonth()];
+        const tsKey = `${tsDay}${tsMonth}`;
+
+        if (dmSchedule && dmSchedule === tsKey) {
+          return true;
+        }
+
+        const hoursDiff = Math.abs(Date.now() - t.getTime()) / (1000 * 3600);
+        if (hoursDiff <= 36) {
+          return true;
+        }
+      }
+    }
+
+    return true; // Flexible fallback for active session reports
+  };
+
+  // Deduplicate target flights by flight code so multi-leg flights (e.g. BS-321 DAC vs CGP) don't duplicate
+  const targetFlightsDeduplicated = React.useMemo(() => {
+    const map = new Map<string, ScheduleFlight>();
+    targetFlights.forEach((sf) => {
+      const code = cleanFlightNum(sf.flightNum || sf.flightFull);
+      if (!code) return;
+      const existing = map.get(code);
+      if (!existing) {
+        map.set(code, sf);
+      } else {
+        // Prefer DAC departure if available
+        if (sf.sector.toUpperCase().startsWith('DAC') || sf.sector.toUpperCase().includes('DAC')) {
+          map.set(code, sf);
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [targetFlights]);
+
   // Reconcile scheduled departure flights with saved reports for TODAY'S schedule date
-  const flightReconciliation = targetFlights.map((sf) => {
+  const flightReconciliation = targetFlightsDeduplicated.map((sf) => {
     const targetCode = cleanFlightNum(sf.flightNum || sf.flightFull);
 
     // Find latest matching saved report for TODAY'S schedule date

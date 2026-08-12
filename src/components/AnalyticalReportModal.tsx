@@ -188,6 +188,71 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
     return false;
   };
 
+  // Helper to normalize any date string to DDMMMYY e.g. "12 AUG 2026", "12 AUG 26", "2026-08-12", "12/08/2026" -> "12AUG26"
+  const normalizeDateToDDMMMYY = (str: string): string => {
+    if (!str) return '';
+    const cleanStr = str.trim().toUpperCase();
+    if (cleanStr.includes('TODAY')) {
+      const d = new Date();
+      const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = monthNames[d.getMonth()];
+      const yr = String(d.getFullYear()).slice(-2);
+      return `${day}${month}${yr}`;
+    }
+
+    const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+    // 1. ISO Format YYYY-MM-DD e.g. 2026-08-12
+    const isoMatch = cleanStr.match(/\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
+    if (isoMatch) {
+      const yShort = isoMatch[1].slice(-2);
+      const mIdx = parseInt(isoMatch[2], 10) - 1;
+      const day = String(parseInt(isoMatch[3], 10)).padStart(2, '0');
+      const month = monthNames[mIdx] || 'JAN';
+      return `${day}${month}${yShort}`;
+    }
+
+    // 2. Alpha Month: "12 AUG 2026", "12 AUG 26", "12AUG26", "12AUG 02", "12-AUG-2026"
+    const alphaMatch = cleanStr.match(/\b(\d{1,2})\s*[-/]?\s*([A-Za-z]{3})\s*[-/]?\s*(\d{2,4})?\b/i);
+    if (alphaMatch) {
+      const day = String(parseInt(alphaMatch[1], 10)).padStart(2, '0');
+      const month = alphaMatch[2].toUpperCase();
+      let yr = String(new Date().getFullYear()).slice(-2);
+      if (alphaMatch[3]) {
+        const parsedYr = parseInt(alphaMatch[3], 10);
+        if (alphaMatch[3].length === 4) {
+          yr = alphaMatch[3].slice(-2);
+        } else if (parsedYr >= 20 && parsedYr <= 35) {
+          yr = String(parsedYr).padStart(2, '0');
+        }
+      }
+      return `${day}${month}${yr}`;
+    }
+
+    // 3. Numeric DD/MM/YYYY or DD-MM-YY
+    const numMatch = cleanStr.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/);
+    if (numMatch) {
+      const day = String(parseInt(numMatch[1], 10)).padStart(2, '0');
+      const mIdx = parseInt(numMatch[2], 10) - 1;
+      const month = monthNames[mIdx] || 'JAN';
+      const yr = numMatch[3].slice(-2);
+      return `${day}${month}${yr}`;
+    }
+
+    return cleanStr.replace(/[^0-9A-Z]/g, '');
+  };
+
+  // Helper to extract clean flight number e.g. "BS-321", "0321", "321" -> "321"
+  const cleanFlightNum = (str: string): string => {
+    if (!str) return '';
+    const digitsOnly = str.replace(/BS/gi, '').replace(/[^0-9]/g, '');
+    if (digitsOnly) {
+      return parseInt(digitsOnly, 10).toString();
+    }
+    return str.replace(/BS/gi, '').replace(/[^0-9a-zA-Z]/g, '').trim().toUpperCase();
+  };
+
   // Helper to convert YYYY-MM-DD (e.g. 2026-08-10) to "10 AUG 26"
   const formatIsoToDDMMMYY = (isoStr: string) => {
     if (!isoStr) return '';
@@ -209,8 +274,11 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
     const rDateObj = parseReportDate(r);
     const rDateStr = r.formData?.date || r.date || '';
 
+    const normReportDate = normalizeDateToDDMMMYY(rDateStr);
+
     if (selectedDateFilter === 'TODAY') {
-      return isSameDay(rDateObj, now) || rDateStr.toUpperCase().includes(todayDateStr);
+      const normToday = normalizeDateToDDMMMYY('TODAY');
+      return isSameDay(rDateObj, now) || normReportDate === normToday || rDateStr.toUpperCase().includes('TODAY');
     }
     if (selectedDateFilter === 'LAST_30_DAYS') {
       return true; // Already filtered to 30 days
@@ -226,25 +294,55 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
       const [y, m, d] = calendarDate.split('-').map(Number);
       const targetDate = new Date(y, m - 1, d);
       const formattedDDMMMYY = formatIsoToDDMMMYY(calendarDate);
+      const normCalendar = normalizeDateToDDMMMYY(calendarDate);
       return (
         isSameDay(rDateObj, targetDate) ||
+        normReportDate === normCalendar ||
         rDateStr.toUpperCase().includes(formattedDDMMMYY) ||
         rDateStr.includes(calendarDate)
       );
     }
     // Specific date selected from list
-    return rDateStr === selectedDateFilter;
+    const normFilter = normalizeDateToDDMMMYY(selectedDateFilter);
+    return normReportDate === normFilter || rDateStr === selectedDateFilter;
   });
 
-  // Helper to deduplicate reports by flight number + date, taking the LATEST saved report
+  // Helper to deduplicate reports by flight number + normalized date, prioritizing the origin station flight
   const dedupeReportsLatest = (reports: SavedReport[]) => {
     const map = new Map<string, SavedReport>();
     reports.forEach((r) => {
-      const fltNum = (r.formData?.deptFlt || r.flight || '').replace(/^BS-?/i, '').trim().toUpperCase();
-      const dt = (r.formData?.date || r.date || '').trim().toUpperCase();
-      const key = `${fltNum}_${dt}`;
-      // Since reports array is in chronological order, later entries overwrite earlier ones
-      map.set(key, r);
+      const deptFlt = r.formData?.deptFlt || '';
+      const mainFlt = r.flight || '';
+      const arvFlt = r.formData?.arvFlt || '';
+      const rawFlt = deptFlt || mainFlt || arvFlt || '';
+      const fltNum = cleanFlightNum(rawFlt);
+
+      const rawDate = r.formData?.date || r.date || '';
+      const normDate = normalizeDateToDDMMMYY(rawDate);
+
+      if (!fltNum || !normDate) return;
+
+      const key = `${fltNum}_${normDate}`;
+
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, r);
+      } else {
+        // If an existing report is present, prioritize the one departing from current station (e.g. DAC)
+        const currentRoute = `${r.formData?.deptRoute || ''} ${r.route || ''}`.toUpperCase();
+        const existingRoute = `${existing.formData?.deptRoute || ''} ${existing.route || ''}`.toUpperCase();
+
+        const st = station ? station.toUpperCase() : 'DAC';
+        const currentMatchesStation = currentRoute.startsWith(st);
+        const existingMatchesStation = existingRoute.startsWith(st);
+
+        if (currentMatchesStation && !existingMatchesStation) {
+          map.set(key, r); // Keep the flight departing from station (e.g. DAC)
+        } else if (currentMatchesStation === existingMatchesStation) {
+          // If both or neither match, take the latest saved report
+          map.set(key, r);
+        }
+      }
     });
     return Array.from(map.values());
   };
