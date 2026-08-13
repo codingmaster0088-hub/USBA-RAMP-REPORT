@@ -144,38 +144,38 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
 
   // Helper to check if a saved report is Domestic based strictly on destination/route station codes & flight numbers
   const isDomesticReport = (r: SavedReport): boolean => {
-    // 1. Gather all route & sector strings
-    const routeText = `${r.formData?.deptRoute || ''} ${r.formData?.arvRoute || ''} ${r.route || ''} ${r.flight || ''}`.toUpperCase();
+    // 1. Check clean flight number first (Most accurate for US-Bangla Airlines fleet & schedule)
+    const deptFltStr = r.formData?.deptFlt || '';
+    const arvFltStr = r.formData?.arvFlt || '';
+    const mainFltStr = r.flight || '';
+    const rawFltString = deptFltStr || arvFltStr || mainFltStr;
+    const cleanNumStr = rawFltString.replace(/BS/gi, '').replace(/[^0-9]/g, '');
+    const fltNum = parseInt(cleanNumStr, 10);
 
-    // Official domestic stations set: DAC, CGP, ZYL, CXB, RJH, SPD, JSR, BZL
-    const domesticStations = new Set(['DAC', 'CGP', 'ZYL', 'CXB', 'RJH', 'SPD', 'JSR', 'BZL']);
-
-    // Extract all 3-letter IATA station codes from route/flight string
-    const extractedCodes = routeText.match(/\b[A-Z]{3}\b/g) || [];
-
-    // If ANY extracted 3-letter code is NOT in domesticStations (e.g. CAN, BKK, KUL, CCU, MAA, MCT, MLE, RUH, JED, AUH, DXB, SHJ, SIN, DOH)
-    // then this is STRICTLY an INTERNATIONAL flight!
-    const nonDomesticCodes = extractedCodes.filter((code) => !domesticStations.has(code));
-    if (nonDomesticCodes.length > 0) {
-      return false; // Strictly International!
-    }
-
-    // If we extracted codes and ALL of them are domestic stations, then it's STRICTLY a DOMESTIC flight!
-    const domesticCodesFound = extractedCodes.filter((code) => domesticStations.has(code));
-    if (domesticCodesFound.length >= 1) {
-      return true; // Strictly Domestic!
-    }
-
-    // 2. Check flight number if no 3-letter station codes were found in route string
-    const fltStr = (r.formData?.deptFlt || r.formData?.arvFlt || r.flight || '').replace(/[^0-9]/g, '');
-    const fltNum = parseInt(fltStr, 10);
-    if (fltNum) {
-      // US-Bangla Domestic Flight range: 101-200 and 501-599
-      if ((fltNum >= 101 && fltNum <= 200) || (fltNum >= 501 && fltNum <= 599)) {
-        return true;
-      } else {
-        return false; // Flight numbers outside domestic range (e.g. 201-399) are International
+    if (fltNum && !isNaN(fltNum)) {
+      // US-Bangla Domestic Flight range: 100-199 (DAC-CGP, DAC-CXB, DAC-JSR, DAC-BZL, DAC-RJH, DAC-SPD) and 500-599 (DAC-ZYL)
+      if ((fltNum >= 100 && fltNum <= 199) || (fltNum >= 500 && fltNum <= 599)) {
+        return true; // 100% Strictly Domestic (e.g. BS-145 DAC-CXB, BS-115 DAC-CGP, BS-539 DAC-ZYL, BS-122 JSR-DAC)
       }
+      // US-Bangla International Flight range: 200-499 (CCU, MAA, BKK, SIN, KUL, MCT, CAN, DOH, MLE, DXB, SHJ, AUH, JED, RUH)
+      if (fltNum >= 200 && fltNum <= 499) {
+        return false; // 100% Strictly International (e.g. BS-307 DAC-SIN, BS-321 DAC-MCT, BS-333 DAC-DOH, BS-341 DAC-DXB, BS-361 DAC-JED)
+      }
+    }
+
+    // 2. Check known International station IATA codes in route strings
+    const routeText = `${r.formData?.deptRoute || ''} ${r.formData?.arvRoute || ''} ${r.route || ''}`.toUpperCase();
+    
+    // Known International stations
+    const intlStationRegex = /\b(DXB|SHJ|AUH|RUH|JED|MED|MLE|BKK|DMK|MCT|DOH|CCU|MAA|DEL|BOM|CAN|SIN|KUL|PKX|KMG|NRT|ICN|LHR)\b/;
+    if (intlStationRegex.test(routeText)) {
+      return false; // Strictly International
+    }
+
+    // Known Domestic stations: DAC, CGP, ZYL, CXB, RJH, SPD, JSR, BZL
+    const domStationRegex = /\b(DAC|CGP|ZYL|CXB|RJH|SPD|JSR|BZL)\b/;
+    if (domStationRegex.test(routeText)) {
+      return true; // Strictly Domestic
     }
 
     // 3. Fallback to report type if route/flight is completely absent

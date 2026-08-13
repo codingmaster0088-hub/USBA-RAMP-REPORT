@@ -621,9 +621,19 @@ export default function App() {
       });
     }
 
+    let resolvedType = type;
+    const cleanNum = parseInt(targetFlightClean, 10);
+    if (cleanNum && !isNaN(cleanNum)) {
+      if ((cleanNum >= 100 && cleanNum <= 199) || (cleanNum >= 500 && cleanNum <= 599)) {
+        resolvedType = 'DOMESTIC';
+      } else if (cleanNum >= 200 && cleanNum <= 499) {
+        resolvedType = 'INTERNATIONAL';
+      }
+    }
+
     const newEntry: SavedReport = {
       id,
-      type,
+      type: resolvedType,
       mode,
       flight: flightKey,
       date: data.date || existingReport?.date || '',

@@ -319,7 +319,17 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       return;
     }
     clearDraft();
-    onSaveReport(formData, reportType, flightMode, reportToEdit?.id);
+    const targetFlightClean = (formData.deptFlt || formData.arvFlt || '').replace(/[^0-9]/g, '');
+    const fltNum = parseInt(targetFlightClean, 10);
+    let resolvedType = reportType;
+    if (fltNum) {
+      if ((fltNum >= 100 && fltNum <= 199) || (fltNum >= 500 && fltNum <= 599)) {
+        resolvedType = 'DOMESTIC';
+      } else if (fltNum >= 200 && fltNum <= 499) {
+        resolvedType = 'INTERNATIONAL';
+      }
+    }
+    onSaveReport(formData, resolvedType, flightMode, reportToEdit?.id);
   };
 
   const handleDownloadAttempt = () => {
@@ -330,22 +340,41 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       return;
     }
     clearDraft();
+    const targetFlightClean = (formData.deptFlt || formData.arvFlt || '').replace(/[^0-9]/g, '');
+    const fltNum = parseInt(targetFlightClean, 10);
+    let resolvedType = reportType;
+    if (fltNum) {
+      if ((fltNum >= 100 && fltNum <= 199) || (fltNum >= 500 && fltNum <= 599)) {
+        resolvedType = 'DOMESTIC';
+      } else if (fltNum >= 200 && fltNum <= 499) {
+        resolvedType = 'INTERNATIONAL';
+      }
+    }
     // Automatically save report with modified data when download is clicked
-    onSaveReport(formData, reportType, flightMode, reportToEdit?.id);
-    onDownloadJPG(formData, reportType, flightMode);
+    onSaveReport(formData, resolvedType, flightMode, reportToEdit?.id);
+    onDownloadJPG(formData, resolvedType, flightMode);
   };
 
   // Handle Field Changes
   const handleChange = (field: keyof RampReportFormData, value: string) => {
     const updated = { ...formData, [field]: value.toUpperCase() };
 
-    // Auto Route Lookup
-    if (field === 'arvFlt') {
+    // Auto Route Lookup & Report Type Sync
+    if (field === 'arvFlt' || field === 'deptFlt') {
+      const fltClean = value.replace(/BS/gi, '').replace(/[^0-9]/g, '');
+      const fltNum = parseInt(fltClean, 10);
+      if (fltNum) {
+        if ((fltNum >= 100 && fltNum <= 199) || (fltNum >= 500 && fltNum <= 599)) {
+          setReportType('DOMESTIC');
+        } else if (fltNum >= 200 && fltNum <= 499) {
+          setReportType('INTERNATIONAL');
+        }
+      }
       const route = lookupRoute(value);
-      if (route) updated.arvRoute = route;
-    } else if (field === 'deptFlt') {
-      const route = lookupRoute(value);
-      if (route) updated.deptRoute = route;
+      if (route) {
+        if (field === 'arvFlt') updated.arvRoute = route;
+        if (field === 'deptFlt') updated.deptRoute = route;
+      }
     }
 
     // Auto Flight Status
