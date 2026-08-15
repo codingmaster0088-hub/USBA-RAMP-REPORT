@@ -33,6 +33,36 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [copiedText, setCopiedText] = useState<boolean>(false);
 
+  // Helper to format Date object to YYYY-MM-DD
+  const getTodayIso = (): string => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Helper to format ISO YYYY-MM-DD to "DD MMM YY" (e.g. "15 AUG 26")
+  const formatIsoToDDMMMYY = (isoStr: string): string => {
+    if (!isoStr) return '';
+    const parts = isoStr.split('-');
+    if (parts.length === 3) {
+      const day = parts[2];
+      const mIdx = parseInt(parts[1], 10) - 1;
+      const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      const month = monthNames[mIdx] || 'JAN';
+      const yr = parts[0].slice(-2);
+      return `${day} ${month} ${yr}`;
+    }
+    return isoStr;
+  };
+
+  // Automatic "Today" date initialization, with capability to select any previous date
+  const [selectedIsoDate, setSelectedIsoDate] = useState<string>(getTodayIso);
+  const todayIso = getTodayIso();
+  const isTodaySelected = selectedIsoDate === todayIso;
+  const activeDateDisplay = formatIsoToDDMMMYY(selectedIsoDate);
+
   // Filter only departure flights (isDeparture === true, or fallback to all flights if empty)
   const departureSchedule = scheduleFlights.filter((f) => f.isDeparture !== false);
   const targetFlights = departureSchedule.length > 0 ? departureSchedule : scheduleFlights;
@@ -47,7 +77,7 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
     return str.replace(/BS/gi, '').replace(/[^0-9a-zA-Z]/g, '').trim().toUpperCase();
   };
 
-  // Helper to extract day and month for 100% robust date matching across formats (e.g. "12 AUG 2026", "12 AUG 26", "12AUG 02", "2026-08-12")
+  // Helper to extract day and month key e.g. "14AUG"
   const parseDayMonthKey = (str: string): string => {
     if (!str) return '';
     const cleanStr = str.trim().toUpperCase();
@@ -60,7 +90,7 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
       return `${day}${month}`;
     }
 
-    // 1. Alpha Month e.g. "12 AUG 2026", "12 AUG 26", "12AUG26", "12AUG 02", "12-AUG-2026"
+    // 1. Alpha Month e.g. "14 AUG 2026", "14 AUG 26", "14AUG26", "14AUG 02", "14-AUG-2026"
     const alphaMatch = cleanStr.match(/\b(\d{1,2})\s*[-/]?\s*([A-Za-z]{3})\b/i);
     if (alphaMatch) {
       const day = String(parseInt(alphaMatch[1], 10)).padStart(2, '0');
@@ -68,7 +98,7 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
       return `${day}${month}`;
     }
 
-    // 2. ISO Format YYYY-MM-DD e.g. 2026-08-12
+    // 2. ISO Format YYYY-MM-DD e.g. 2026-08-14
     const isoMatch = cleanStr.match(/\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
     if (isoMatch) {
       const mIdx = parseInt(isoMatch[2], 10) - 1;
@@ -77,7 +107,7 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
       return `${day}${month}`;
     }
 
-    // 3. Numeric DD/MM/YYYY or DD-MM-YY e.g. 12/08/2026
+    // 3. Numeric DD/MM/YYYY or DD-MM-YY e.g. 14/08/2026
     const numMatch = cleanStr.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/);
     if (numMatch) {
       const day = String(parseInt(numMatch[1], 10)).padStart(2, '0');
@@ -89,23 +119,21 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
     return cleanStr.replace(/[^0-9A-Z]/g, '').slice(0, 5);
   };
 
-  // Helper to test if a saved report belongs to today's schedule date
-  const isReportDateMatchingSchedule = (r: SavedReport, scheduleDateStr: string): boolean => {
-    if (!scheduleDateStr) return true;
+  // Helper to test if a saved report belongs to the selected reconciliation date
+  const isReportDateMatchingSelectedDate = (r: SavedReport, targetIso: string): boolean => {
+    if (!targetIso) return true;
+    const targetDmKey = parseDayMonthKey(targetIso); // e.g. "14AUG"
 
+    // 1. Check report form date
     const rDateString = (r.formData?.date || r.date || '').trim();
-    if (!rDateString || rDateString.toUpperCase().includes('TODAY') || scheduleDateStr.toUpperCase().includes('TODAY')) {
-      return true;
+    if (rDateString) {
+      const rDmKey = parseDayMonthKey(rDateString);
+      if (rDmKey && targetDmKey && rDmKey === targetDmKey) {
+        return true;
+      }
     }
 
-    const dmSchedule = parseDayMonthKey(scheduleDateStr);
-    const dmReport = parseDayMonthKey(rDateString);
-
-    if (dmSchedule && dmReport && dmSchedule === dmReport) {
-      return true;
-    }
-
-    // Check timestamps (r.timestamp or r.createdAt)
+    // 2. Check timestamps (r.timestamp or r.createdAt)
     const timestamps = [r.timestamp, r.createdAt].filter(Boolean);
     for (const ts of timestamps) {
       const t = new Date(ts as string);
@@ -115,18 +143,18 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
         const tsMonth = monthNames[t.getMonth()];
         const tsKey = `${tsDay}${tsMonth}`;
 
-        if (dmSchedule && dmSchedule === tsKey) {
-          return true;
-        }
-
-        const hoursDiff = Math.abs(Date.now() - t.getTime()) / (1000 * 3600);
-        if (hoursDiff <= 36) {
+        if (targetDmKey && targetDmKey === tsKey) {
           return true;
         }
       }
     }
 
-    return true; // Flexible fallback for active session reports
+    // 3. If today is selected and report is marked 'TODAY'
+    if (isTodaySelected && rDateString.toUpperCase().includes('TODAY')) {
+      return true;
+    }
+
+    return false;
   };
 
   // Deduplicate target flights by flight code so multi-leg flights (e.g. BS-321 DAC vs CGP) don't duplicate
@@ -148,11 +176,11 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
     return Array.from(map.values());
   }, [targetFlights]);
 
-  // Reconcile scheduled departure flights with saved reports for TODAY'S schedule date
+  // Reconcile scheduled departure flights with saved reports for the SELECTED DATE
   const flightReconciliation = targetFlightsDeduplicated.map((sf) => {
     const targetCode = cleanFlightNum(sf.flightNum || sf.flightFull);
 
-    // Find latest matching saved report for TODAY'S schedule date
+    // Find latest matching saved report for the SELECTED DATE
     const matchingReports = savedReports.filter((r) => {
       const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
       const mainFlt = cleanFlightNum(r.flight || '');
@@ -161,8 +189,8 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
       const isSameCode = deptFlt === targetCode || mainFlt === targetCode || arvFlt === targetCode;
       if (!isSameCode) return false;
 
-      // Ensure report belongs to target schedule date
-      return isReportDateMatchingSchedule(r, scheduleDate);
+      // Ensure report belongs to target selected date
+      return isReportDateMatchingSelectedDate(r, selectedIsoDate);
     });
 
     // Get the latest saved report if multiple exist
@@ -204,7 +232,7 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
   const handleCopyMissingList = () => {
     if (missingFlights.length === 0) return;
     const lines = [
-      `🚨 US-BANGLA RAMP REPORT ALERT (${scheduleDate}) 🚨`,
+      `🚨 US-BANGLA RAMP REPORT ALERT (${activeDateDisplay}) 🚨`,
       `The following ${missingFlights.length} flight departure reports are MISSING:`,
       ...missingFlights.map(
         (m, i) =>
@@ -223,7 +251,7 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
     <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden fade-in">
       <div className="bg-slate-900 border-2 border-amber-500/60 rounded-3xl w-full max-w-[98vw] lg:max-w-7xl h-[94vh] max-h-[96vh] flex flex-col shadow-2xl overflow-hidden my-auto">
         {/* Header */}
-        <div className="py-2.5 px-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0">
+        <div className="py-2.5 px-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0 flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-400 shadow">
               <FileCheck2 className="w-5 h-5" />
@@ -233,21 +261,57 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
                 <h2 className="text-sm sm:text-base font-black text-amber-400 uppercase tracking-wider">
                   COMPLETE FLIGHT RECONCILIATION
                 </h2>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-900 text-amber-300 border border-amber-500/40">
-                  {scheduleDate}
+                <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-slate-900 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-amber-400" />
+                  {activeDateDisplay}
                 </span>
+                {isTodaySelected && (
+                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 tracking-wider font-mono">
+                    TODAY (AUTO)
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-slate-400 font-sans hidden sm:block">
-                Audit today's generated flight reports against FLST schedule for 100% analytical accuracy
+                Audit generated flight reports against FLST schedule for 100% analytical accuracy
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-all cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          {/* Date Selector Controls in Header */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-slate-900 border border-amber-500/40 rounded-xl px-2.5 py-1 shadow-inner">
+              <Calendar className="w-3.5 h-3.5 text-amber-400" />
+              <input
+                type="date"
+                value={selectedIsoDate}
+                onChange={(e) => setSelectedIsoDate(e.target.value)}
+                className="bg-transparent text-xs text-amber-300 font-mono font-bold outline-none cursor-pointer scheme-dark"
+                title="Select date to reconcile reports"
+              />
+            </div>
+
+            {!isTodaySelected ? (
+              <button
+                type="button"
+                onClick={() => setSelectedIsoDate(todayIso)}
+                className="px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black transition-all cursor-pointer flex items-center gap-1"
+                title="Return to today's date"
+              >
+                <span>📅</span> TODAY
+              </button>
+            ) : (
+              <span className="text-[10px] font-bold text-emerald-400 font-mono hidden md:inline px-1">
+                ● LIVE
+              </span>
+            )}
+
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-all cursor-pointer ml-1"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Compact Operational Statistics & Control Toolbar */}
@@ -440,7 +504,7 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
         {/* Compact Modal Footer */}
         <div className="py-2.5 px-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between shrink-0 flex-wrap gap-2">
           <span className="text-[11px] text-slate-400 font-mono">
-            * Only flight reports generated for today's schedule ({scheduleDate}) are matched here.
+            * Flight reports generated for {activeDateDisplay} are matched against scheduled departures.
           </span>
           <button
             onClick={onClose}
