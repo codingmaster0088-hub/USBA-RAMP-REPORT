@@ -11,14 +11,13 @@ import {
   Layers,
   Plane,
   Search,
-  Timer,
   Sparkles,
   ShieldCheck,
   CheckCircle2,
   Activity,
-  ArrowRight,
-  TrendingUp,
-  RefreshCw
+  Image as ImageIcon,
+  Eye,
+  Table as TableIcon
 } from 'lucide-react';
 
 interface TimeAnalyticalModalProps {
@@ -41,8 +40,11 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
   showToast
 }) => {
   const printCardRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [customHeaderPhoto, setCustomHeaderPhoto] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'HUD_TABLE' | 'PHOTO_CARD'>('HUD_TABLE');
 
   // 1. Helper to format Date object to YYYY-MM-DD
   const getTodayIso = (): string => {
@@ -68,13 +70,48 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
     return isoStr;
   };
 
+  const formatIsoToFullDate = (isoStr: string): string => {
+    if (!isoStr) return '';
+    const parts = isoStr.split('-');
+    if (parts.length === 3) {
+      const day = parts[2];
+      const mIdx = parseInt(parts[1], 10) - 1;
+      const monthNames = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+      const month = monthNames[mIdx] || 'JANUARY';
+      const yr = parts[0];
+      return `${day} ${month} ${yr}`;
+    }
+    return isoStr;
+  };
+
   const todayIso = getTodayIso();
   const [selectedIsoDate, setSelectedIsoDate] = useState<string>(todayIso);
   const isTodaySelected = selectedIsoDate === todayIso;
   const activeDateDisplay = formatIsoToDDMMMYY(selectedIsoDate);
+  const fullDateDisplay = formatIsoToFullDate(selectedIsoDate);
 
   // 3. Category Filter State: ALL | DOMESTIC | INTERNATIONAL
   const [flightScopeFilter, setFlightScopeFilter] = useState<'ALL' | 'DOMESTIC' | 'INTERNATIONAL'>('ALL');
+
+  // Handle Custom Aircraft Photo Upload
+  const handleCustomPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        showToast('Image Too Large', 'Please select an image smaller than 10MB', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        const result = uploadEvent.target?.result as string;
+        if (result) {
+          setCustomHeaderPhoto(result);
+          showToast('Header Photo Updated', 'Your custom aircraft photo is set for the Time Analytical Card!', 'success');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Helper to extract day and month key e.g. "16AUG"
   const parseDayMonthKey = (str: string): string => {
@@ -227,7 +264,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
     const sClean = (startStr || '').trim().toUpperCase();
     const eClean = (endStr || '').trim().toUpperCase();
 
-    // 1. If in time box written earlier or n/a -> show 'PRE'
+    // If marked earlier or n/a -> show 'PRE'
     if (
       sClean === 'EARLIER' ||
       sClean === 'EARLY' ||
@@ -522,22 +559,26 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
 
   // Download High-Resolution Official JPG Card
   const handleDownloadJPG = async () => {
-    if (!printCardRef.current) return;
+    if (!printCardRef.current) {
+      showToast('Error', 'Photo Card canvas element not found', 'error');
+      return;
+    }
     try {
       setIsDownloading(true);
-      showToast('Generating JPG...', 'Rendering high-resolution time analytics card', 'info');
+      showToast('Generating High-Res JPG...', 'Rendering official photo card at 1200px', 'info');
 
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Allow DOM to settle
+      await new Promise((resolve) => setTimeout(resolve, 350));
 
       const canvas = await captureHtml2CanvasSafe(printCardRef.current, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#020617',
+        backgroundColor: '#ffffff',
         logging: false
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgData = canvas.toDataURL('image/jpeg', 0.96);
       const link = document.createElement('a');
       link.href = imgData;
       link.download = `US_BANGLA_TIME_ANALYTICAL_REPORT_${activeDateDisplay.replace(/\s+/g, '_')}_${flightScopeFilter}.jpg`;
@@ -545,9 +586,9 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       link.click();
       document.body.removeChild(link);
 
-      showToast('Official JPG Downloaded!', 'Saved to your downloads folder', 'success');
+      showToast('Official JPG Downloaded!', 'High-resolution photo card saved to your device', 'success');
     } catch (e) {
-      console.error(e);
+      console.error('Failed to download JPG', e);
       showToast('Download Failed', 'Could not generate JPG file', 'error');
     } finally {
       setIsDownloading(false);
@@ -557,15 +598,16 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden fade-in">
       <div className="bg-slate-900 border-2 border-cyan-500/60 rounded-3xl w-full max-w-[98vw] lg:max-w-7xl h-[94vh] max-h-[96vh] flex flex-col shadow-2xl overflow-hidden my-auto">
-        {/* Modal Header */}
-        <div className="py-2.5 px-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0 flex-wrap gap-2">
+        
+        {/* Modal Top Header Bar */}
+        <div className="py-2.5 px-4 bg-slate-950 border-b border-cyan-500/30 flex items-center justify-between shrink-0 flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-400 shadow">
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-400 shadow">
               <Clock className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm sm:text-base font-black text-cyan-400 uppercase tracking-wider">
+                <h2 className="text-sm sm:text-base font-black text-cyan-400 uppercase tracking-wider font-sans">
                   TIME ANALYTICAL REPORT
                 </h2>
                 <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-slate-900 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
@@ -584,8 +626,36 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
             </div>
           </div>
 
-          {/* Action & Date Controls */}
+          {/* Action Buttons, Date Selector & Photo Upload */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Custom Plane Photo Upload Input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              onChange={handleCustomPhotoUpload}
+              className="hidden"
+            />
+            
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs rounded-xl border border-cyan-500/40 shadow active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Upload your custom US-Bangla aircraft photo for the photo card"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{customHeaderPhoto ? 'CHANGE PLANE PHOTO' : 'UPLOAD PLANE PHOTO'}</span>
+            </button>
+            {customHeaderPhoto && (
+              <button
+                onClick={() => setCustomHeaderPhoto(null)}
+                className="px-2 py-1.5 bg-rose-950/70 hover:bg-rose-900 text-rose-300 font-bold text-[11px] rounded-xl border border-rose-500/40 active:scale-95 transition-all cursor-pointer"
+                title="Reset to default US-Bangla HD aircraft photo"
+              >
+                RESET
+              </button>
+            )}
+
+            {/* Date Picker Box */}
             <div className="flex items-center gap-1.5 bg-slate-900 border border-cyan-500/40 rounded-xl px-2.5 py-1 shadow-inner">
               <Calendar className="w-3.5 h-3.5 text-cyan-400" />
               <input
@@ -599,327 +669,745 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
 
             {!isTodaySelected && (
               <button
-                type="button"
                 onClick={() => setSelectedIsoDate(todayIso)}
-                className="px-2.5 py-1 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-black transition-all cursor-pointer flex items-center gap-1"
-                title="Return to today's date"
+                className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 text-xs font-bold rounded-xl border border-emerald-500/50 transition-colors cursor-pointer flex items-center gap-1"
+                title="Jump back to Today"
               >
-                <span>📅</span> TODAY
+                <Calendar className="w-3.5 h-3.5" />
+                <span>TODAY</span>
               </button>
             )}
 
+            {/* Excel Download */}
             <button
               onClick={handleExportExcel}
-              className="px-3 py-1.5 rounded-xl bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow"
+              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/40 text-xs font-black rounded-xl active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 shadow"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
               <span>EXCEL / CSV</span>
             </button>
 
+            {/* Official JPG Download */}
             <button
               onClick={handleDownloadJPG}
               disabled={isDownloading}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 disabled:opacity-50"
+              className="px-4 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 text-xs font-black rounded-xl active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 disabled:opacity-50"
             >
-              <Download className="w-4 h-4" />
-              <span>{isDownloading ? 'SAVING...' : 'OFFICIAL JPG'}</span>
+              <Download className="w-3.5 h-3.5 text-slate-950" />
+              <span>{isDownloading ? 'EXPORTING...' : 'OFFICIAL JPG'}</span>
             </button>
 
+            {/* Close Modal Button */}
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-all cursor-pointer ml-1"
+              className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer border border-slate-700"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Toolbar: Tabs & Search */}
-        <div className="p-2.5 bg-slate-950/80 border-b border-slate-800 shrink-0 space-y-2">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            {/* 3 Scope Options (ALL, DOM, INT) */}
-            <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-2xl border border-slate-800">
-              <button
-                type="button"
-                onClick={() => setFlightScopeFilter('ALL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
-                  flightScopeFilter === 'ALL'
-                    ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>ALL FLIGHTS</span>
-                <span className="text-[10px] font-mono opacity-80">({stats.totalFlights})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFlightScopeFilter('DOMESTIC')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
-                  flightScopeFilter === 'DOMESTIC'
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Plane className="w-3.5 h-3.5" />
-                <span>DOMESTIC</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFlightScopeFilter('INTERNATIONAL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
-                  flightScopeFilter === 'INTERNATIONAL'
-                    ? 'bg-blue-500 text-slate-950 shadow-md shadow-blue-500/20'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Plane className="w-3.5 h-3.5 rotate-45" />
-                <span>INTERNATIONAL</span>
-              </button>
-            </div>
-
-            {/* Search Box */}
-            <div className="relative min-w-[220px] max-w-xs flex-1">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search flight, route, A/C, bay..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700/80 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 focus:border-cyan-400 outline-none"
-              />
-            </div>
+        {/* View Tabs & Category Filters */}
+        <div className="bg-slate-950/80 border-b border-slate-800 px-4 py-2 flex items-center justify-between flex-wrap gap-3 shrink-0">
+          
+          {/* Category Tabs: ALL | DOMESTIC | INTERNATIONAL */}
+          <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800">
+            <button
+              onClick={() => setFlightScopeFilter('ALL')}
+              className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                flightScopeFilter === 'ALL'
+                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>ALL FLIGHTS ({savedReports.filter((r) => isReportMatchingSelectedDate(r, selectedIsoDate)).length})</span>
+            </button>
+            <button
+              onClick={() => setFlightScopeFilter('DOMESTIC')}
+              className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                flightScopeFilter === 'DOMESTIC'
+                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Plane className="w-3.5 h-3.5" />
+              <span>DOMESTIC</span>
+            </button>
+            <button
+              onClick={() => setFlightScopeFilter('INTERNATIONAL')}
+              className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                flightScopeFilter === 'INTERNATIONAL'
+                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Plane className="w-3.5 h-3.5 rotate-45" />
+              <span>INTERNATIONAL</span>
+            </button>
           </div>
 
-          {/* Average Durations KPI Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            <div className="bg-slate-900/90 border border-cyan-500/30 rounded-xl p-2 flex flex-col">
-              <span className="text-[10px] text-slate-400 font-bold uppercase">TOTAL FLIGHTS</span>
-              <span className="text-base font-black text-cyan-400 font-mono">{stats.totalFlights}</span>
-            </div>
+          {/* Search Box */}
+          <div className="relative min-w-[220px] max-w-xs flex-1">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search flight, route, A/C, bay..."
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
 
-            <div className="bg-slate-900/90 border border-amber-500/30 rounded-xl p-2 flex flex-col">
-              <span className="text-[10px] text-slate-400 font-bold uppercase">AVG GROUND TIME</span>
-              <span className="text-base font-black text-amber-400 font-mono">{stats.avgGround}</span>
-            </div>
-
-            <div className="bg-slate-900/90 border border-indigo-500/30 rounded-xl p-2 flex flex-col">
-              <span className="text-[10px] text-slate-400 font-bold uppercase">AVG SECURITY</span>
-              <span className="text-base font-black text-indigo-400 font-mono">{stats.avgSecurity}</span>
-            </div>
-
-            <div className="bg-slate-900/90 border border-teal-500/30 rounded-xl p-2 flex flex-col">
-              <span className="text-[10px] text-slate-400 font-bold uppercase">AVG CLEANING</span>
-              <span className="text-base font-black text-teal-400 font-mono">{stats.avgCleaning}</span>
-            </div>
-
-            <div className="bg-slate-900/90 border border-purple-500/30 rounded-xl p-2 flex flex-col">
-              <span className="text-[10px] text-slate-400 font-bold uppercase">AVG CATERING</span>
-              <span className="text-base font-black text-purple-400 font-mono">{stats.avgCatering}</span>
-            </div>
-
-            <div className="bg-slate-900/90 border border-emerald-500/30 rounded-xl p-2 flex flex-col">
-              <span className="text-[10px] text-slate-400 font-bold uppercase">AVG BOARDING</span>
-              <span className="text-base font-black text-emerald-400 font-mono">{stats.avgBoarding}</span>
-            </div>
+          {/* Mode Switcher: HUD Table vs Photo Card Preview */}
+          <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+            <button
+              onClick={() => setActiveTab('HUD_TABLE')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'HUD_TABLE'
+                  ? 'bg-slate-800 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>HUD TABLE</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('PHOTO_CARD')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'PHOTO_CARD'
+                  ? 'bg-slate-800 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+              <span>PHOTO CARD PREVIEW</span>
+            </button>
           </div>
         </div>
 
-        {/* Scrollable Main Content & Interactive Table */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4">
-          {processedRows.length === 0 ? (
-            <div className="py-20 text-center space-y-3 bg-slate-950/40 rounded-2xl border border-slate-800">
-              <Clock className="w-12 h-12 text-slate-600 mx-auto" />
-              <p className="text-sm font-bold text-slate-400">
-                No saved flight reports found for {activeDateDisplay} ({flightScopeFilter})
-              </p>
-              <p className="text-xs text-slate-500">
-                Reports generated by ramp officers on this date will automatically calculate turnaround durations here.
-              </p>
+        {/* Modal Body Container */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 bg-slate-950/60">
+          
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            <div className="bg-slate-900/90 border border-cyan-500/30 rounded-2xl p-3 shadow">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">TOTAL FLIGHTS</span>
+              <span className="text-xl font-black text-cyan-400 font-mono mt-0.5 block">{stats.totalFlights}</span>
             </div>
-          ) : (
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-3 shadow">
+              <span className="text-[10px] text-amber-400/80 font-bold uppercase tracking-wider block">AVG GROUND TIME</span>
+              <span className="text-xl font-black text-amber-400 font-mono mt-0.5 block">{stats.avgGround}</span>
+            </div>
+            <div className="bg-slate-900/90 border border-indigo-500/30 rounded-2xl p-3 shadow">
+              <span className="text-[10px] text-indigo-400/80 font-bold uppercase tracking-wider block">AVG SECURITY</span>
+              <span className="text-xl font-black text-indigo-400 font-mono mt-0.5 block">{stats.avgSecurity}</span>
+            </div>
+            <div className="bg-slate-900/90 border border-teal-500/30 rounded-2xl p-3 shadow">
+              <span className="text-[10px] text-teal-400/80 font-bold uppercase tracking-wider block">AVG CLEANING</span>
+              <span className="text-xl font-black text-teal-400 font-mono mt-0.5 block">{stats.avgCleaning}</span>
+            </div>
+            <div className="bg-slate-900/90 border border-purple-500/30 rounded-2xl p-3 shadow">
+              <span className="text-[10px] text-purple-400/80 font-bold uppercase tracking-wider block">AVG CATERING</span>
+              <span className="text-xl font-black text-purple-400 font-mono mt-0.5 block">{stats.avgCatering}</span>
+            </div>
+            <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-3 shadow">
+              <span className="text-[10px] text-emerald-400/80 font-bold uppercase tracking-wider block">AVG BOARDING</span>
+              <span className="text-xl font-black text-emerald-400 font-mono mt-0.5 block">{stats.avgBoarding}</span>
+            </div>
+          </div>
+
+          {/* TAB 1: HUD TABLE VIEW */}
+          {activeTab === 'HUD_TABLE' && (
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+                <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="bg-slate-900/90 text-slate-300 uppercase tracking-wider font-mono border-b border-slate-800 text-[11px]">
-                      <th className="py-2.5 px-3 font-extrabold text-center w-10">#</th>
-                      <th className="py-2.5 px-3 font-extrabold">FLIGHT</th>
-                      <th className="py-2.5 px-3 font-extrabold">ROUTE</th>
-                      <th className="py-2.5 px-3 font-extrabold">A/C & BAY</th>
-                      <th className="py-2.5 px-3 font-extrabold text-amber-300">GROUND TIME</th>
-                      <th className="py-2.5 px-3 font-extrabold text-indigo-300">
-                        SECURITY <span className="text-[9px] text-slate-400">(ST - END)</span>
-                      </th>
-                      <th className="py-2.5 px-3 font-extrabold text-teal-300">
-                        CLEANING <span className="text-[9px] text-slate-400">(ST - END)</span>
-                      </th>
-                      <th className="py-2.5 px-3 font-extrabold text-purple-300">
-                        CATERING <span className="text-[9px] text-slate-400">(ST - END)</span>
-                      </th>
-                      <th className="py-2.5 px-3 font-extrabold text-emerald-300">
-                        BOARDING <span className="text-[9px] text-slate-400">(PERMIT - PAX)</span>
-                      </th>
-                      <th className="py-2.5 px-3 font-extrabold">STATUS</th>
-                      <th className="py-2.5 px-3 font-extrabold">OFFICER</th>
+                    <tr className="bg-slate-950 text-slate-400 uppercase font-mono text-[10px] tracking-wider border-b border-slate-800">
+                      <th className="py-3 px-3 text-center w-10">#</th>
+                      <th className="py-3 px-3">FLIGHT</th>
+                      <th className="py-3 px-3">ROUTE</th>
+                      <th className="py-3 px-3">A/C & BAY</th>
+                      <th className="py-3 px-3 text-amber-300">GROUND TIME</th>
+                      <th className="py-3 px-3 text-indigo-300">SECURITY <span className="text-[9px] text-slate-500">(ST - END)</span></th>
+                      <th className="py-3 px-3 text-teal-300">CLEANING <span className="text-[9px] text-slate-500">(ST - END)</span></th>
+                      <th className="py-3 px-3 text-purple-300">CATERING <span className="text-[9px] text-slate-500">(ST - END)</span></th>
+                      <th className="py-3 px-3 text-emerald-300">BOARDING <span className="text-[9px] text-slate-500">(PERMIT - PAX)</span></th>
+                      <th className="py-3 px-3">STATUS</th>
+                      <th className="py-3 px-3">OFFICER</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/80 font-sans">
-                    {processedRows.map((row, idx) => (
-                      <tr
-                        key={row.id}
-                        className="hover:bg-slate-900/60 transition-colors text-slate-200"
-                      >
-                        <td className="py-2.5 px-3 text-center text-slate-500 font-mono text-[11px]">
-                          {idx + 1}
-                        </td>
-                        <td className="py-2.5 px-3 font-black text-white font-mono flex items-center gap-1.5">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              row.isDomestic ? 'bg-amber-400' : 'bg-blue-400'
-                            }`}
-                          />
-                          <span>{row.flight}</span>
-                        </td>
-                        <td className="py-2.5 px-3 font-bold text-amber-300 font-mono">{row.route}</td>
-                        <td className="py-2.5 px-3 text-slate-300 font-mono text-[11px]">
-                          <div>{row.ac}</div>
-                          <div className="text-[10px] text-slate-400">{row.bay}</div>
-                        </td>
-
-                        {/* Ground Time */}
-                        <td className="py-2.5 px-3 font-mono">
-                          <span
-                            className={`px-2 py-0.5 rounded-md font-extrabold text-[11px] ${
-                              row.groundTime.text === 'ON GROUND'
-                                ? 'bg-slate-900 text-slate-400 border border-slate-700'
-                                : 'bg-amber-950/80 text-amber-300 border border-amber-500/40'
-                            }`}
-                          >
-                            {row.groundTime.text}
-                          </span>
-                        </td>
-
-                        {/* 1. Security start to end */}
-                        <td className="py-2.5 px-3 font-mono">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`px-2 py-0.5 rounded-md font-black text-[11px] ${
-                                row.securityDuration.durationText === 'PRE'
-                                  ? 'bg-slate-800 text-cyan-300 border border-cyan-500/30'
-                                  : row.securityDuration.minutes !== null
-                                  ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-500/40'
-                                  : 'text-slate-500'
-                              }`}
-                            >
-                              {row.securityDuration.durationText}
-                            </span>
-                            {row.securitySt && row.securityEnd && (
-                              <span className="text-[10px] text-slate-400 font-sans">
-                                ({row.securitySt}-{row.securityEnd})
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* 2. Cleaning start to end */}
-                        <td className="py-2.5 px-3 font-mono">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`px-2 py-0.5 rounded-md font-black text-[11px] ${
-                                row.cleaningDuration.durationText === 'PRE'
-                                  ? 'bg-slate-800 text-cyan-300 border border-cyan-500/30'
-                                  : row.cleaningDuration.minutes !== null
-                                  ? 'bg-teal-950/80 text-teal-300 border border-teal-500/40'
-                                  : 'text-slate-500'
-                              }`}
-                            >
-                              {row.cleaningDuration.durationText}
-                            </span>
-                            {row.cleaningSt && row.cleaningEnd && (
-                              <span className="text-[10px] text-slate-400 font-sans">
-                                ({row.cleaningSt}-{row.cleaningEnd})
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* 3. Catering start to end */}
-                        <td className="py-2.5 px-3 font-mono">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`px-2 py-0.5 rounded-md font-black text-[11px] ${
-                                row.cateringDuration.durationText === 'PRE'
-                                  ? 'bg-slate-800 text-cyan-300 border border-cyan-500/30'
-                                  : row.cateringDuration.minutes !== null
-                                  ? 'bg-purple-950/80 text-purple-300 border border-purple-500/40'
-                                  : 'text-slate-500'
-                              }`}
-                            >
-                              {row.cateringDuration.durationText}
-                            </span>
-                            {row.cateringSt && row.cateringEnd && (
-                              <span className="text-[10px] text-slate-400 font-sans">
-                                ({row.cateringSt}-{row.cateringEnd})
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* 4. Boarding permit to pax */}
-                        <td className="py-2.5 px-3 font-mono">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`px-2 py-0.5 rounded-md font-black text-[11px] ${
-                                row.boardingDuration.durationText === 'PRE'
-                                  ? 'bg-slate-800 text-cyan-300 border border-cyan-500/30'
-                                  : row.boardingDuration.minutes !== null
-                                  ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40'
-                                  : 'text-slate-500'
-                              }`}
-                            >
-                              {row.boardingDuration.durationText}
-                            </span>
-                            {row.permit && row.pax && (
-                              <span className="text-[10px] text-slate-400 font-sans">
-                                ({row.permit}-{row.pax})
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Status */}
-                        <td className="py-2.5 px-3">
-                          <span
-                            className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase ${
-                              row.status.includes('DELAY')
-                                ? 'bg-rose-950 text-rose-400 border border-rose-500/40'
-                                : 'bg-emerald-950 text-emerald-400 border border-emerald-500/40'
-                            }`}
-                          >
-                            {row.status}
-                          </span>
-                        </td>
-
-                        {/* Officer */}
-                        <td className="py-2.5 px-3 text-[11px] text-slate-300 font-medium">
-                          {row.officer}
+                  <tbody className="divide-y divide-slate-800/60 font-sans text-slate-200">
+                    {processedRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="py-12 text-center text-slate-500 font-mono text-xs">
+                          No turnaround duration records found for {activeDateDisplay} ({flightScopeFilter}).
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      processedRows.map((row, idx) => (
+                        <tr key={row.id} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="py-2.5 px-3 text-center font-mono text-slate-500 text-[11px]">{idx + 1}</td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-white text-xs">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                              {row.flight}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-black text-amber-300 text-xs">{row.route}</td>
+                          <td className="py-2.5 px-3 font-mono text-slate-300 text-[11px]">
+                            <div>{row.ac}</div>
+                            <div className="text-[10px] text-slate-400">BAY: {row.bay}</div>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono">
+                            <span
+                              className={`px-2 py-0.5 rounded-md font-black text-[11px] ${
+                                row.groundTime.text === 'ON GROUND'
+                                  ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                                  : 'bg-amber-950/80 text-amber-300 border border-amber-500/40'
+                              }`}
+                            >
+                              {row.groundTime.text}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-2 py-0.5 rounded-md font-black text-[11px] ${
+                                  row.securityDuration.durationText === 'PRE'
+                                    ? 'bg-slate-800 text-cyan-300 border border-cyan-500/30'
+                                    : row.securityDuration.minutes !== null
+                                    ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-500/40'
+                                    : 'text-slate-500'
+                                }`}
+                              >
+                                {row.securityDuration.durationText}
+                              </span>
+                              {row.securitySt && row.securityEnd && (
+                                <span className="text-[10px] text-slate-400 font-sans">
+                                  ({row.securitySt}-{row.securityEnd})
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-2 py-0.5 rounded-md font-black text-[11px] ${
+                                  row.cleaningDuration.durationText === 'PRE'
+                                    ? 'bg-slate-800 text-cyan-300 border border-cyan-500/30'
+                                    : row.cleaningDuration.minutes !== null
+                                    ? 'bg-teal-950/80 text-teal-300 border border-teal-500/40'
+                                    : 'text-slate-500'
+                                }`}
+                              >
+                                {row.cleaningDuration.durationText}
+                              </span>
+                              {row.cleaningSt && row.cleaningEnd && (
+                                <span className="text-[10px] text-slate-400 font-sans">
+                                  ({row.cleaningSt}-{row.cleaningEnd})
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-2 py-0.5 rounded-md font-black text-[11px] ${
+                                  row.cateringDuration.durationText === 'PRE'
+                                    ? 'bg-slate-800 text-cyan-300 border border-cyan-500/30'
+                                    : row.cateringDuration.minutes !== null
+                                    ? 'bg-purple-950/80 text-purple-300 border border-purple-500/40'
+                                    : 'text-slate-500'
+                                }`}
+                              >
+                                {row.cateringDuration.durationText}
+                              </span>
+                              {row.cateringSt && row.cateringEnd && (
+                                <span className="text-[10px] text-slate-400 font-sans">
+                                  ({row.cateringSt}-{row.cateringEnd})
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-2 py-0.5 rounded-md font-black text-[11px] ${
+                                  row.boardingDuration.durationText === 'PRE'
+                                    ? 'bg-slate-800 text-cyan-300 border border-cyan-500/30'
+                                    : row.boardingDuration.minutes !== null
+                                    ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40'
+                                    : 'text-slate-500'
+                                }`}
+                              >
+                                {row.boardingDuration.durationText}
+                              </span>
+                              {row.permit && row.pax && (
+                                <span className="text-[10px] text-slate-400 font-sans">
+                                  ({row.permit}-{row.pax})
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase ${
+                                row.status.includes('DELAY')
+                                  ? 'bg-rose-950 text-rose-400 border border-rose-500/40'
+                                  : 'bg-emerald-950 text-emerald-400 border border-emerald-500/40'
+                              }`}
+                            >
+                              {row.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-[11px] text-slate-300 font-medium">
+                            {row.officer}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
+
+          {/* ========================================================================= */}
+          {/* HIGH-RESOLUTION TIME ANALYTICAL PHOTO CARD (EXPORTED TO OFFICIAL JPG)     */}
+          {/* Rendered directly in DOM for live preview and 100% reliable JPG capture   */}
+          {/* ========================================================================= */}
+          <div className="pt-2 space-y-3">
+            <div className="flex items-center justify-between text-xs text-slate-400 flex-wrap gap-2">
+              <span className="font-black uppercase text-cyan-400 flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4" /> OFFICIAL HIGH-RESOLUTION TIME ANALYTICAL PHOTO CARD
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 font-mono text-[11px]">Retina Canvas 1200px Width</span>
+                <button
+                  onClick={handleDownloadJPG}
+                  disabled={isDownloading}
+                  className="px-3 py-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>{isDownloading ? 'SAVING...' : 'DOWNLOAD JPG'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Container containing the 1200px Card */}
+            <div className="p-2 bg-slate-950 border border-cyan-500/50 rounded-2xl overflow-x-auto shadow-2xl">
+              <div
+                ref={printCardRef}
+                style={{
+                  width: '1200px',
+                  minHeight: '1400px',
+                  backgroundColor: '#ffffff',
+                  color: '#0f172a',
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  padding: '36px',
+                  borderRadius: '16px',
+                  border: '4px solid #0284c7',
+                  boxSizing: 'border-box',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
+                }}
+              >
+                <div>
+                  {/* 1. Header Box with Navy Bar and Aircraft Tarmac Banner */}
+                  <div
+                    style={{
+                      marginBottom: '24px',
+                      borderRadius: '16px',
+                      overflow: 'hidden',
+                      border: '2px solid #031b4e',
+                      boxShadow: '0 8px 20px rgba(3, 27, 78, 0.12)'
+                    }}
+                  >
+                    {/* Top Navy Bar */}
+                    <div
+                      style={{
+                        backgroundColor: '#031b4e',
+                        padding: '18px 26px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        color: '#ffffff'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div
+                          style={{
+                            width: '54px',
+                            height: '54px',
+                            borderRadius: '14px',
+                            backgroundColor: '#0284c7',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '28px',
+                            fontWeight: '900',
+                            color: '#ffffff',
+                            boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)'
+                          }}
+                        >
+                          ⏱
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '32px', fontWeight: '900', color: '#ffffff', letterSpacing: '1px', lineHeight: '1.1' }}>
+                            US BANGLA AIRLINES
+                          </div>
+                          <div style={{ fontSize: '15px', fontWeight: '800', color: '#38bdf8', letterSpacing: '0.8px', marginTop: '4px' }}>
+                            TIME ANALYTICAL REPORT • {activeDateDisplay}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '12px' }}>
+                        <div style={{ backgroundColor: '#0f2963', border: '1.5px solid #38bdf8', padding: '6px 16px', borderRadius: '20px', color: '#ffffff', fontWeight: '900', marginBottom: '6px', display: 'inline-block' }}>
+                          TURNAROUND & GROUND DURATION AUDIT
+                        </div>
+                        <div style={{ color: '#93c5fd', marginTop: '2px' }}>
+                          STATION: <strong style={{ color: '#ffffff', fontWeight: '900' }}>
+                            {station} ({flightScopeFilter === 'DOMESTIC' ? 'DOMESTIC FLIGHTS' : flightScopeFilter === 'INTERNATIONAL' ? 'INTERNATIONAL FLIGHTS' : 'ALL FLIGHTS'})
+                          </strong>
+                        </div>
+                        <div style={{ color: '#93c5fd' }}>
+                          DATE: <strong style={{ color: '#38bdf8', fontWeight: '900' }}>{fullDateDisplay}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Aircraft Photo Banner */}
+                    <div style={{ width: '100%', height: '240px', position: 'relative', overflow: 'hidden', backgroundColor: '#0f172a' }}>
+                      <img
+                        src={customHeaderPhoto || aircraftImage}
+                        alt="US-Bangla Aircraft Banner"
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 45%' }}
+                      />
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(3, 27, 78, 0.75) 0%, transparent 65%)' }} />
+                      <div style={{ position: 'absolute', bottom: '12px', left: '20px', right: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#ffffff', fontFamily: 'sans-serif', fontSize: '11px', fontWeight: '800', letterSpacing: '0.5px' }}>
+                        <span style={{ backgroundColor: 'rgba(3, 27, 78, 0.85)', padding: '4px 12px', borderRadius: '6px', border: '1px solid #38bdf8' }}>
+                          US-BANGLA AIRLINES FLEET • RAMP & GROUND OPERATIONS
+                        </span>
+                        <span style={{ backgroundColor: 'rgba(15, 23, 42, 0.85)', padding: '4px 12px', borderRadius: '6px', border: '1px solid #38bdf8', color: '#38bdf8' }}>
+                          TURNAROUND TIME ANALYTICAL BRIEF
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. KPI Summary Row (6 Metric Boxes) */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(6, 1fr)',
+                      gap: '12px',
+                      marginBottom: '24px'
+                    }}
+                  >
+                    {/* KPI 1: TOTAL FLIGHTS */}
+                    <div
+                      style={{
+                        backgroundColor: '#eff6ff',
+                        border: '2px solid #0284c7',
+                        borderRadius: '12px',
+                        padding: '14px 10px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)'
+                      }}
+                    >
+                      <div style={{ fontSize: '11px', fontWeight: '900', color: '#0369a1', textTransform: 'uppercase' }}>
+                        TOTAL FLIGHTS
+                      </div>
+                      <div style={{ fontSize: '28px', fontWeight: '900', color: '#0f172a', fontFamily: 'monospace', margin: '6px 0 2px 0' }}>
+                        {stats.totalFlights}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '700' }}>Evaluated Flights</div>
+                    </div>
+
+                    {/* KPI 2: AVG GROUND TIME */}
+                    <div
+                      style={{
+                        backgroundColor: '#fffbeb',
+                        border: '2px solid #f59e0b',
+                        borderRadius: '12px',
+                        padding: '14px 10px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)'
+                      }}
+                    >
+                      <div style={{ fontSize: '11px', fontWeight: '900', color: '#b45309', textTransform: 'uppercase' }}>
+                        AVG GROUND TIME
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '900', color: '#d97706', fontFamily: 'monospace', margin: '6px 0 2px 0' }}>
+                        {stats.avgGround}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#b45309', fontWeight: '700' }}>Chox-On to Chox-Off</div>
+                    </div>
+
+                    {/* KPI 3: AVG SECURITY */}
+                    <div
+                      style={{
+                        backgroundColor: '#eef2ff',
+                        border: '2px solid #6366f1',
+                        borderRadius: '12px',
+                        padding: '14px 10px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)'
+                      }}
+                    >
+                      <div style={{ fontSize: '11px', fontWeight: '900', color: '#4338ca', textTransform: 'uppercase' }}>
+                        AVG SECURITY
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '900', color: '#4f46e5', fontFamily: 'monospace', margin: '6px 0 2px 0' }}>
+                        {stats.avgSecurity}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#4338ca', fontWeight: '700' }}>ST to END</div>
+                    </div>
+
+                    {/* KPI 4: AVG CLEANING */}
+                    <div
+                      style={{
+                        backgroundColor: '#f0fdfa',
+                        border: '2px solid #0d9488',
+                        borderRadius: '12px',
+                        padding: '14px 10px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)'
+                      }}
+                    >
+                      <div style={{ fontSize: '11px', fontWeight: '900', color: '#0f766e', textTransform: 'uppercase' }}>
+                        AVG CLEANING
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '900', color: '#0d9488', fontFamily: 'monospace', margin: '6px 0 2px 0' }}>
+                        {stats.avgCleaning}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#0f766e', fontWeight: '700' }}>ST to END</div>
+                    </div>
+
+                    {/* KPI 5: AVG CATERING */}
+                    <div
+                      style={{
+                        backgroundColor: '#faf5ff',
+                        border: '2px solid #9333ea',
+                        borderRadius: '12px',
+                        padding: '14px 10px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)'
+                      }}
+                    >
+                      <div style={{ fontSize: '11px', fontWeight: '900', color: '#7e22ce', textTransform: 'uppercase' }}>
+                        AVG CATERING
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '900', color: '#9333ea', fontFamily: 'monospace', margin: '6px 0 2px 0' }}>
+                        {stats.avgCatering}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#7e22ce', fontWeight: '700' }}>ST to END</div>
+                    </div>
+
+                    {/* KPI 6: AVG BOARDING */}
+                    <div
+                      style={{
+                        backgroundColor: '#f0fdf4',
+                        border: '2px solid #16a34a',
+                        borderRadius: '12px',
+                        padding: '14px 10px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)'
+                      }}
+                    >
+                      <div style={{ fontSize: '11px', fontWeight: '900', color: '#15803d', textTransform: 'uppercase' }}>
+                        AVG BOARDING
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '900', color: '#16a34a', fontFamily: 'monospace', margin: '6px 0 2px 0' }}>
+                        {stats.avgBoarding}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#15803d', fontWeight: '700' }}>Permit to Last Pax</div>
+                    </div>
+                  </div>
+
+                  {/* 3. Turnaround Duration Table */}
+                  <div style={{ marginBottom: '24px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid #031b4e' }}>
+                    <div
+                      style={{
+                        backgroundColor: '#031b4e',
+                        color: '#ffffff',
+                        padding: '12px 18px',
+                        fontSize: '14px',
+                        fontWeight: '900',
+                        letterSpacing: '0.5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>⏱</span> TURNAROUND ACTIVITY DURATION AUDIT (MINUTES & TIMESTAMPS)
+                      </div>
+                      <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#93c5fd' }}>
+                        {processedRows.length} FLIGHTS RECORDED
+                      </span>
+                    </div>
+
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', fontFamily: 'sans-serif' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#0f2963', color: '#ffffff' }}>
+                          <th style={{ padding: '10px 8px', border: '1px solid #1e3a8a', width: '4%', textAlign: 'center', fontWeight: '900' }}>#</th>
+                          <th style={{ padding: '10px 8px', border: '1px solid #1e3a8a', width: '11%', textAlign: 'left', fontWeight: '900' }}>FLIGHT</th>
+                          <th style={{ padding: '10px 8px', border: '1px solid #1e3a8a', width: '10%', textAlign: 'left', fontWeight: '900' }}>ROUTE</th>
+                          <th style={{ padding: '10px 8px', border: '1px solid #1e3a8a', width: '10%', textAlign: 'left', fontWeight: '900' }}>A/C & BAY</th>
+                          <th style={{ padding: '10px 8px', border: '1px solid #1e3a8a', width: '10%', textAlign: 'center', fontWeight: '900' }}>GROUND TIME</th>
+                          <th style={{ padding: '10px 8px', border: '1px solid #1e3a8a', width: '12%', textAlign: 'center', fontWeight: '900' }}>SECURITY (ST-END)</th>
+                          <th style={{ padding: '10px 8px', border: '1px solid #1e3a8a', width: '12%', textAlign: 'center', fontWeight: '900' }}>CLEANING (ST-END)</th>
+                          <th style={{ padding: '10px 8px', border: '1px solid #1e3a8a', width: '12%', textAlign: 'center', fontWeight: '900' }}>CATERING (ST-END)</th>
+                          <th style={{ padding: '10px 8px', border: '1px solid #1e3a8a', width: '12%', textAlign: 'center', fontWeight: '900' }}>BOARDING (PERMIT-PAX)</th>
+                          <th style={{ padding: '10px 8px', border: '1px solid #1e3a8a', width: '7%', textAlign: 'center', fontWeight: '900' }}>STATUS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {processedRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontWeight: '800', backgroundColor: '#f8fafc' }}>
+                              NO TURNAROUND DURATION RECORDS FOUND FOR {activeDateDisplay}.
+                            </td>
+                          </tr>
+                        ) : (
+                          processedRows.map((r, idx) => (
+                            <tr key={r.id} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                              <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: '800', color: '#64748b', fontSize: '12px' }}>
+                                {idx + 1}
+                              </td>
+                              <td style={{ padding: '8px', border: '1px solid #cbd5e1', fontWeight: '900', color: '#031b4e', fontFamily: 'monospace' }}>
+                                {r.flight}
+                              </td>
+                              <td style={{ padding: '8px', border: '1px solid #cbd5e1', fontWeight: '900', color: '#b45309', fontFamily: 'monospace' }}>
+                                {r.route}
+                              </td>
+                              <td style={{ padding: '8px', border: '1px solid #cbd5e1', color: '#334155', fontSize: '12px', fontFamily: 'monospace' }}>
+                                <strong>{r.ac}</strong> <span style={{ color: '#64748b' }}>({r.bay})</span>
+                              </td>
+                              <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#b45309' }}>
+                                {r.groundTime.text}
+                              </td>
+                              <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#4338ca' }}>
+                                <span>{r.securityDuration.durationText}</span>
+                                {r.securitySt && r.securityEnd && (
+                                  <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 'normal' }}>({r.securitySt}-{r.securityEnd})</div>
+                                )}
+                              </td>
+                              <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#0f766e' }}>
+                                <span>{r.cleaningDuration.durationText}</span>
+                                {r.cleaningSt && r.cleaningEnd && (
+                                  <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 'normal' }}>({r.cleaningSt}-{r.cleaningEnd})</div>
+                                )}
+                              </td>
+                              <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#7e22ce' }}>
+                                <span>{r.cateringDuration.durationText}</span>
+                                {r.cateringSt && r.cateringEnd && (
+                                  <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 'normal' }}>({r.cateringSt}-{r.cateringEnd})</div>
+                                )}
+                              </td>
+                              <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'center', fontFamily: 'monospace', fontWeight: '900', color: '#15803d' }}>
+                                <span>{r.boardingDuration.durationText}</span>
+                                {r.permit && r.pax && (
+                                  <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 'normal' }}>({r.permit}-{r.pax})</div>
+                                )}
+                              </td>
+                              <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    fontSize: '10px',
+                                    fontWeight: '900',
+                                    fontFamily: 'monospace',
+                                    backgroundColor: r.status.includes('DELAY') ? '#fee2e2' : '#dcfce7',
+                                    color: r.status.includes('DELAY') ? '#b91c1c' : '#15803d',
+                                    border: `1px solid ${r.status.includes('DELAY') ? '#f87171' : '#86efac'}`
+                                  }}
+                                >
+                                  {r.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* 4. Turnaround Operational Remarks Note */}
+                  <div
+                    style={{
+                      backgroundColor: '#f8fafc',
+                      border: '2px solid #94a3b8',
+                      borderLeft: '6px solid #0284c7',
+                      borderRadius: '12px',
+                      padding: '16px 20px',
+                      marginBottom: '20px'
+                    }}
+                  >
+                    <div style={{ fontSize: '14px', fontWeight: '900', color: '#031b4e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>📋</span> TIME AUDIT & TURNAROUND EFFICIENCY REMARKS:
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#334155', lineHeight: '1.5', fontFamily: 'sans-serif', fontWeight: '700' }}>
+                      • Recorded average turnaround ground time is <strong style={{ color: '#b45309' }}>{stats.avgGround}</strong> across {stats.totalFlights} evaluated flights at Station {station}.<br />
+                      • Security & Cleaning readiness achieved an average duration of <strong style={{ color: '#4338ca' }}>{stats.avgSecurity}</strong> and <strong style={{ color: '#0f766e' }}>{stats.avgCleaning}</strong> respectively.<br />
+                      • Passenger boarding permit to last passenger onboard was clocked at an average of <strong style={{ color: '#15803d' }}>{stats.avgBoarding}</strong>.
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Footer Official Approval & Verification Bar */}
+                <div
+                  style={{
+                    backgroundColor: '#031b4e',
+                    borderRadius: '14px',
+                    padding: '16px 24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    fontFamily: 'monospace',
+                    marginTop: 'auto'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#1e3a8a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
+                      👤
+                    </div>
+                    <div>
+                      <span style={{ color: '#93c5fd' }}>PREPARED BY:</span> <strong style={{ color: '#38bdf8', fontSize: '13px' }}>{adminName}</strong> <span style={{ color: '#93c5fd' }}>(ID-{adminId})</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#0f2963', padding: '8px 20px', borderRadius: '10px', border: '1px solid #2563eb' }}>
+                    <div style={{ width: '26px', height: '26px', borderRadius: '50%', backgroundColor: '#15803d', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 'bold' }}>
+                      ✓
+                    </div>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ color: '#4ade80', fontWeight: '900', fontSize: '12px', letterSpacing: '0.5px' }}>US-BANGLA RAMP OPERATIONS VERIFIED</div>
+                      <div style={{ color: '#93c5fd', fontSize: '10px' }}>SYSTEM GEN: {new Date().toLocaleString()}</div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
         </div>
 
-        {/* Modal Footer Note */}
+        {/* Modal Bottom Footer Bar */}
         <div className="py-2.5 px-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between shrink-0 flex-wrap gap-2">
           <span className="text-[11px] text-slate-400 font-mono">
-            * Durations calculated from saved turnaround timestamps for {activeDateDisplay}. If time is marked EARLIER/N/A, it is designated as 'PRE'.
+            * Turnaround durations calculated for {activeDateDisplay}. Earlier/N/A entries are designated as 'PRE'.
           </span>
           <button
             onClick={onClose}
@@ -928,154 +1416,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
             CLOSE
           </button>
         </div>
-      </div>
 
-      {/* ========================================================================= */}
-      {/* HIDDEN PRINT/DOWNLOAD CONTAINER FOR HIGH-RES OFFICIAL JPG GENERATION     */}
-      {/* ========================================================================= */}
-      <div className="fixed -left-[9999px] top-0 pointer-events-none">
-        <div
-          ref={printCardRef}
-          className="w-[1280px] bg-slate-950 text-slate-100 p-8 border-4 border-cyan-500/80 shadow-2xl rounded-none space-y-6 font-sans"
-        >
-          {/* Header Branding */}
-          <div className="flex items-center justify-between border-b-2 border-cyan-500/40 pb-5">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center text-cyan-400">
-                <Clock className="w-9 h-9" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-black text-white tracking-wider flex items-center gap-2">
-                  <span className="text-cyan-400">US-BANGLA AIRLINES</span>
-                  <span className="text-slate-500">|</span>
-                  <span>TIME & TURNAROUND ANALYTICS</span>
-                </h1>
-                <p className="text-xs text-cyan-300 font-mono uppercase tracking-widest mt-0.5">
-                  RAMP OPERATIONS & GROUND HANDLING DURATION AUDIT REPORT
-                </p>
-              </div>
-            </div>
-
-            <div className="text-right space-y-1">
-              <div className="inline-block px-3 py-1 bg-cyan-500/20 border border-cyan-400 text-cyan-300 font-mono font-black text-sm rounded-lg">
-                DATE: {activeDateDisplay}
-              </div>
-              <div className="text-[11px] font-mono text-slate-400">
-                SCOPE: <span className="text-amber-400 font-bold">{flightScopeFilter}</span> | STATION:{' '}
-                <span className="text-cyan-400 font-bold">{station}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* KPI Summary Cards in Export */}
-          <div className="grid grid-cols-6 gap-3">
-            <div className="bg-slate-900 border border-cyan-500/40 rounded-xl p-3 text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">TOTAL FLIGHTS</span>
-              <span className="text-xl font-black text-cyan-400 font-mono">{stats.totalFlights}</span>
-            </div>
-            <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-3 text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">AVG GROUND TIME</span>
-              <span className="text-xl font-black text-amber-400 font-mono">{stats.avgGround}</span>
-            </div>
-            <div className="bg-slate-900 border border-indigo-500/40 rounded-xl p-3 text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">AVG SECURITY</span>
-              <span className="text-xl font-black text-indigo-400 font-mono">{stats.avgSecurity}</span>
-            </div>
-            <div className="bg-slate-900 border border-teal-500/40 rounded-xl p-3 text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">AVG CLEANING</span>
-              <span className="text-xl font-black text-teal-400 font-mono">{stats.avgCleaning}</span>
-            </div>
-            <div className="bg-slate-900 border border-purple-500/40 rounded-xl p-3 text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">AVG CATERING</span>
-              <span className="text-xl font-black text-purple-400 font-mono">{stats.avgCatering}</span>
-            </div>
-            <div className="bg-slate-900 border border-emerald-500/40 rounded-xl p-3 text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">AVG BOARDING</span>
-              <span className="text-xl font-black text-emerald-400 font-mono">{stats.avgBoarding}</span>
-            </div>
-          </div>
-
-          {/* Export Table */}
-          <div className="border border-slate-700 rounded-xl overflow-hidden bg-slate-900/90">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-800 text-slate-200 uppercase font-mono text-[11px] border-b border-slate-700">
-                  <th className="py-2.5 px-3 text-center w-8">#</th>
-                  <th className="py-2.5 px-3">FLIGHT</th>
-                  <th className="py-2.5 px-3">ROUTE</th>
-                  <th className="py-2.5 px-3">A/C</th>
-                  <th className="py-2.5 px-3">BAY</th>
-                  <th className="py-2.5 px-3 text-amber-300">GROUND TIME</th>
-                  <th className="py-2.5 px-3 text-indigo-300">SECURITY (ST-END)</th>
-                  <th className="py-2.5 px-3 text-teal-300">CLEANING (ST-END)</th>
-                  <th className="py-2.5 px-3 text-purple-300">CATERING (ST-END)</th>
-                  <th className="py-2.5 px-3 text-emerald-300">BOARDING (PERMIT-PAX)</th>
-                  <th className="py-2.5 px-3">STATUS</th>
-                  <th className="py-2.5 px-3">OFFICER</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800 font-sans text-slate-300">
-                {processedRows.map((r, i) => (
-                  <tr key={r.id} className={i % 2 === 0 ? 'bg-slate-950/50' : 'bg-slate-900/50'}>
-                    <td className="py-2 px-3 text-center font-mono text-slate-500">{i + 1}</td>
-                    <td className="py-2 px-3 font-bold font-mono text-white">{r.flight}</td>
-                    <td className="py-2 px-3 font-bold text-amber-300 font-mono">{r.route}</td>
-                    <td className="py-2 px-3 font-mono">{r.ac}</td>
-                    <td className="py-2 px-3 font-mono">{r.bay}</td>
-                    <td className="py-2 px-3 font-mono font-bold text-amber-300">{r.groundTime.text}</td>
-                    <td className="py-2 px-3 font-mono text-indigo-300">
-                      {r.securityDuration.durationText}
-                      {r.securitySt && r.securityEnd && (
-                        <span className="text-[10px] text-slate-400 ml-1">({r.securitySt}-{r.securityEnd})</span>
-                      )}
-                    </td>
-                    <td className="py-2 px-3 font-mono text-teal-300">
-                      {r.cleaningDuration.durationText}
-                      {r.cleaningSt && r.cleaningEnd && (
-                        <span className="text-[10px] text-slate-400 ml-1">({r.cleaningSt}-{r.cleaningEnd})</span>
-                      )}
-                    </td>
-                    <td className="py-2 px-3 font-mono text-purple-300">
-                      {r.cateringDuration.durationText}
-                      {r.cateringSt && r.cateringEnd && (
-                        <span className="text-[10px] text-slate-400 ml-1">({r.cateringSt}-{r.cateringEnd})</span>
-                      )}
-                    </td>
-                    <td className="py-2 px-3 font-mono text-emerald-300">
-                      {r.boardingDuration.durationText}
-                      {r.permit && r.pax && (
-                        <span className="text-[10px] text-slate-400 ml-1">({r.permit}-{r.pax})</span>
-                      )}
-                    </td>
-                    <td className="py-2 px-3 font-bold font-mono text-[10px]">{r.status}</td>
-                    <td className="py-2 px-3 text-[11px] text-slate-300">{r.officer}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Signatures & Footer in JPG */}
-          <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-            <div className="space-y-1">
-              <div>Generated by: <span className="text-cyan-300 font-bold">{adminName} ({adminId})</span></div>
-              <div className="text-[10px] font-mono text-slate-500">
-                System timestamp: {new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' })} (Dhaka LT)
-              </div>
-            </div>
-            <div className="flex gap-12 text-center text-[11px] font-mono">
-              <div className="border-t border-slate-600 pt-1 px-4">
-                <span>DUTY OFFICER</span>
-              </div>
-              <div className="border-t border-slate-600 pt-1 px-4">
-                <span>RAMP SUPERVISOR</span>
-              </div>
-              <div className="border-t border-slate-600 pt-1 px-4">
-                <span>OPERATIONS MANAGER</span>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
