@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { SavedReport, ScheduleFlight } from '../types';
-import html2canvas from 'html2canvas';
+import { captureHtml2CanvasSafe } from '../utils/html2canvasHelper';
 import aircraftImage from '../assets/images/us_bangla_real_hd_plane_1786386727381.jpg';
 import {
   X,
@@ -448,7 +448,7 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
       // Short delay for DOM render stabilization
       await new Promise((res) => setTimeout(res, 350));
 
-      const canvas = await html2canvas(printCardRef.current, {
+      const canvas = await captureHtml2CanvasSafe(printCardRef.current, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#030712',

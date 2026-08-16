@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import html2canvas from 'html2canvas';
+import { captureHtml2CanvasSafe } from '../utils/html2canvasHelper';
 import { RampReportFormData, ReportType, FlightMode, UserProfile } from '../types';
 
 interface ReportCanvasCardProps {
@@ -51,7 +51,7 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
 
     const timer = setTimeout(() => {
       if (!containerRef.current) return;
-      html2canvas(containerRef.current, {
+      captureHtml2CanvasSafe(containerRef.current, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff'

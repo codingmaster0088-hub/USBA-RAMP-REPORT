@@ -3,6 +3,7 @@ import { UserProfile, ScheduleFlight, UserLog, UserActionType, AdminNotice, Save
 import { parseFLSTData, sampleFLSTInput } from '../utils/flstParser';
 import { AnalyticalReportModal } from './AnalyticalReportModal';
 import { CompleteFlightModal } from './CompleteFlightModal';
+import { TimeAnalyticalModal } from './TimeAnalyticalModal';
 import {
   ShieldCheck,
   Lock,
@@ -23,7 +24,8 @@ import {
   BarChart3,
   X,
   ChevronRight,
-  FileCheck2
+  FileCheck2,
+  Timer
 } from 'lucide-react';
 
 interface AdminSectionProps {
@@ -59,9 +61,9 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   const [pinError, setPinError] = useState('');
   const [showPin, setShowPin] = useState(false);
 
-  // Active Admin Modal Popup State ('LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'ANALYTICAL_REPORT' | 'COMPLETE_FLIGHT' | null)
+  // Active Admin Modal Popup State ('LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'ANALYTICAL_REPORT' | 'COMPLETE_FLIGHT' | 'TIME_ANALYTICAL' | null)
   const [activeModal, setActiveModal] = useState<
-    'LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'ANALYTICAL_REPORT' | 'COMPLETE_FLIGHT' | null
+    'LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'ANALYTICAL_REPORT' | 'COMPLETE_FLIGHT' | 'TIME_ANALYTICAL' | null
   >(null);
 
   const [flstInput, setFlstInput] = useState<string>(() => {
@@ -464,6 +466,32 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
               </p>
             </div>
           </button>
+
+          {/* 6. TIME ANALYTICAL BUTTON */}
+          <button
+            onClick={() => setActiveModal('TIME_ANALYTICAL')}
+            className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
+              activeModal === 'TIME_ANALYTICAL' ? 'border-cyan-400 bg-cyan-500/10' : 'border-cyan-500/50 hover:border-cyan-400'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-400/40 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500 group-hover:text-slate-950 transition-colors shadow-md">
+                <Clock className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-cyan-400 border border-slate-800">
+                TIMINGS
+              </span>
+            </div>
+            <div>
+              <div className="text-xs font-black text-white group-hover:text-cyan-300 uppercase tracking-wide flex items-center justify-between">
+                <span>6. TIME ANALYTICAL</span>
+                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-300 transition-transform group-hover:translate-x-0.5" />
+              </div>
+              <p className="text-[11px] text-slate-400 leading-snug mt-1">
+                Turnaround duration analysis (Security, Cleaning, Catering, Boarding & Ground Time).
+              </p>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -797,6 +825,19 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
           savedReports={savedReports}
           scheduleDate={scheduleDate}
           onClose={() => setActiveModal(null)}
+        />
+      )}
+
+      {/* POPUP WINDOW MODAL 6: TIME ANALYTICAL */}
+      {activeModal === 'TIME_ANALYTICAL' && (
+        <TimeAnalyticalModal
+          savedReports={savedReports}
+          scheduleFlights={scheduleFlights}
+          station={user.station}
+          adminName={user.name}
+          adminId={user.id}
+          onClose={() => setActiveModal(null)}
+          showToast={showToast}
         />
       )}
     </div>
