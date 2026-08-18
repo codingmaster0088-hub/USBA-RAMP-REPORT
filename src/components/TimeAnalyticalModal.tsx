@@ -1,6 +1,8 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { SavedReport, ScheduleFlight } from '../types';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { SavedReport, ScheduleFlight, DailyAnalyticalSnapshot } from '../types';
 import { captureHtml2CanvasSafe } from '../utils/html2canvasHelper';
+import { saveDailyAnalyticalSnapshotToFirestore, subscribeToDailyAnalyticalSnapshots } from '../lib/firebase';
+import { BackendStorageConfirmationModal } from './BackendStorageConfirmationModal';
 import aircraftImage from '../assets/images/us_bangla_real_hd_plane_1786386727381.jpg';
 import {
   X,
@@ -17,7 +19,9 @@ import {
   Activity,
   Image as ImageIcon,
   Eye,
-  Table as TableIcon
+  Table as TableIcon,
+  Database,
+  Check
 } from 'lucide-react';
 
 interface TimeAnalyticalModalProps {
@@ -90,7 +94,53 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
   const activeDateDisplay = formatIsoToDDMMMYY(selectedIsoDate);
   const fullDateDisplay = formatIsoToFullDate(selectedIsoDate);
 
-  // 3. Category Filter State: ALL | DOMESTIC | INTERNATIONAL
+  // 3. 30-Day Backend Storage Snapshot States
+  const [snapshots, setSnapshots] = useState<DailyAnalyticalSnapshot[]>([]);
+  const [showSaveSuccessModal, setShowSaveSuccessModal] = useState<boolean>(false);
+  const [savedSnapshotInfo, setSavedSnapshotInfo] = useState<{
+    dateDisplay: string;
+    dateIso: string;
+    totalFlights: number;
+    expiresDateStr: string;
+  } | null>(null);
+
+  // Real-time listener for 30-Day Daily Analytical Snapshots
+  useEffect(() => {
+    const unsub = subscribeToDailyAnalyticalSnapshots((list) => {
+      setSnapshots(list);
+    });
+    return () => unsub();
+  }, []);
+
+  // Check if an archived snapshot exists in backend for the active date
+  const activeBackendSnapshot = useMemo(() => {
+    return snapshots.find(
+      (s) => s.dateIso === selectedIsoDate || s.dateDisplay === activeDateDisplay
+    );
+  }, [snapshots, selectedIsoDate, activeDateDisplay]);
+
+  // Compute oldest archived date and range string
+  const backendArchiveRange = useMemo(() => {
+    if (snapshots.length === 0) {
+      return {
+        startDateDisplay: formatIsoToDDMMMYY(todayIso),
+        todayDateDisplay: formatIsoToDDMMMYY(todayIso),
+        totalArchivedDays: 1,
+        rangeText: `${formatIsoToDDMMMYY(todayIso)} (START) ➔ ${formatIsoToDDMMMYY(todayIso)} (TODAY)`
+      };
+    }
+    const sorted = [...snapshots].sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+    const oldest = sorted[0];
+    const oldestDisplay = oldest.dateDisplay || formatIsoToDDMMMYY(oldest.dateIso) || formatIsoToDDMMMYY(todayIso);
+    return {
+      startDateDisplay: oldestDisplay,
+      todayDateDisplay: formatIsoToDDMMMYY(todayIso),
+      totalArchivedDays: snapshots.length,
+      rangeText: `${oldestDisplay} (START) ➔ ${formatIsoToDDMMMYY(todayIso)} (TODAY)`
+    };
+  }, [snapshots, todayIso]);
+
+  // Category Filter State: ALL | DOMESTIC | INTERNATIONAL
   const [flightScopeFilter, setFlightScopeFilter] = useState<'ALL' | 'DOMESTIC' | 'INTERNATIONAL'>('ALL');
 
   // Handle Custom Aircraft Photo Upload
@@ -343,8 +393,13 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
 
   // Process & filter reports
   const processedRows = useMemo(() => {
+    // If an archived backend snapshot exists, use its frozen reports snapshot
+    const baseReports = activeBackendSnapshot?.reportsSnapshot?.length
+      ? activeBackendSnapshot.reportsSnapshot
+      : savedReports;
+
     // 1. Filter for selected date
-    const dateFiltered = savedReports.filter((r) => isReportMatchingSelectedDate(r, selectedIsoDate));
+    const dateFiltered = baseReports.filter((r) => isReportMatchingSelectedDate(r, selectedIsoDate));
 
     // 2. Filter for Scope (ALL | DOMESTIC | INTERNATIONAL)
     const scopeFiltered = dateFiltered.filter((r) => {
@@ -431,7 +486,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         r.bay.toUpperCase().includes(q) ||
         r.officer.toUpperCase().includes(q)
     );
-  }, [savedReports, selectedIsoDate, flightScopeFilter, searchQuery, activeDateDisplay]);
+  }, [savedReports, activeBackendSnapshot, selectedIsoDate, flightScopeFilter, searchQuery, activeDateDisplay]);
 
   // Statistics / Average calculations
   const stats = useMemo(() => {
@@ -479,12 +534,64 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
     };
   }, [processedRows]);
 
+  // Save Full Day Snapshot to Backend Firestore
+  const handleSaveToBackend = async (showModal = true) => {
+    try {
+      const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+      const expiresDateObj = new Date(expiresAt);
+      const expiresDateStr = `${String(expiresDateObj.getDate()).padStart(2, '0')} ${expiresDateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase()} ${expiresDateObj.getFullYear()}`;
+
+      // Extract raw reports matching selected date
+      const dateReports = savedReports.filter((r) => isReportMatchingSelectedDate(r, selectedIsoDate));
+
+      const snapshotPayload: DailyAnalyticalSnapshot = {
+        id: `SNAPSHOT_${selectedIsoDate}_${station || 'ALL'}`,
+        dateIso: selectedIsoDate,
+        dateDisplay: activeDateDisplay,
+        station: station || 'ALL',
+        savedAt: Date.now(),
+        savedBy: {
+          name: adminName || 'Admin',
+          id: adminId || '001'
+        },
+        expiresAt,
+        totalReportsCount: dateReports.length,
+        reportsSnapshot: dateReports,
+        timeAnalyticalData: {
+          totalFlights: stats.totalFlights,
+          avgSecurity: stats.avgSecurity,
+          avgCleaning: stats.avgCleaning,
+          avgCatering: stats.avgCatering,
+          avgBoarding: stats.avgBoarding,
+          avgGround: stats.avgGround
+        }
+      };
+
+      await saveDailyAnalyticalSnapshotToFirestore(snapshotPayload);
+
+      if (showModal) {
+        setSavedSnapshotInfo({
+          dateDisplay: activeDateDisplay,
+          dateIso: selectedIsoDate,
+          totalFlights: dateReports.length,
+          expiresDateStr
+        });
+        setShowSaveSuccessModal(true);
+      }
+    } catch (e) {
+      console.error('Error saving snapshot to backend', e);
+    }
+  };
+
   // Export to Excel / CSV
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (processedRows.length === 0) {
       showToast('No Data', 'No flight rows available to export', 'error');
       return;
     }
+
+    // Auto-save day snapshot to backend storage with 30-day retention
+    await handleSaveToBackend(true);
 
     const headers = [
       'SL',
@@ -566,6 +673,9 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
     try {
       setIsDownloading(true);
       showToast('Generating High-Res JPG...', 'Rendering official photo card at 1200px', 'info');
+
+      // Auto-save day snapshot to backend storage with 30-day retention
+      await handleSaveToBackend(true);
 
       // Allow DOM to settle
       await new Promise((resolve) => setTimeout(resolve, 350));
@@ -789,6 +899,46 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         {/* Modal Body Container */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 bg-slate-950/60">
           
+          {/* 30-DAY BACKEND CLOUD STORAGE RANGE & RETENTION BANNER */}
+          <div className="bg-gradient-to-r from-slate-950 via-cyan-950/40 to-slate-950 border border-cyan-500/40 rounded-2xl p-3 sm:p-3.5 flex items-center justify-between flex-wrap gap-3 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-400 shrink-0">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-mono">
+                    30-DAY CLOUD STORAGE
+                  </span>
+                  <span className="text-xs font-black text-white font-mono tracking-wider">
+                    ARCHIVE RANGE: <span className="text-cyan-400">{backendArchiveRange.rangeText}</span>
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-sans mt-0.5">
+                  Full-day turnaround records are securely backed up in Firestore for 30 days and vanish automatically after retention.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {activeBackendSnapshot ? (
+                <span className="text-xs font-mono font-bold px-3 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 flex items-center gap-1.5 shadow-sm">
+                  <Check className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>BACKEND ARCHIVED ({activeBackendSnapshot.reportsSnapshot?.length || activeBackendSnapshot.totalReportsCount} FLTS)</span>
+                </span>
+              ) : (
+                <button
+                  onClick={() => handleSaveToBackend(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5"
+                  title="Archive full day turnaround data to backend storage now"
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  <span>SAVE TO BACKEND</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
             <div className="bg-slate-900/90 border border-cyan-500/30 rounded-2xl p-3 shadow">
@@ -1418,6 +1568,18 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         </div>
 
       </div>
+
+      {/* Backend Storage 30-Day Confirmation Modal Popup */}
+      <BackendStorageConfirmationModal
+        isOpen={showSaveSuccessModal}
+        dateDisplay={savedSnapshotInfo?.dateDisplay || activeDateDisplay}
+        dateIso={savedSnapshotInfo?.dateIso || selectedIsoDate}
+        station={station}
+        reportType="TIME_ANALYTICAL"
+        totalFlights={savedSnapshotInfo?.totalFlights || processedRows.length}
+        expiresDateStr={savedSnapshotInfo?.expiresDateStr || ''}
+        onClose={() => setShowSaveSuccessModal(false)}
+      />
     </div>
   );
 };

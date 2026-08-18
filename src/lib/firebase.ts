@@ -9,7 +9,7 @@ import {
   query,
   orderBy
 } from 'firebase/firestore';
-import { SavedReport, ScheduleFlight, AdminNotice, UserLog } from '../types';
+import { SavedReport, ScheduleFlight, AdminNotice, UserLog, DailyAnalyticalSnapshot } from '../types';
 import config from '../../firebase-applet-config.json';
 
 const app = !getApps().length ? initializeApp(config) : getApp();
@@ -21,6 +21,7 @@ export const db = config.firestoreDatabaseId
 const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000; // 20 Hours auto-vanish for Flight Reports
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000; // 30 Days auto-retention for Daily Analytical Snapshots
 
 // Helper to extract timestamp from notice or log ID/createdAt
 function getCreatedTimestamp(item: { createdAt?: number; id: string }): number {
@@ -273,5 +274,73 @@ export async function logUserActivityToFirestore(log: UserLog) {
     await setDoc(docRef, log);
   } catch (err) {
     console.error('Failed to log user activity to Firestore:', err);
+  }
+}
+
+// =========================================================================
+// 30-DAY BACKEND STORAGE FOR DAILY ANALYTICAL & TIME SNAPSHOTS
+// =========================================================================
+
+// Save full-day analytical snapshot to Firestore with 30-day retention
+export async function saveDailyAnalyticalSnapshotToFirestore(snapshot: DailyAnalyticalSnapshot): Promise<void> {
+  try {
+    const docId = `SNAPSHOT_${snapshot.dateIso}_${snapshot.station || 'ALL'}`;
+    const docRef = doc(db, 'dailyAnalyticalSnapshots', docId);
+
+    const now = Date.now();
+    const expiresAt = snapshot.expiresAt || (now + THIRTY_DAYS_MS);
+
+    const payload: DailyAnalyticalSnapshot = {
+      ...snapshot,
+      id: docId,
+      savedAt: snapshot.savedAt || now,
+      expiresAt: expiresAt
+    };
+
+    await setDoc(docRef, payload, { merge: true });
+  } catch (err) {
+    console.error('Failed to save daily analytical snapshot to Firestore:', err);
+    throw err;
+  }
+}
+
+// Real-time subscription to 30-Day Daily Analytical Snapshots with strict auto-purge
+export function subscribeToDailyAnalyticalSnapshots(
+  onUpdate: (snapshots: DailyAnalyticalSnapshot[]) => void,
+  onError?: (err: any) => void
+) {
+  try {
+    const q = query(collection(db, 'dailyAnalyticalSnapshots'), orderBy('dateIso', 'desc'));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const list: DailyAnalyticalSnapshot[] = [];
+        const now = Date.now();
+
+        snapshot.forEach((docSnap) => {
+          const item = docSnap.data() as DailyAnalyticalSnapshot;
+          const expiresAt = item.expiresAt || (item.savedAt ? item.savedAt + THIRTY_DAYS_MS : now + THIRTY_DAYS_MS);
+
+          if (now <= expiresAt) {
+            list.push(item);
+          } else {
+            // Auto-purge snapshot if older than 30 days
+            deleteDoc(doc(db, 'dailyAnalyticalSnapshots', docSnap.id)).catch(() => {});
+          }
+        });
+
+        // Sort latest date first
+        list.sort((a, b) => b.dateIso.localeCompare(a.dateIso));
+        onUpdate(list);
+      },
+      (error) => {
+        console.error('Error listening to dailyAnalyticalSnapshots:', error);
+        if (onError) onError(error);
+      }
+    );
+  } catch (err) {
+    console.error('Failed to subscribe to dailyAnalyticalSnapshots:', err);
+    if (onError) onError(err);
+    return () => {};
   }
 }

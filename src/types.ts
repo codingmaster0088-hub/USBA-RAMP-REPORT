@@ -126,3 +126,36 @@ export interface TurnaroundMilestone {
   time: string;
   status: 'pending' | 'active' | 'completed';
 }
+
+export interface DailyAnalyticalSnapshot {
+  id: string; // e.g. "SNAPSHOT_2026-08-18_DAC"
+  dateIso: string; // "2026-08-18"
+  dateDisplay: string; // "18 AUG 26"
+  station: string; // "DAC"
+  savedAt: number; // timestamp ms
+  savedBy: {
+    name: string;
+    id: string;
+  };
+  expiresAt: number; // savedAt + 30 * 24 * 60 * 60 * 1000
+  totalReportsCount: number;
+  reportsSnapshot: SavedReport[];
+  executiveAnalyticalData?: {
+    totalReportsCount: number;
+    delayedCount: number;
+    onTimeCount: number;
+    otpRate: string;
+    delayRate: string;
+    topDelayItem?: { code: string; count: number; flights: string[] };
+    activeCategoryBreakdown?: Array<{ catName: string; count: number; pct: string }>;
+    delayBreakdown?: Array<{ code: string; count: number; flights: string[] }>;
+  };
+  timeAnalyticalData?: {
+    totalFlights: number;
+    avgGround: string;
+    avgSecurity: string;
+    avgCleaning: string;
+    avgCatering: string;
+    avgBoarding: string;
+  };
+}
