@@ -49,6 +49,7 @@ export interface RampReportFormData {
   ab: string; // Airborne LT
   status: string; // ONTIME / DELAY / EARLY calculation text
   delayReason?: string; // Reason for flight delay if applicable
+  delayRemarks?: string; // Manual remarks / situation details for delay
 
   // Turnaround Timings (13 fields requested)
   securitySt?: string; // SECURITY CHECK ST

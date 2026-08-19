@@ -115,6 +115,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       ab: '',
       status: '',
       delayReason: '',
+      delayRemarks: '',
       securitySt: '',
       securityEnd: '',
       cleaningSt: '',
@@ -357,7 +358,8 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
   // Handle Field Changes
   const handleChange = (field: keyof RampReportFormData, value: string) => {
-    const updated = { ...formData, [field]: value.toUpperCase() };
+    const transformedVal = field === 'delayRemarks' ? value : value.toUpperCase();
+    const updated = { ...formData, [field]: transformedVal };
 
     // Auto Route Lookup & Report Type Sync
     if (field === 'arvFlt' || field === 'deptFlt') {
@@ -1101,6 +1103,25 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                     ⚠️ Please check (tik box) at least 1 or 2 delay reasons from the list above.
                   </p>
                 )}
+
+                {/* REMARKS (LIGHT YELLOW BOX FOR HIGH VISIBILITY) */}
+                <div className="p-3 bg-yellow-950/40 border-2 border-yellow-400 rounded-xl space-y-1.5 shadow-lg">
+                  <div className="flex items-center justify-between flex-wrap gap-1">
+                    <label className="text-xs font-black text-yellow-300 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                      <span>REMARKS:</span>
+                    </label>
+                    <span className="text-[10px] font-bold text-yellow-400/90 font-mono">
+                      SHOWS IN FINAL REPORT
+                    </span>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={formData.delayRemarks || ''}
+                    onChange={(e) => handleChange('delayRemarks', e.target.value)}
+                    placeholder="Write remarks here (e.g., Fuel bowser arrived 15 mins late due to apron congestion, ATC pushback delay)..."
+                    className="w-full bg-yellow-100 border-2 border-yellow-400 focus:border-amber-500 rounded-xl p-2.5 text-xs text-slate-950 font-bold placeholder-slate-600 outline-none font-sans leading-relaxed resize-none shadow-inner transition-all"
+                  />
+                </div>
               </div>
             )}
           </div>

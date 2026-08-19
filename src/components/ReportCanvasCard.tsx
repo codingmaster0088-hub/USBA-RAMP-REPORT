@@ -530,6 +530,24 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
                 >
                   {formData.delayReason || 'DELAY CODE NOT SPECIFIED'}
                 </div>
+
+                {formData.delayRemarks && formData.delayRemarks.trim() && (
+                  <div
+                    style={{
+                      marginTop: '12px',
+                      paddingTop: '10px',
+                      borderTop: '2px dashed #dc3545',
+                      fontSize: '22px',
+                      fontWeight: 800,
+                      color: '#212529',
+                      lineHeight: '1.4',
+                      whiteSpace: 'pre-wrap'
+                    }}
+                  >
+                    <span style={{ fontWeight: 900, color: '#721c24' }}>REMARKS: </span>
+                    {formData.delayRemarks.trim()}
+                  </div>
+                )}
               </div>
             )}
           </div>

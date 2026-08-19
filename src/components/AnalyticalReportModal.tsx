@@ -1064,7 +1064,14 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
                             {r.formData.status || 'DELAYED'}
                           </span>
                         </td>
-                        <td className="p-2.5 text-amber-200 font-sans font-medium">{r.formData.delayReason || 'Unspecified Delay'}</td>
+                        <td className="p-2.5 text-amber-200 font-sans font-medium">
+                          <div>{r.formData.delayReason || 'Unspecified Delay'}</div>
+                          {r.formData.delayRemarks && (
+                            <div className="text-[10px] text-amber-400/90 font-sans italic mt-0.5">
+                              Remarks: {r.formData.delayRemarks}
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
