@@ -24,8 +24,10 @@ import {
   broadcastNoticeToFirestore,
   deleteNoticeFromFirestore,
   subscribeToUserLogs,
-  logUserActivityToFirestore
+  logUserActivityToFirestore,
+  saveDailyAnalyticalSnapshotToFirestore
 } from './lib/firebase';
+import { parseDateToIso, buildDailyAnalyticalSnapshot } from './utils/analyticalSnapshotBuilder';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { LiveMonitor } from './components/LiveMonitor';
@@ -666,6 +668,53 @@ export default function App() {
         'SAVE_REPORT',
         `${existingId ? 'Updated' : 'Saved'} turnaround report for ${newEntry.flight} (${newEntry.route})`
       );
+
+      // Auto-update 30-Day Daily Analytical Snapshot in Firestore Backend Storage
+      try {
+        const targetDateIso = parseDateToIso(newEntry.date || newEntry.formData?.date);
+        const updatedList = [
+          newEntry,
+          ...savedReports.filter((r) => {
+            const rFltClean = (r.flight || r.formData?.deptFlt || '')
+              .replace(/^BS-?/i, '')
+              .trim()
+              .toUpperCase();
+            return r.id !== id && rFltClean !== targetFlightClean;
+          })
+        ];
+
+        const reportsForDate = updatedList.filter((r) => {
+          const rDateIso = parseDateToIso(r.date || r.formData?.date);
+          return rDateIso === targetDateIso;
+        });
+
+        const snapshotPayload = buildDailyAnalyticalSnapshot(
+          reportsForDate,
+          targetDateIso,
+          activeUser.station || 'DAC',
+          { name: activeUser.name || 'RAMP OFFICER', id: activeUser.id || '0000' }
+        );
+
+        await saveDailyAnalyticalSnapshotToFirestore(snapshotPayload);
+
+        // Check if all scheduled departure flights for today are completed
+        const departureFlights = scheduleFlights.filter((f) => f.isDeparture !== false);
+        const targetCount = departureFlights.length > 0 ? departureFlights.length : 41;
+
+        if (reportsForDate.length >= targetCount) {
+          showToast(
+            'Daily Flight Schedule Completed!',
+            `All ${reportsForDate.length}/${targetCount} flights completed & auto-archived in 30-Day Backend Storage`,
+            'success'
+          );
+          logUserAction(
+            'OTHER',
+            `Auto-archived full daily snapshot (${snapshotPayload.dateDisplay}, ${reportsForDate.length} flights) to 30-day backend storage`
+          );
+        }
+      } catch (snapErr) {
+        console.error('Auto daily analytical snapshot save error:', snapErr);
+      }
     } catch (e) {
       console.error('Sync failed:', e);
       showToast('Report Saved Locally', 'Will sync when online', 'info');

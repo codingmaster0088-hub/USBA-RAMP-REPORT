@@ -14,7 +14,8 @@ import {
   Search,
   Check,
   CheckSquare,
-  Square
+  Square,
+  Calendar
 } from 'lucide-react';
 import {
   RampReportFormData,
@@ -91,10 +92,28 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     return 'ROUND';
   });
 
-  const getInitialFormData = (userStation: string): RampReportFormData => {
-    const todayStr = new Date()
+  const getTodayFormattedDate = (): string => {
+    return new Date()
       .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
       .toUpperCase();
+  };
+
+  const formatIsoToReportDate = (isoStr: string): string => {
+    if (!isoStr) return '';
+    const parts = isoStr.split('-');
+    if (parts.length === 3) {
+      const day = parts[2];
+      const mIdx = parseInt(parts[1], 10) - 1;
+      const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      const month = monthNames[mIdx] || 'JAN';
+      const yr = parts[0].slice(-2);
+      return `${day} ${month} ${yr}`.toUpperCase();
+    }
+    return isoStr;
+  };
+
+  const getInitialFormData = (userStation: string): RampReportFormData => {
+    const todayStr = getTodayFormattedDate();
 
     return {
       date: todayStr,
@@ -579,16 +598,49 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-              DATE
-            </label>
-            <input
-              type="text"
-              value={formData.date}
-              onChange={(e) => handleChange('date', e.target.value)}
-              placeholder="DD MMM YY"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-amber-400" />
+                <span>DATE</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const todayStr = getTodayFormattedDate();
+                  handleChange('date', todayStr);
+                }}
+                className="text-[9px] font-bold text-amber-400 hover:text-amber-300 uppercase px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 active:scale-95 transition-all cursor-pointer flex items-center gap-0.5"
+                title="Reset date to Today"
+              >
+                <span>⚡ TODAY</span>
+              </button>
+            </div>
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                value={formData.date || getTodayFormattedDate()}
+                onChange={(e) => handleChange('date', e.target.value)}
+                placeholder="DD MMM YY"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-3 pr-9 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none uppercase font-bold"
+              />
+              {/* Native Calendar Date Picker Trigger */}
+              <label
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 flex items-center justify-center cursor-pointer transition-all border border-slate-700 shadow-sm"
+                title="Pick Date from Calendar"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <input
+                  type="date"
+                  className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const formatted = formatIsoToReportDate(e.target.value);
+                      if (formatted) handleChange('date', formatted);
+                    }
+                  }}
+                />
+              </label>
+            </div>
           </div>
 
           <div>
