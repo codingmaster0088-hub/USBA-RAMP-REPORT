@@ -13,6 +13,7 @@ import {
   UserActionType
 } from './types';
 import { parseFLSTData, sampleFLSTInput } from './utils/flstParser';
+import { august22VerifiedReports } from './data/august22VerifiedReports';
 import {
   subscribeToSavedReports,
   syncReportToFirestore,
@@ -88,18 +89,31 @@ export default function App() {
   const [savedReports, setSavedReports] = useState<SavedReport[]>(() => {
     try {
       const saved = localStorage.getItem('usb_reports');
+      let currentList: SavedReport[] = [];
       if (saved) {
         const parsed: SavedReport[] = JSON.parse(saved);
-        // Filter out legacy mock/demo reports (e.g. demo-1, demo-2 BS-341, sub-*)
-        const validReports = parsed.filter(
+        currentList = parsed.filter(
           (r) => !r.id.startsWith('demo-') && !r.id.startsWith('sub-')
         );
-        localStorage.setItem('usb_reports', JSON.stringify(validReports));
-        return validReports;
       }
-      return [];
+      // Merge verified 22 August reports if not present
+      const existingKeys = new Set(
+        currentList.map(
+          (r) =>
+            `${(r.flight || r.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${(r.date || r.formData?.date || '').trim().toUpperCase()}`
+        )
+      );
+      august22VerifiedReports.forEach((rep) => {
+        const key = `${(rep.flight || rep.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${(rep.date || rep.formData?.date || '').trim().toUpperCase()}`;
+        if (!existingKeys.has(key)) {
+          currentList.push(rep);
+          existingKeys.add(key);
+        }
+      });
+      localStorage.setItem('usb_reports', JSON.stringify(currentList));
+      return currentList;
     } catch {
-      return [];
+      return august22VerifiedReports;
     }
   });
 
@@ -228,13 +242,32 @@ export default function App() {
   useEffect(() => {
     const unsubReports = subscribeToSavedReports(
       (reports) => {
-        const validReports = (reports || []).filter((r) => {
+        let validReports = (reports || []).filter((r) => {
           if (r.id.startsWith('demo-') || r.id.startsWith('sub-')) {
             // Auto-purge legacy mock/demo report from Firestore
             deleteReportFromFirestore(r.id).catch(() => {});
             return false;
           }
           return true;
+        });
+
+        // Ensure all verified 22 Aug reports are synced into Firestore
+        const existingKeys = new Set(
+          validReports.map(
+            (r) =>
+              `${(r.flight || r.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${(r.date || r.formData?.date || '').trim().toUpperCase()}`
+          )
+        );
+
+        august22VerifiedReports.forEach((verifiedRep) => {
+          const key = `${(verifiedRep.flight || verifiedRep.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${(verifiedRep.date || verifiedRep.formData?.date || '').trim().toUpperCase()}`;
+          if (!existingKeys.has(key)) {
+            validReports.push(verifiedRep);
+            existingKeys.add(key);
+            syncReportToFirestore(verifiedRep).catch((err) => {
+              console.error(`Failed to sync verified report ${verifiedRep.flight}:`, err);
+            });
+          }
         });
 
         setSavedReports(validReports);
