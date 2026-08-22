@@ -12,7 +12,6 @@ import {
   UserLog,
   UserActionType
 } from './types';
-import { initialSampleReports } from './data/routesDB';
 import { parseFLSTData, sampleFLSTInput } from './utils/flstParser';
 import {
   subscribeToSavedReports,
@@ -91,26 +90,16 @@ export default function App() {
       const saved = localStorage.getItem('usb_reports');
       if (saved) {
         const parsed: SavedReport[] = JSON.parse(saved);
-        const existingIds = new Set(parsed.map((r) => r.id));
-        const existingFlightNums = new Set(
-          parsed.map((r) => (r.flight || r.formData?.deptFlt || '').replace(/[^0-9]/g, ''))
+        // Filter out legacy mock/demo reports (e.g. demo-1, demo-2 BS-341, sub-*)
+        const validReports = parsed.filter(
+          (r) => !r.id.startsWith('demo-') && !r.id.startsWith('sub-')
         );
-
-        const missingSamples = initialSampleReports.filter((s) => {
-          const num = (s.flight || s.formData?.deptFlt || '').replace(/[^0-9]/g, '');
-          return !existingIds.has(s.id) && !existingFlightNums.has(num);
-        });
-
-        if (missingSamples.length > 0) {
-          const merged = [...parsed, ...missingSamples];
-          localStorage.setItem('usb_reports', JSON.stringify(merged));
-          return merged;
-        }
-        return parsed;
+        localStorage.setItem('usb_reports', JSON.stringify(validReports));
+        return validReports;
       }
-      return initialSampleReports;
+      return [];
     } catch {
-      return initialSampleReports;
+      return [];
     }
   });
 
@@ -239,32 +228,17 @@ export default function App() {
   useEffect(() => {
     const unsubReports = subscribeToSavedReports(
       (reports) => {
-        let combinedReports = reports ? [...reports] : [];
-
-        // Ensure all initial/submitted sample reports exist in Firestore and state
-        initialSampleReports.forEach((sampleRep) => {
-          const sampleFlt = (sampleRep.flight || sampleRep.formData?.deptFlt || '')
-            .replace(/BS-?/i, '')
-            .trim();
-          
-          const exists = combinedReports.some((r) => {
-            const rFlt = (r.flight || r.formData?.deptFlt || '')
-              .replace(/BS-?/i, '')
-              .trim();
-            return rFlt === sampleFlt;
-          });
-
-          if (!exists) {
-            combinedReports.push(sampleRep);
-            // Sync to Firestore DB so all users/devices see it in real-time
-            syncReportToFirestore(sampleRep).catch((err) => {
-              console.error(`Failed to seed report ${sampleRep.flight} to Firestore:`, err);
-            });
+        const validReports = (reports || []).filter((r) => {
+          if (r.id.startsWith('demo-') || r.id.startsWith('sub-')) {
+            // Auto-purge legacy mock/demo report from Firestore
+            deleteReportFromFirestore(r.id).catch(() => {});
+            return false;
           }
+          return true;
         });
 
-        setSavedReports(combinedReports);
-        localStorage.setItem('usb_reports', JSON.stringify(combinedReports));
+        setSavedReports(validReports);
+        localStorage.setItem('usb_reports', JSON.stringify(validReports));
         setIsLiveConnected(true);
       },
       () => setIsLiveConnected(false)
