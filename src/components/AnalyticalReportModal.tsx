@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { SavedReport, ScheduleFlight, DailyAnalyticalSnapshot } from '../types';
 import { captureHtml2CanvasSafe } from '../utils/html2canvasHelper';
 import { saveDailyAnalyticalSnapshotToFirestore, subscribeToDailyAnalyticalSnapshots } from '../lib/firebase';
+import { parseDateToIso, formatIsoToDisplay } from '../utils/analyticalSnapshotBuilder';
 import { BackendStorageConfirmationModal } from './BackendStorageConfirmationModal';
 import aircraftImage from '../assets/images/us_bangla_real_hd_plane_1786386727381.jpg';
 import {
@@ -295,12 +296,11 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
   const filteredReports = valid30DaysReports.filter((r) => {
     const rDateObj = parseReportDate(r);
     const rDateStr = r.formData?.date || r.date || '';
-
-    const normReportDate = normalizeDateToDDMMMYY(rDateStr);
+    const rDateIso = parseDateToIso(rDateStr);
 
     if (selectedDateFilter === 'TODAY') {
-      const normToday = normalizeDateToDDMMMYY('TODAY');
-      return isSameDay(rDateObj, now) || normReportDate === normToday || rDateStr.toUpperCase().includes('TODAY');
+      const todayIso = parseDateToIso('TODAY');
+      return rDateIso === todayIso || isSameDay(rDateObj, now) || rDateStr.toUpperCase().includes('TODAY');
     }
     if (selectedDateFilter === 'LAST_30_DAYS') {
       return true; // Already filtered to 30 days
@@ -313,23 +313,14 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
     }
     if (selectedDateFilter === 'CUSTOM_CALENDAR') {
       if (!calendarDate) return true;
-      const [y, m, d] = calendarDate.split('-').map(Number);
-      const targetDate = new Date(y, m - 1, d);
-      const formattedDDMMMYY = formatIsoToDDMMMYY(calendarDate);
-      const normCalendar = normalizeDateToDDMMMYY(calendarDate);
-      return (
-        isSameDay(rDateObj, targetDate) ||
-        normReportDate === normCalendar ||
-        rDateStr.toUpperCase().includes(formattedDDMMMYY) ||
-        rDateStr.includes(calendarDate)
-      );
+      return rDateIso === calendarDate;
     }
     // Specific date selected from list
-    const normFilter = normalizeDateToDDMMMYY(selectedDateFilter);
-    return normReportDate === normFilter || rDateStr === selectedDateFilter;
+    const filterIso = parseDateToIso(selectedDateFilter);
+    return rDateIso === filterIso || rDateStr === selectedDateFilter;
   });
 
-  // Helper to deduplicate reports by flight number + normalized date, prioritizing the origin station flight
+  // Helper to deduplicate reports by flight number + normalized ISO date, prioritizing the origin station flight
   const dedupeReportsLatest = (reports: SavedReport[]) => {
     const map = new Map<string, SavedReport>();
     reports.forEach((r) => {
@@ -340,11 +331,11 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
       const fltNum = cleanFlightNum(rawFlt);
 
       const rawDate = r.formData?.date || r.date || '';
-      const normDate = normalizeDateToDDMMMYY(rawDate);
+      const isoDate = parseDateToIso(rawDate);
 
-      if (!fltNum || !normDate) return;
+      if (!fltNum || !isoDate) return;
 
-      const key = `${fltNum}_${normDate}`;
+      const key = `${fltNum}_${isoDate}`;
 
       const existing = map.get(key);
       if (!existing) {
@@ -361,8 +352,12 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
         if (currentMatchesStation && !existingMatchesStation) {
           map.set(key, r); // Keep the flight departing from station (e.g. DAC)
         } else if (currentMatchesStation === existingMatchesStation) {
-          // If both or neither match, take the latest saved report
-          map.set(key, r);
+          // Take the one with more filled data or newer timestamp
+          const existingFilled = Object.values(existing.formData || {}).filter(Boolean).length;
+          const currentFilled = Object.values(r.formData || {}).filter(Boolean).length;
+          if (currentFilled >= existingFilled) {
+            map.set(key, r);
+          }
         }
       }
     });

@@ -43,11 +43,29 @@ export const parseDateToIso = (dateStr?: string): string => {
     return `${yr}-${m}-${day}`;
   }
 
+  // 3. Numeric format DD/MM/YYYY or DD-MM-YYYY e.g. "22/08/2026"
+  const numMatch = clean.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);
+  if (numMatch) {
+    const day = String(parseInt(numMatch[1], 10)).padStart(2, '0');
+    const m = String(parseInt(numMatch[2], 10)).padStart(2, '0');
+    let yr = numMatch[3] || `${new Date().getFullYear()}`;
+    if (yr.length === 2) yr = `20${yr}`;
+    return `${yr}-${m}-${day}`;
+  }
+
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+};
+
+/**
+ * Cleans flight number strings to pure digits (e.g. "BS-361" -> "361", "BS 191" -> "191")
+ */
+export const cleanFlightNum = (str?: string): string => {
+  if (!str) return '';
+  return str.replace(/BS/gi, '').replace(/[^0-9]/g, '').trim();
 };
 
 /**

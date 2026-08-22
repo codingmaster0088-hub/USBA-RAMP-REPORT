@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { SavedReport, ScheduleFlight, DailyAnalyticalSnapshot } from '../types';
 import { captureHtml2CanvasSafe } from '../utils/html2canvasHelper';
 import { saveDailyAnalyticalSnapshotToFirestore, subscribeToDailyAnalyticalSnapshots } from '../lib/firebase';
+import { parseDateToIso, formatIsoToDisplay, cleanFlightNum } from '../utils/analyticalSnapshotBuilder';
 import { BackendStorageConfirmationModal } from './BackendStorageConfirmationModal';
 import aircraftImage from '../assets/images/us_bangla_real_hd_plane_1786386727381.jpg';
 import {
@@ -209,8 +210,10 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
   // Helper to check if report matches selected date
   const isReportMatchingSelectedDate = (r: SavedReport, targetIso: string): boolean => {
     if (!targetIso) return true;
-    const targetDmKey = parseDayMonthKey(targetIso);
+    const rDateIso = parseDateToIso(r.formData?.date || r.date);
+    if (rDateIso === targetIso) return true;
 
+    const targetDmKey = parseDayMonthKey(targetIso);
     const rDateString = (r.formData?.date || r.date || '').trim();
     if (rDateString) {
       const rDmKey = parseDayMonthKey(rDateString);
@@ -391,18 +394,48 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
     return { text: clean || 'ON GROUND', minutes: null };
   };
 
+  // Deduplicated base reports for the selected date
+  const dedupedDateReports = useMemo(() => {
+    const combinedReports = [...savedReports, ...(activeBackendSnapshot?.reportsSnapshot || [])];
+    const map = new Map<string, SavedReport>();
+
+    combinedReports.forEach((r) => {
+      if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
+
+      const rawFlight = r.formData?.deptFlt || r.flight || r.formData?.arvFlt || '';
+      const fltClean = cleanFlightNum(rawFlight);
+      if (!fltClean) return;
+
+      const existing = map.get(fltClean);
+      if (!existing) {
+        map.set(fltClean, r);
+      } else {
+        const currentRoute = `${r.formData?.deptRoute || ''} ${r.route || ''}`.toUpperCase();
+        const existingRoute = `${existing.formData?.deptRoute || ''} ${existing.route || ''}`.toUpperCase();
+
+        const st = station ? station.toUpperCase() : 'DAC';
+        const currentMatchesStation = currentRoute.startsWith(st);
+        const existingMatchesStation = existingRoute.startsWith(st);
+
+        if (currentMatchesStation && !existingMatchesStation) {
+          map.set(fltClean, r);
+        } else if (currentMatchesStation === existingMatchesStation) {
+          const existingCount = Object.values(existing.formData || {}).filter(Boolean).length;
+          const currentCount = Object.values(r.formData || {}).filter(Boolean).length;
+          if (currentCount >= existingCount) {
+            map.set(fltClean, r);
+          }
+        }
+      }
+    });
+
+    return Array.from(map.values());
+  }, [savedReports, activeBackendSnapshot, selectedIsoDate, station]);
+
   // Process & filter reports
   const processedRows = useMemo(() => {
-    // If an archived backend snapshot exists, use its frozen reports snapshot
-    const baseReports = activeBackendSnapshot?.reportsSnapshot?.length
-      ? activeBackendSnapshot.reportsSnapshot
-      : savedReports;
-
-    // 1. Filter for selected date
-    const dateFiltered = baseReports.filter((r) => isReportMatchingSelectedDate(r, selectedIsoDate));
-
-    // 2. Filter for Scope (ALL | DOMESTIC | INTERNATIONAL)
-    const scopeFiltered = dateFiltered.filter((r) => {
+    // 1. Filter for Scope (ALL | DOMESTIC | INTERNATIONAL)
+    const scopeFiltered = dedupedDateReports.filter((r) => {
       if (flightScopeFilter === 'ALL') return true;
       const isDom = isDomesticReport(r);
       if (flightScopeFilter === 'DOMESTIC') return isDom;
@@ -410,7 +443,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       return true;
     });
 
-    // 3. Map into analyzed flight rows
+    // 2. Map into analyzed flight rows
     const rows = scopeFiltered.map((r, index) => {
       const flight = r.formData?.deptFlt || r.formData?.arvFlt || r.flight || 'FLT';
       const route = r.formData?.deptRoute || r.formData?.arvRoute || r.route || '-';
@@ -475,7 +508,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       };
     });
 
-    // 4. Search query filter
+    // 3. Search query filter
     if (!searchQuery.trim()) return rows;
     const q = searchQuery.trim().toUpperCase();
     return rows.filter(
@@ -486,7 +519,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         r.bay.toUpperCase().includes(q) ||
         r.officer.toUpperCase().includes(q)
     );
-  }, [savedReports, activeBackendSnapshot, selectedIsoDate, flightScopeFilter, searchQuery, activeDateDisplay]);
+  }, [dedupedDateReports, flightScopeFilter, searchQuery, activeDateDisplay]);
 
   // Statistics / Average calculations
   const stats = useMemo(() => {
@@ -831,7 +864,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>ALL FLIGHTS ({savedReports.filter((r) => isReportMatchingSelectedDate(r, selectedIsoDate)).length})</span>
+              <span>ALL FLIGHTS ({dedupedDateReports.length})</span>
             </button>
             <button
               onClick={() => setFlightScopeFilter('DOMESTIC')}
@@ -842,7 +875,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
               }`}
             >
               <Plane className="w-3.5 h-3.5" />
-              <span>DOMESTIC</span>
+              <span>DOMESTIC ({dedupedDateReports.filter((r) => isDomesticReport(r)).length})</span>
             </button>
             <button
               onClick={() => setFlightScopeFilter('INTERNATIONAL')}
@@ -853,7 +886,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
               }`}
             >
               <Plane className="w-3.5 h-3.5 rotate-45" />
-              <span>INTERNATIONAL</span>
+              <span>INTERNATIONAL ({dedupedDateReports.filter((r) => !isDomesticReport(r)).length})</span>
             </button>
           </div>
 
