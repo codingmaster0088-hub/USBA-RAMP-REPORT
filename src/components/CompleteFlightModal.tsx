@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ScheduleFlight, SavedReport } from '../types';
+import { parseDateToIso, formatIsoToDisplay, cleanFlightNum } from '../utils/analyticalSnapshotBuilder';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -33,132 +34,48 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [copiedText, setCopiedText] = useState<boolean>(false);
 
-  // Helper to format Date object to YYYY-MM-DD
-  const getTodayIso = (): string => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
+  // Today ISO helper
+  const todayIso = useMemo(() => parseDateToIso(), []);
 
-  // Helper to format ISO YYYY-MM-DD to "DD MMM YY" (e.g. "15 AUG 26")
-  const formatIsoToDDMMMYY = (isoStr: string): string => {
-    if (!isoStr) return '';
-    const parts = isoStr.split('-');
-    if (parts.length === 3) {
-      const day = parts[2];
-      const mIdx = parseInt(parts[1], 10) - 1;
-      const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-      const month = monthNames[mIdx] || 'JAN';
-      const yr = parts[0].slice(-2);
-      return `${day} ${month} ${yr}`;
+  // Initialize selected date from scheduleDate or today
+  const initialIsoDate = useMemo(() => {
+    if (scheduleDate && scheduleDate.trim()) {
+      return parseDateToIso(scheduleDate);
     }
-    return isoStr;
-  };
+    return parseDateToIso();
+  }, [scheduleDate]);
 
-  // Automatic "Today" date initialization, with capability to select any previous date
-  const [selectedIsoDate, setSelectedIsoDate] = useState<string>(getTodayIso);
-  const todayIso = getTodayIso();
+  const [selectedIsoDate, setSelectedIsoDate] = useState<string>(initialIsoDate);
   const isTodaySelected = selectedIsoDate === todayIso;
-  const activeDateDisplay = formatIsoToDDMMMYY(selectedIsoDate);
+  const activeDateDisplay = formatIsoToDisplay(selectedIsoDate);
 
   // Filter only departure flights (isDeparture === true, or fallback to all flights if empty)
   const departureSchedule = scheduleFlights.filter((f) => f.isDeparture !== false);
   const targetFlights = departureSchedule.length > 0 ? departureSchedule : scheduleFlights;
 
-  // Helper to extract clean flight number e.g. "BS-103", "103", "BS 103", "0103" -> "103"
-  const cleanFlightNum = (str: string) => {
-    if (!str) return '';
-    const digitsOnly = str.replace(/BS/gi, '').replace(/[^0-9]/g, '');
-    if (digitsOnly) {
-      return parseInt(digitsOnly, 10).toString(); // Converts "0103" -> "103"
-    }
-    return str.replace(/BS/gi, '').replace(/[^0-9a-zA-Z]/g, '').trim().toUpperCase();
-  };
-
-  // Helper to extract day and month key e.g. "14AUG"
-  const parseDayMonthKey = (str: string): string => {
-    if (!str) return '';
-    const cleanStr = str.trim().toUpperCase();
-    const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-
-    if (cleanStr.includes('TODAY')) {
-      const d = new Date();
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = monthNames[d.getMonth()];
-      return `${day}${month}`;
-    }
-
-    // 1. Alpha Month e.g. "14 AUG 2026", "14 AUG 26", "14AUG26", "14AUG 02", "14-AUG-2026"
-    const alphaMatch = cleanStr.match(/\b(\d{1,2})\s*[-/]?\s*([A-Za-z]{3})\b/i);
-    if (alphaMatch) {
-      const day = String(parseInt(alphaMatch[1], 10)).padStart(2, '0');
-      const month = alphaMatch[2].toUpperCase();
-      return `${day}${month}`;
-    }
-
-    // 2. ISO Format YYYY-MM-DD e.g. 2026-08-14
-    const isoMatch = cleanStr.match(/\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
-    if (isoMatch) {
-      const mIdx = parseInt(isoMatch[2], 10) - 1;
-      const day = String(parseInt(isoMatch[3], 10)).padStart(2, '0');
-      const month = monthNames[mIdx] || 'JAN';
-      return `${day}${month}`;
-    }
-
-    // 3. Numeric DD/MM/YYYY or DD-MM-YY e.g. 14/08/2026
-    const numMatch = cleanStr.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/);
-    if (numMatch) {
-      const day = String(parseInt(numMatch[1], 10)).padStart(2, '0');
-      const mIdx = parseInt(numMatch[2], 10) - 1;
-      const month = monthNames[mIdx] || 'JAN';
-      return `${day}${month}`;
-    }
-
-    return cleanStr.replace(/[^0-9A-Z]/g, '').slice(0, 5);
-  };
-
   // Helper to test if a saved report belongs to the selected reconciliation date
   const isReportDateMatchingSelectedDate = (r: SavedReport, targetIso: string): boolean => {
     if (!targetIso) return true;
-    const targetDmKey = parseDayMonthKey(targetIso); // e.g. "14AUG"
-
-    // 1. Check report form date
+    
+    // 1. Direct form date match using standardized parseDateToIso
     const rDateString = (r.formData?.date || r.date || '').trim();
     if (rDateString) {
-      const rDmKey = parseDayMonthKey(rDateString);
-      if (rDmKey && targetDmKey && rDmKey === targetDmKey) {
-        return true;
-      }
+      const rIso = parseDateToIso(rDateString);
+      return rIso === targetIso;
     }
 
-    // 2. Check timestamps (r.timestamp or r.createdAt)
-    const timestamps = [r.timestamp, r.createdAt].filter(Boolean);
-    for (const ts of timestamps) {
-      const t = new Date(ts as string);
-      if (!isNaN(t.getTime())) {
-        const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-        const tsDay = String(t.getDate()).padStart(2, '0');
-        const tsMonth = monthNames[t.getMonth()];
-        const tsKey = `${tsDay}${tsMonth}`;
-
-        if (targetDmKey && targetDmKey === tsKey) {
-          return true;
-        }
-      }
-    }
-
-    // 3. If today is selected and report is marked 'TODAY'
-    if (isTodaySelected && rDateString.toUpperCase().includes('TODAY')) {
-      return true;
+    // 2. Fallback only if no date string exists at all in report
+    const rTs = r.timestamp || r.createdAt;
+    if (rTs) {
+      const rIso = parseDateToIso(String(rTs));
+      return rIso === targetIso;
     }
 
     return false;
   };
 
   // Deduplicate target flights by flight code so multi-leg flights (e.g. BS-321 DAC vs CGP) don't duplicate
-  const targetFlightsDeduplicated = React.useMemo(() => {
+  const targetFlightsDeduplicated = useMemo(() => {
     const map = new Map<string, ScheduleFlight>();
     targetFlights.forEach((sf) => {
       const code = cleanFlightNum(sf.flightNum || sf.flightFull);
@@ -193,8 +110,14 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
       return isReportDateMatchingSelectedDate(r, selectedIsoDate);
     });
 
-    // Get the latest saved report if multiple exist
-    const latestReport = matchingReports.length > 0 ? matchingReports[matchingReports.length - 1] : null;
+    // Sort by latest updated/created timestamp descending so the MOST RECENT report is always active
+    matchingReports.sort((a, b) => {
+      const timeA = a.createdAt || (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+      const timeB = b.createdAt || (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+      return timeB - timeA;
+    });
+
+    const latestReport = matchingReports.length > 0 ? matchingReports[0] : null;
 
     return {
       scheduleFlight: sf,

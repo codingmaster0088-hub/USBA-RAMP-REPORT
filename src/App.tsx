@@ -13,7 +13,7 @@ import {
   UserActionType
 } from './types';
 import { parseFLSTData, sampleFLSTInput } from './utils/flstParser';
-import { august22VerifiedReports } from './data/august22VerifiedReports';
+import { verifiedFlightReports } from './data/verifiedFlightReports';
 import {
   subscribeToSavedReports,
   syncReportToFirestore,
@@ -96,15 +96,15 @@ export default function App() {
           (r) => !r.id.startsWith('demo-') && !r.id.startsWith('sub-')
         );
       }
-      // Merge verified 22 August reports if not present
+      // Merge verified flight reports (22 Aug & 23 Aug) if not present
       const existingKeys = new Set(
         currentList.map(
           (r) =>
-            `${(r.flight || r.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${(r.date || r.formData?.date || '').trim().toUpperCase()}`
+            `${(r.flight || r.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${parseDateToIso(r.date || r.formData?.date || '')}`
         )
       );
-      august22VerifiedReports.forEach((rep) => {
-        const key = `${(rep.flight || rep.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${(rep.date || rep.formData?.date || '').trim().toUpperCase()}`;
+      verifiedFlightReports.forEach((rep) => {
+        const key = `${(rep.flight || rep.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${parseDateToIso(rep.date || rep.formData?.date || '')}`;
         if (!existingKeys.has(key)) {
           currentList.push(rep);
           existingKeys.add(key);
@@ -113,7 +113,7 @@ export default function App() {
       localStorage.setItem('usb_reports', JSON.stringify(currentList));
       return currentList;
     } catch {
-      return august22VerifiedReports;
+      return verifiedFlightReports;
     }
   });
 
@@ -251,16 +251,16 @@ export default function App() {
           return true;
         });
 
-        // Ensure all verified 22 Aug reports are synced into Firestore
+        // Ensure all verified reports (22 Aug & 23 Aug) are synced into Firestore
         const existingKeys = new Set(
           validReports.map(
             (r) =>
-              `${(r.flight || r.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${(r.date || r.formData?.date || '').trim().toUpperCase()}`
+              `${(r.flight || r.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${parseDateToIso(r.date || r.formData?.date || '')}`
           )
         );
 
-        august22VerifiedReports.forEach((verifiedRep) => {
-          const key = `${(verifiedRep.flight || verifiedRep.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${(verifiedRep.date || verifiedRep.formData?.date || '').trim().toUpperCase()}`;
+        verifiedFlightReports.forEach((verifiedRep) => {
+          const key = `${(verifiedRep.flight || verifiedRep.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${parseDateToIso(verifiedRep.date || verifiedRep.formData?.date || '')}`;
           if (!existingKeys.has(key)) {
             validReports.push(verifiedRep);
             existingKeys.add(key);
@@ -595,23 +595,26 @@ export default function App() {
     } catch (e) {}
     setReportToEdit(null);
 
-    const targetFlightClean = (data.deptFlt || '').replace(/^BS-?/i, '').trim().toUpperCase();
+    const targetFlightClean = (data.deptFlt || data.arvFlt || '').replace(/^BS-?/i, '').trim().toUpperCase();
     const flightKey = `BS-${targetFlightClean}`;
+    const reportDateIso = parseDateToIso(data.date || 'TODAY');
 
-    // Find existing report by existingId OR by flight number so same flight updates in place
+    // Find existing report by existingId OR by BOTH (flight number + same date)
     const existingReport = existingId
       ? savedReports.find((r) => r.id === existingId)
       : savedReports.find((r) => {
-          const rFltClean = (r.flight || r.formData?.deptFlt || '')
+          const rFltClean = (r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '')
             .replace(/^BS-?/i, '')
             .trim()
             .toUpperCase();
-          return rFltClean === targetFlightClean;
+          if (rFltClean !== targetFlightClean) return false;
+          const rDateIso = parseDateToIso(r.formData?.date || r.date || '');
+          return rDateIso === reportDateIso;
         });
 
-    const id = existingReport ? existingReport.id : (existingId || `report-${Date.now()}`);
+    const id = existingReport ? existingReport.id : (existingId || `report-${targetFlightClean.toLowerCase()}-${reportDateIso.replace(/-/g, '')}-${Date.now()}`);
 
-    // Merge existing formData with new updates, removing empty string overwrites if existing had data
+    // Merge existing formData with new updates only when updating same report
     const mergedFormData: RampReportFormData = existingReport
       ? {
           ...existingReport.formData,
@@ -620,11 +623,16 @@ export default function App() {
         }
       : { ...data, station: activeUser.station };
 
-    // Clean undefined or empty overrides if existing had value
+    // Clean undefined or empty overrides if existing had value, BUT do NOT keep old delay reasons if new report is early/on-time
     if (existingReport) {
+      const isNewStatusEarlyOrOnTime = (data.status || '').toUpperCase().includes('EARLY') || (data.status || '').toUpperCase().includes('ON TIME');
       Object.keys(existingReport.formData).forEach((key) => {
         const k = key as keyof RampReportFormData;
-        if ((!data[k] || data[k] === '') && existingReport.formData[k]) {
+        if (isNewStatusEarlyOrOnTime && (k === 'delayReason' || k === 'delayRemarks')) {
+          if (!data[k]) {
+            mergedFormData[k] = '';
+          }
+        } else if ((!data[k] || data[k] === '') && existingReport.formData[k]) {
           mergedFormData[k] = existingReport.formData[k];
         }
       });
@@ -646,8 +654,9 @@ export default function App() {
       mode,
       flight: flightKey,
       date: data.date || existingReport?.date || '',
-      route: data.deptRoute || existingReport?.route || 'N/A',
+      route: data.deptRoute || data.arvRoute || existingReport?.route || 'N/A',
       timestamp: new Date().toISOString(),
+      createdAt: Date.now(),
       officerName: activeUser.name || existingReport?.officerName || 'RAMP OFFICER',
       officerId: activeUser.id || existingReport?.officerId || '0000',
       formData: mergedFormData
@@ -655,13 +664,20 @@ export default function App() {
 
     setSavedReports((prev) => {
       const filtered = prev.filter((r) => {
-        const rFltClean = (r.flight || r.formData?.deptFlt || '')
+        if (r.id === id) return false;
+        const rFltClean = (r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '')
           .replace(/^BS-?/i, '')
           .trim()
           .toUpperCase();
-        return r.id !== id && rFltClean !== targetFlightClean;
+        const rDateIso = parseDateToIso(r.formData?.date || r.date || '');
+        if (rFltClean === targetFlightClean && rDateIso === reportDateIso) {
+          return false;
+        }
+        return true;
       });
-      return [newEntry, ...filtered];
+      const updated = [newEntry, ...filtered];
+      localStorage.setItem('usb_reports', JSON.stringify(updated));
+      return updated;
     });
 
     try {
