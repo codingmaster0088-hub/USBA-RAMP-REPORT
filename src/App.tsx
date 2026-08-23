@@ -698,11 +698,16 @@ export default function App() {
         const updatedList = [
           newEntry,
           ...savedReports.filter((r) => {
-            const rFltClean = (r.flight || r.formData?.deptFlt || '')
+            if (r.id === id) return false;
+            const rFltClean = (r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '')
               .replace(/^BS-?/i, '')
               .trim()
               .toUpperCase();
-            return r.id !== id && rFltClean !== targetFlightClean;
+            const rDateIso = parseDateToIso(r.date || r.formData?.date || '');
+            if (rFltClean === targetFlightClean && rDateIso === targetDateIso) {
+              return false;
+            }
+            return true;
           })
         ];
 
