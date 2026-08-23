@@ -79,9 +79,11 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
     // 2. Fallback check timestamp
     const rTs = r.timestamp || r.createdAt;
     if (rTs) {
-      const rIso = parseDateToIso(String(rTs));
-      if (rIso === normalizedTargetIso) return true;
-      if (rIso.slice(5) === normalizedTargetIso.slice(5)) return true;
+      const tsIso = typeof rTs === 'number'
+        ? new Date(rTs).toISOString().slice(0, 10)
+        : parseDateToIso(String(rTs));
+      if (tsIso === normalizedTargetIso) return true;
+      if (tsIso.slice(5) === normalizedTargetIso.slice(5)) return true;
     }
 
     return false;

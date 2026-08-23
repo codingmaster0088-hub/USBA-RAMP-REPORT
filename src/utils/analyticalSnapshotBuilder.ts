@@ -210,10 +210,7 @@ export function buildDailyAnalyticalSnapshot(
   // Deduplicate reports by flight number
   const uniqueReportsMap = new Map<string, SavedReport>();
   reportsForDate.forEach((r) => {
-    const fltKey = (r.formData?.deptFlt || r.formData?.arvFlt || r.flight || r.id)
-      .replace(/^BS-?/i, '')
-      .trim()
-      .toUpperCase();
+    const fltKey = cleanFlightNum(r.formData?.deptFlt || r.formData?.arvFlt || r.flight || r.id);
     if (!uniqueReportsMap.has(fltKey)) {
       uniqueReportsMap.set(fltKey, r);
     }

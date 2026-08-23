@@ -27,7 +27,7 @@ import {
   logUserActivityToFirestore,
   saveDailyAnalyticalSnapshotToFirestore
 } from './lib/firebase';
-import { parseDateToIso, buildDailyAnalyticalSnapshot } from './utils/analyticalSnapshotBuilder';
+import { parseDateToIso, buildDailyAnalyticalSnapshot, cleanFlightNum } from './utils/analyticalSnapshotBuilder';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { LiveMonitor } from './components/LiveMonitor';
@@ -100,11 +100,11 @@ export default function App() {
       const existingKeys = new Set(
         currentList.map(
           (r) =>
-            `${(r.flight || r.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${parseDateToIso(r.date || r.formData?.date || '')}`
+            `${cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '')}-${parseDateToIso(r.date || r.formData?.date || '')}`
         )
       );
       verifiedFlightReports.forEach((rep) => {
-        const key = `${(rep.flight || rep.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${parseDateToIso(rep.date || rep.formData?.date || '')}`;
+        const key = `${cleanFlightNum(rep.flight || rep.formData?.deptFlt || rep.formData?.arvFlt || '')}-${parseDateToIso(rep.date || rep.formData?.date || '')}`;
         if (!existingKeys.has(key)) {
           currentList.push(rep);
           existingKeys.add(key);
@@ -255,12 +255,12 @@ export default function App() {
         const existingKeys = new Set(
           validReports.map(
             (r) =>
-              `${(r.flight || r.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${parseDateToIso(r.date || r.formData?.date || '')}`
+              `${cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '')}-${parseDateToIso(r.date || r.formData?.date || '')}`
           )
         );
 
         verifiedFlightReports.forEach((verifiedRep) => {
-          const key = `${(verifiedRep.flight || verifiedRep.formData?.deptFlt || '').replace(/[^0-9]/g, '')}-${parseDateToIso(verifiedRep.date || verifiedRep.formData?.date || '')}`;
+          const key = `${cleanFlightNum(verifiedRep.flight || verifiedRep.formData?.deptFlt || verifiedRep.formData?.arvFlt || '')}-${parseDateToIso(verifiedRep.date || verifiedRep.formData?.date || '')}`;
           if (!existingKeys.has(key)) {
             validReports.push(verifiedRep);
             existingKeys.add(key);
@@ -595,18 +595,15 @@ export default function App() {
     } catch (e) {}
     setReportToEdit(null);
 
-    const targetFlightClean = (data.deptFlt || data.arvFlt || '').replace(/^BS-?/i, '').trim().toUpperCase();
-    const flightKey = `BS-${targetFlightClean}`;
+    const targetFlightClean = cleanFlightNum(data.deptFlt || data.arvFlt || '');
+    const flightKey = targetFlightClean ? `BS-${targetFlightClean}` : 'BS-FLT';
     const reportDateIso = parseDateToIso(data.date || 'TODAY');
 
     // Find existing report by existingId OR by BOTH (flight number + same date)
     const existingReport = existingId
       ? savedReports.find((r) => r.id === existingId)
       : savedReports.find((r) => {
-          const rFltClean = (r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '')
-            .replace(/^BS-?/i, '')
-            .trim()
-            .toUpperCase();
+          const rFltClean = cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '');
           if (rFltClean !== targetFlightClean) return false;
           const rDateIso = parseDateToIso(r.formData?.date || r.date || '');
           return rDateIso === reportDateIso;
@@ -665,10 +662,7 @@ export default function App() {
     setSavedReports((prev) => {
       const filtered = prev.filter((r) => {
         if (r.id === id) return false;
-        const rFltClean = (r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '')
-          .replace(/^BS-?/i, '')
-          .trim()
-          .toUpperCase();
+        const rFltClean = cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '');
         const rDateIso = parseDateToIso(r.formData?.date || r.date || '');
         if (rFltClean === targetFlightClean && rDateIso === reportDateIso) {
           return false;
@@ -699,10 +693,7 @@ export default function App() {
           newEntry,
           ...savedReports.filter((r) => {
             if (r.id === id) return false;
-            const rFltClean = (r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '')
-              .replace(/^BS-?/i, '')
-              .trim()
-              .toUpperCase();
+            const rFltClean = cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '');
             const rDateIso = parseDateToIso(r.date || r.formData?.date || '');
             if (rFltClean === targetFlightClean && rDateIso === targetDateIso) {
               return false;
