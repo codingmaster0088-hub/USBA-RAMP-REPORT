@@ -37,13 +37,16 @@ export function parseFLSTData(rawText: string): { flights: ScheduleFlight[]; dat
     // Odd numbers flight = DEPARTURE, Even numbers flight = ARRIVAL
     const isDeparture = flightInt % 2 !== 0;
 
-    // 2. Date e.g. 01AUG
-    const dateMatch = line.match(/\b(\d{1,2}\s*[A-Za-z]{3}(?:\s*\d{2,4})?)\b/i);
+    // 2. Date e.g. 23AUG, 01AUG, 22AUG or 23AUG26
+    const dateMatch = line.match(/\b(\d{1,2})\s*([A-Za-z]{3})(?:[\s-]?((?:20)?2[4-9]|(?:20)?3[0-9]))?\b/i);
     let dateStr = '';
     if (dateMatch) {
-      dateStr = dateMatch[1].toUpperCase().replace(/\s+/g, '');
+      const day = dateMatch[1].padStart(2, '0');
+      const month = dateMatch[2].toUpperCase();
+      const yr = dateMatch[3] ? (dateMatch[3].length === 2 ? `20${dateMatch[3]}` : dateMatch[3]) : '';
+      dateStr = yr ? `${day} ${month} ${yr.slice(-2)}` : `${day} ${month}`;
       if (!detectedDate) {
-        detectedDate = dateMatch[1].toUpperCase();
+        detectedDate = dateStr;
       }
     }
 

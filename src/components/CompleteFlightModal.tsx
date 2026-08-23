@@ -46,6 +46,14 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
   }, [scheduleDate]);
 
   const [selectedIsoDate, setSelectedIsoDate] = useState<string>(initialIsoDate);
+
+  // Sync selectedIsoDate if scheduleDate changes
+  React.useEffect(() => {
+    if (scheduleDate && scheduleDate.trim()) {
+      setSelectedIsoDate(parseDateToIso(scheduleDate));
+    }
+  }, [scheduleDate]);
+
   const isTodaySelected = selectedIsoDate === todayIso;
   const activeDateDisplay = formatIsoToDisplay(selectedIsoDate);
 
@@ -56,19 +64,24 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
   // Helper to test if a saved report belongs to the selected reconciliation date
   const isReportDateMatchingSelectedDate = (r: SavedReport, targetIso: string): boolean => {
     if (!targetIso) return true;
+    const normalizedTargetIso = parseDateToIso(targetIso);
     
     // 1. Direct form date match using standardized parseDateToIso
     const rDateString = (r.formData?.date || r.date || '').trim();
     if (rDateString) {
       const rIso = parseDateToIso(rDateString);
-      return rIso === targetIso;
+      if (rIso === normalizedTargetIso) return true;
+      // Match by month & day (e.g. "08-23" === "08-23")
+      if (rIso.slice(5) === normalizedTargetIso.slice(5)) return true;
+      if (isTodaySelected && rDateString.toUpperCase().includes('TODAY')) return true;
     }
 
-    // 2. Fallback only if no date string exists at all in report
+    // 2. Fallback check timestamp
     const rTs = r.timestamp || r.createdAt;
     if (rTs) {
       const rIso = parseDateToIso(String(rTs));
-      return rIso === targetIso;
+      if (rIso === normalizedTargetIso) return true;
+      if (rIso.slice(5) === normalizedTargetIso.slice(5)) return true;
     }
 
     return false;

@@ -5,7 +5,9 @@ import { DELAY_CODES } from '../constants/delayCodes';
  * Parses any date string format (e.g. "21 AUG 26", "21-AUG-2026", "2026-08-21", "TODAY") into ISO "YYYY-MM-DD"
  */
 export const parseDateToIso = (dateStr?: string): string => {
-  if (!dateStr) {
+  const currentYear = new Date().getFullYear();
+
+  if (!dateStr || !dateStr.trim()) {
     const d = new Date();
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -31,15 +33,25 @@ export const parseDateToIso = (dateStr?: string): string => {
     return `${y}-${m}-${day}`;
   }
 
-  // 2. Alpha format DD MMM YY e.g. "21 AUG 26" or "21-AUG-2026"
-  const alphaMatch = clean.match(/(\d{1,2})\s*[-/ ]?\s*([A-Za-z]{3})\s*[-/ ]?\s*(\d{2,4})?/i);
+  // 2. Alpha format DD MMM YY or DD-MMM-YYYY e.g. "23 AUG 26", "23-AUG-2026", "23AUG"
+  const alphaMatch = clean.match(/(\d{1,2})\s*[-/ ]?\s*([A-Za-z]{3})(?:\s*[-/ ]?\s*(\d{2,4}))?/i);
   if (alphaMatch) {
     const day = String(parseInt(alphaMatch[1], 10)).padStart(2, '0');
     const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     const mIdx = monthNames.indexOf(alphaMatch[2].toUpperCase());
     const m = String(mIdx !== -1 ? mIdx + 1 : 1).padStart(2, '0');
-    let yr = alphaMatch[3] || `${new Date().getFullYear()}`;
-    if (yr.length === 2) yr = `20${yr}`;
+
+    let yrStr = alphaMatch[3];
+    let yr = currentYear;
+    if (yrStr) {
+      const yrNum = parseInt(yrStr, 10);
+      if (yrStr.length === 4 && yrNum >= 2020 && yrNum <= 2040) {
+        yr = yrNum;
+      } else if (yrStr.length === 2 && yrNum >= 20 && yrNum <= 40) {
+        yr = 2000 + yrNum;
+      }
+      // If yrNum < 20 (e.g. 01, 07 from time/tokens), it defaults safely to currentYear
+    }
     return `${yr}-${m}-${day}`;
   }
 
@@ -48,8 +60,16 @@ export const parseDateToIso = (dateStr?: string): string => {
   if (numMatch) {
     const day = String(parseInt(numMatch[1], 10)).padStart(2, '0');
     const m = String(parseInt(numMatch[2], 10)).padStart(2, '0');
-    let yr = numMatch[3] || `${new Date().getFullYear()}`;
-    if (yr.length === 2) yr = `20${yr}`;
+    let yrStr = numMatch[3];
+    let yr = currentYear;
+    if (yrStr) {
+      const yrNum = parseInt(yrStr, 10);
+      if (yrStr.length === 4 && yrNum >= 2020 && yrNum <= 2040) {
+        yr = yrNum;
+      } else if (yrStr.length === 2 && yrNum >= 20 && yrNum <= 40) {
+        yr = 2000 + yrNum;
+      }
+    }
     return `${yr}-${m}-${day}`;
   }
 
