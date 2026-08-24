@@ -3,6 +3,7 @@ import { SavedReport, ScheduleFlight, DailyAnalyticalSnapshot } from '../types';
 import { captureHtml2CanvasSafe } from '../utils/html2canvasHelper';
 import { saveDailyAnalyticalSnapshotToFirestore, subscribeToDailyAnalyticalSnapshots } from '../lib/firebase';
 import { parseDateToIso, formatIsoToDisplay, cleanFlightNum } from '../utils/analyticalSnapshotBuilder';
+import { verifiedFlightReports } from '../data/verifiedFlightReports';
 import { BackendStorageConfirmationModal } from './BackendStorageConfirmationModal';
 import aircraftImage from '../assets/images/us_bangla_real_hd_plane_1786386727381.jpg';
 import {
@@ -422,10 +423,10 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
 
       const route = `${r.formData?.deptRoute || ''} ${r.route || ''}`.toUpperCase().trim();
       const bay = (r.formData?.bay || '').toUpperCase().trim();
-      const stdSta = `${r.formData?.std || ''}_${r.formData?.sta || ''}`.trim();
+      const std = (r.formData?.std || '').trim();
 
       // Use unique report id if present, otherwise distinct flight + sector/bay key
-      const key = r.id || `${fltClean}_${route}_${bay}_${stdSta}`;
+      const key = r.id || `${fltClean}_${route}_${bay}_${std}`;
       if (!key || key === '____') return;
 
       map.set(key, r);
@@ -442,12 +443,41 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
 
       const route = `${r.formData?.deptRoute || ''} ${r.route || ''}`.toUpperCase().trim();
       const bay = (r.formData?.bay || '').toUpperCase().trim();
-      const stdSta = `${r.formData?.std || ''}_${r.formData?.sta || ''}`.trim();
+      const std = (r.formData?.std || '').trim();
 
-      const key = r.id || `${fltClean}_${route}_${bay}_${stdSta}`;
+      const key = r.id || `${fltClean}_${route}_${bay}_${std}`;
       if (!key || key === '____') return;
 
       if (!map.has(key)) {
+        map.set(key, r);
+      }
+    });
+
+    // 3. Add verified historical reports (including 24 AUG BS-309 and BS-349) if not already present
+    verifiedFlightReports.forEach((r) => {
+      if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
+
+      const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
+      const mainFlt = cleanFlightNum(r.flight || '');
+      const arvFlt = cleanFlightNum(r.formData?.arvFlt || '');
+      const fltClean = deptFlt || mainFlt || arvFlt;
+
+      const route = `${r.formData?.deptRoute || ''} ${r.route || ''}`.toUpperCase().trim();
+      const bay = (r.formData?.bay || '').toUpperCase().trim();
+      const std = (r.formData?.std || '').trim();
+
+      const key = r.id || `${fltClean}_${route}_${bay}_${std}`;
+      if (!key || key === '____') return;
+
+      // Also check by flight number key so existing user edits take precedence
+      const hasFlt = Array.from(map.values()).some((ex) => {
+        const exDept = cleanFlightNum(ex.formData?.deptFlt || '');
+        const exMain = cleanFlightNum(ex.flight || '');
+        const exArv = cleanFlightNum(ex.formData?.arvFlt || '');
+        return (exDept || exMain || exArv) === fltClean;
+      });
+
+      if (!map.has(key) && !hasFlt) {
         map.set(key, r);
       }
     });
