@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   UserProfile,
   SavedReport,
@@ -238,36 +238,32 @@ export default function App() {
     }
   };
 
+  // Active Saved Count (Within 20 Hours) for the bottom nav badge & header indicators
+  const activeSavedCount = useMemo(() => {
+    const now = Date.now();
+    const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000;
+    return savedReports.filter((r) => {
+      if (!r.timestamp) return true;
+      const t = new Date(r.timestamp).getTime();
+      return !isNaN(t) ? now - t <= TWENTY_HOURS_MS : true;
+    }).length;
+  }, [savedReports]);
+
   // Subscribe to Firebase Firestore real-time updates for Saved Reports, Schedules, Notices & User Logs
   useEffect(() => {
     const unsubReports = subscribeToSavedReports(
       (reports) => {
+        const deletedIds = new Set(JSON.parse(localStorage.getItem('usb_deleted_report_ids') || '[]'));
         let validReports = (reports || []).filter((r) => {
           if (r.id.startsWith('demo-') || r.id.startsWith('sub-')) {
             // Auto-purge legacy mock/demo report from Firestore
             deleteReportFromFirestore(r.id).catch(() => {});
             return false;
           }
-          return true;
-        });
-
-        // Ensure all verified reports (22 Aug & 23 Aug) are synced into Firestore
-        const existingKeys = new Set(
-          validReports.map(
-            (r) =>
-              `${cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '')}-${parseDateToIso(r.date || r.formData?.date || '')}`
-          )
-        );
-
-        verifiedFlightReports.forEach((verifiedRep) => {
-          const key = `${cleanFlightNum(verifiedRep.flight || verifiedRep.formData?.deptFlt || verifiedRep.formData?.arvFlt || '')}-${parseDateToIso(verifiedRep.date || verifiedRep.formData?.date || '')}`;
-          if (!existingKeys.has(key)) {
-            validReports.push(verifiedRep);
-            existingKeys.add(key);
-            syncReportToFirestore(verifiedRep).catch((err) => {
-              console.error(`Failed to sync verified report ${verifiedRep.flight}:`, err);
-            });
+          if (deletedIds.has(r.id)) {
+            return false;
           }
+          return true;
         });
 
         setSavedReports(validReports);
@@ -547,6 +543,11 @@ export default function App() {
       const targetReport = savedReports.find((r) => r.id === id);
       setSavedReports((prev) => prev.filter((r) => r.id !== id));
       try {
+        const deletedIds = JSON.parse(localStorage.getItem('usb_deleted_report_ids') || '[]');
+        if (!deletedIds.includes(id)) {
+          deletedIds.push(id);
+          localStorage.setItem('usb_deleted_report_ids', JSON.stringify(deletedIds));
+        }
         await deleteReportFromFirestore(id);
         logUserAction(
           'DELETE_REPORT',
@@ -556,6 +557,40 @@ export default function App() {
         console.error('Delete from cloud failed:', e);
       }
       showToast('Report deleted', '', 'info');
+    }
+  };
+
+  const handleDeleteAllReports = async () => {
+    const count = savedReports.length;
+    if (count === 0) {
+      showToast('No Reports', 'Saved reports list is empty', 'info');
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `⚠️ ADMIN CONFIRMATION: Are you sure you want to permanently delete ALL ${count} saved turnaround reports from the database? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    const currentReports = [...savedReports];
+    setSavedReports([]);
+    try {
+      const deletedIds = JSON.parse(localStorage.getItem('usb_deleted_report_ids') || '[]');
+      currentReports.forEach((r) => {
+        if (!deletedIds.includes(r.id)) deletedIds.push(r.id);
+      });
+      localStorage.setItem('usb_deleted_report_ids', JSON.stringify(deletedIds));
+      localStorage.removeItem('usb_reports');
+
+      await Promise.all(currentReports.map((r) => deleteReportFromFirestore(r.id).catch(() => {})));
+      logUserAction('DELETE_REPORT', `Admin purged ALL (${count}) saved turnaround reports`);
+      showToast('All Saved Reports Deleted', `Removed ${count} records from database`, 'success');
+    } catch (e) {
+      console.error('Purge all failed:', e);
+      showToast('Purge Encountered Error', 'Some records could not be removed', 'error');
     }
   };
 
@@ -856,8 +891,10 @@ export default function App() {
             savedReports={savedReports}
             onEditReport={handleEditReport}
             onDeleteReport={handleDeleteReport}
+            onDeleteAllReports={handleDeleteAllReports}
             onDownloadJPG={handleDownloadFromSaved}
             isDarkMode={isDarkMode}
+            isAdmin={user?.id === '1425' || user?.id === '0088' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126'}
           />
         )}
 
@@ -894,7 +931,7 @@ export default function App() {
         user={user}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        savedCount={savedReports.length}
+        savedCount={activeSavedCount}
         isDarkMode={isDarkMode}
       />
 
