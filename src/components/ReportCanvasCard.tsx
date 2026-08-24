@@ -508,44 +508,74 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
                   padding: '16px 20px'
                 }}
               >
-                <div
-                  style={{
-                    fontSize: '22px',
-                    fontWeight: 900,
-                    color: '#721c24',
-                    textTransform: 'uppercase',
-                    marginBottom: '6px'
-                  }}
-                >
-                  ⚠️ DELAY CODE:
-                </div>
-                <div
-                  style={{
-                    fontSize: '26px',
-                    fontWeight: 900,
-                    color: '#000000',
-                    lineHeight: '1.4',
-                    whiteSpace: 'pre-wrap'
-                  }}
-                >
-                  {formData.delayReason || 'DELAY CODE NOT SPECIFIED'}
-                </div>
-
-                {formData.delayRemarks && formData.delayRemarks.trim() && (
-                  <div
-                    style={{
-                      marginTop: '12px',
-                      paddingTop: '10px',
-                      borderTop: '2px dashed #dc3545',
-                      fontSize: '22px',
-                      fontWeight: 800,
-                      color: '#212529',
-                      lineHeight: '1.4',
-                      whiteSpace: 'pre-wrap'
-                    }}
-                  >
-                    <span style={{ fontWeight: 900, color: '#721c24' }}>REMARKS: </span>
-                    {formData.delayRemarks.trim()}
+                {formData.delayReason && formData.delayReason.trim() ? (
+                  <>
+                    <div
+                      style={{
+                        fontSize: '22px',
+                        fontWeight: 900,
+                        color: '#721c24',
+                        textTransform: 'uppercase',
+                        marginBottom: '6px'
+                      }}
+                    >
+                      ⚠️ DELAY CODE:
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '26px',
+                        fontWeight: 900,
+                        color: '#000000',
+                        lineHeight: '1.4',
+                        whiteSpace: 'pre-wrap'
+                      }}
+                    >
+                      {formData.delayReason}
+                    </div>
+                    {formData.delayRemarks && formData.delayRemarks.trim() && (
+                      <div
+                        style={{
+                          marginTop: '12px',
+                          paddingTop: '10px',
+                          borderTop: '2px dashed #dc3545',
+                          fontSize: '24px',
+                          fontWeight: 800,
+                          color: '#212529',
+                          lineHeight: '1.4',
+                          whiteSpace: 'pre-wrap'
+                        }}
+                      >
+                        <span style={{ fontWeight: 900, color: '#721c24' }}>REMARKS: </span>
+                        {formData.delayRemarks.trim()}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div>
+                    <div
+                      style={{
+                        fontSize: '22px',
+                        fontWeight: 900,
+                        color: '#721c24',
+                        textTransform: 'uppercase',
+                        marginBottom: '6px'
+                      }}
+                    >
+                      ⚠️ DELAY REMARKS:
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '26px',
+                        fontWeight: 900,
+                        color: '#000000',
+                        lineHeight: '1.4',
+                        whiteSpace: 'pre-wrap'
+                      }}
+                    >
+                      {formData.delayRemarks && formData.delayRemarks.trim()
+                        ? formData.delayRemarks.trim()
+                        : 'DELAY DUE TO OPERATIONAL REASONS'}
+                    </div>
                   </div>
                 )}
               </div>
