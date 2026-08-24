@@ -81,16 +81,23 @@ export const parseDateToIso = (dateStr?: string): string => {
 };
 
 /**
- * Cleans flight number strings to pure standardized digits (e.g. "BS-361" -> "361", "BS 0115" -> "115")
+ * Cleans flight number strings to pure standardized digits (e.g. "BS-361" -> "361", "BS 0115" -> "115", "101/102" -> "101")
  */
 export const cleanFlightNum = (str?: string): string => {
   if (!str) return '';
-  const digits = str.replace(/BS/gi, '').replace(/[^0-9]/g, '').trim();
+  const cleanStr = str.trim();
+  // Match first 2-4 digit flight number (e.g. "BS-361" -> "361", "101/102" -> "101", "BS 0541" -> "541")
+  const match = cleanStr.match(/(?:BS[- ]?)?(\d{2,4})/i);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    if (!isNaN(num)) return num.toString();
+  }
+  const digits = cleanStr.replace(/BS/gi, '').replace(/[^0-9]/g, '').trim();
   if (digits) {
     const num = parseInt(digits, 10);
     if (!isNaN(num)) return num.toString();
   }
-  return str.replace(/BS/gi, '').replace(/[^0-9a-zA-Z]/g, '').trim().toUpperCase();
+  return cleanStr.replace(/BS/gi, '').replace(/[^0-9a-zA-Z]/g, '').trim().toUpperCase();
 };
 
 /**

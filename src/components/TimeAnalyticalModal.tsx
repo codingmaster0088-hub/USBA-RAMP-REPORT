@@ -210,21 +210,34 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
   // Helper to check if report matches selected date
   const isReportMatchingSelectedDate = (r: SavedReport, targetIso: string): boolean => {
     if (!targetIso) return true;
-    const rDateIso = parseDateToIso(r.formData?.date || r.date);
-    if (rDateIso === targetIso) return true;
+    const normalizedTargetIso = parseDateToIso(targetIso);
+    const targetDmKey = parseDayMonthKey(normalizedTargetIso);
 
-    const targetDmKey = parseDayMonthKey(targetIso);
+    // 1. Direct form date match using standardized parseDateToIso
     const rDateString = (r.formData?.date || r.date || '').trim();
     if (rDateString) {
+      if (isTodaySelected && rDateString.toUpperCase().includes('TODAY')) {
+        return true;
+      }
+      const rDateIso = parseDateToIso(rDateString);
+      if (rDateIso === normalizedTargetIso) return true;
+
+      // Match by month & day (e.g. "08-24" === "08-24")
+      if (rDateIso.slice(5) === normalizedTargetIso.slice(5)) return true;
+
       const rDmKey = parseDayMonthKey(rDateString);
       if (rDmKey && targetDmKey && rDmKey === targetDmKey) {
         return true;
       }
+
+      // If the report explicitly has a different date specified (e.g. "22 AUG" vs "24 AUG"), reject
+      return false;
     }
 
+    // 2. Only if no explicit date in report formData, fallback to createdAt or timestamp
     const timestamps = [r.timestamp, r.createdAt].filter(Boolean);
     for (const ts of timestamps) {
-      const t = new Date(ts as string);
+      const t = new Date(ts as string | number);
       if (!isNaN(t.getTime())) {
         const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
         const tsDay = String(t.getDate()).padStart(2, '0');
@@ -233,11 +246,11 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         if (targetDmKey && targetDmKey === tsKey) {
           return true;
         }
+        const tsIso = t.toISOString().slice(0, 10);
+        if (tsIso === normalizedTargetIso || tsIso.slice(5) === normalizedTargetIso.slice(5)) {
+          return true;
+        }
       }
-    }
-
-    if (targetIso === todayIso && rDateString.toUpperCase().includes('TODAY')) {
-      return true;
     }
 
     return false;
@@ -396,41 +409,51 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
 
   // Deduplicated base reports for the selected date
   const dedupedDateReports = useMemo(() => {
-    const combinedReports = [...savedReports, ...(activeBackendSnapshot?.reportsSnapshot || [])];
     const map = new Map<string, SavedReport>();
 
-    combinedReports.forEach((r) => {
+    // 1. Process active savedReports first (they have the most accurate user-entered flight logs)
+    savedReports.forEach((r) => {
       if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
 
-      const rawFlight = r.formData?.deptFlt || r.flight || r.formData?.arvFlt || '';
-      const fltClean = cleanFlightNum(rawFlight);
-      if (!fltClean) return;
+      const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
+      const mainFlt = cleanFlightNum(r.flight || '');
+      const arvFlt = cleanFlightNum(r.formData?.arvFlt || '');
+      const fltClean = deptFlt || mainFlt || arvFlt;
 
-      const existing = map.get(fltClean);
-      if (!existing) {
-        map.set(fltClean, r);
-      } else {
-        const currentRoute = `${r.formData?.deptRoute || ''} ${r.route || ''}`.toUpperCase();
-        const existingRoute = `${existing.formData?.deptRoute || ''} ${existing.route || ''}`.toUpperCase();
+      const route = `${r.formData?.deptRoute || ''} ${r.route || ''}`.toUpperCase().trim();
+      const bay = (r.formData?.bay || '').toUpperCase().trim();
+      const stdSta = `${r.formData?.std || ''}_${r.formData?.sta || ''}`.trim();
 
-        const st = station ? station.toUpperCase() : 'DAC';
-        const currentMatchesStation = currentRoute.startsWith(st);
-        const existingMatchesStation = existingRoute.startsWith(st);
+      // Use unique report id if present, otherwise distinct flight + sector/bay key
+      const key = r.id || `${fltClean}_${route}_${bay}_${stdSta}`;
+      if (!key || key === '____') return;
 
-        if (currentMatchesStation && !existingMatchesStation) {
-          map.set(fltClean, r);
-        } else if (currentMatchesStation === existingMatchesStation) {
-          const existingCount = Object.values(existing.formData || {}).filter(Boolean).length;
-          const currentCount = Object.values(r.formData || {}).filter(Boolean).length;
-          if (currentCount >= existingCount) {
-            map.set(fltClean, r);
-          }
-        }
+      map.set(key, r);
+    });
+
+    // 2. Add reports from backend snapshot if not already present
+    (activeBackendSnapshot?.reportsSnapshot || []).forEach((r) => {
+      if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
+
+      const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
+      const mainFlt = cleanFlightNum(r.flight || '');
+      const arvFlt = cleanFlightNum(r.formData?.arvFlt || '');
+      const fltClean = deptFlt || mainFlt || arvFlt;
+
+      const route = `${r.formData?.deptRoute || ''} ${r.route || ''}`.toUpperCase().trim();
+      const bay = (r.formData?.bay || '').toUpperCase().trim();
+      const stdSta = `${r.formData?.std || ''}_${r.formData?.sta || ''}`.trim();
+
+      const key = r.id || `${fltClean}_${route}_${bay}_${stdSta}`;
+      if (!key || key === '____') return;
+
+      if (!map.has(key)) {
+        map.set(key, r);
       }
     });
 
     return Array.from(map.values());
-  }, [savedReports, activeBackendSnapshot, selectedIsoDate, station]);
+  }, [savedReports, activeBackendSnapshot, selectedIsoDate]);
 
   // Process & filter reports
   const processedRows = useMemo(() => {
