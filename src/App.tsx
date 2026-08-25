@@ -609,9 +609,10 @@ export default function App() {
     data: RampReportFormData,
     type: ReportType,
     mode: FlightMode,
-    existingId?: string
+    existingId?: string,
+    officerOverride?: { name: string; id: string }
   ) => {
-    const activeUser = user || {
+    const activeUser = officerOverride || user || {
       id: '0000',
       name: 'RAMP OFFICER',
       station: data.station || 'DAC',
@@ -893,6 +894,7 @@ export default function App() {
             onDeleteReport={handleDeleteReport}
             onDeleteAllReports={handleDeleteAllReports}
             onDownloadJPG={handleDownloadFromSaved}
+            onSaveUploadedReport={handleSaveReport}
             isDarkMode={isDarkMode}
             isAdmin={user?.id === '1425' || user?.id === '0088' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126'}
           />
