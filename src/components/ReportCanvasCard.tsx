@@ -528,11 +528,17 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
                     whiteSpace: 'pre-wrap'
                   }}
                 >
-                  {formData.delayRemarks && formData.delayRemarks.trim()
-                    ? formData.delayRemarks.trim()
-                    : formData.delayReason && formData.delayReason.trim()
-                    ? formData.delayReason.trim()
-                    : 'DELAY DUE TO OPERATIONAL REASONS'}
+                  {(() => {
+                    if (formData.delayRemarks && formData.delayRemarks.trim()) {
+                      return formData.delayRemarks.trim();
+                    }
+                    if (formData.delayReason && formData.delayReason.trim()) {
+                      // Strip numeric code prefixes like "93: ", "93 - ", "Code 93:"
+                      const cleaned = formData.delayReason.trim().replace(/^(?:code\s*)?\d{1,3}\s*[:\-]\s*/i, '');
+                      return cleaned || 'DELAY DUE TO OPERATIONAL REASONS';
+                    }
+                    return 'DELAY DUE TO OPERATIONAL REASONS';
+                  })()}
                 </div>
               </div>
             )}

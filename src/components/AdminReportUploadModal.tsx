@@ -191,6 +191,14 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
           if (nameClean.length > 2) newOfficerName = nameClean;
         }
       }
+
+      // Delay Remarks / Reason
+      if (upper.includes('REMARKS:') || upper.includes('REMARK:') || upper.includes('DELAY REASON')) {
+        const remarksClean = line.replace(/^(?:REMARKS?|DELAY\s*REASON|DELAY\s*CODE)[:\s-]*/i, '').trim();
+        if (remarksClean) {
+          newForm.delayRemarks = remarksClean;
+        }
+      }
     });
 
     setFormData(newForm);
@@ -639,7 +647,21 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
               </div>
             </div>
 
-            {/* Row 4: Officer Info Override */}
+            {/* Row 4: Delay Remarks (if delayed) */}
+            <div>
+              <label className="text-[10px] font-bold text-amber-300 block mb-1">
+                DELAY REMARKS (IF FLIGHT IS DELAYED)
+              </label>
+              <input
+                type="text"
+                value={formData.delayRemarks || ''}
+                onChange={(e) => handleFieldChange('delayRemarks', e.target.value)}
+                placeholder="e.g. AIRCRAFT CHANGE FOR TECHNICAL ISSUE AND LATE REPORTING OF PADMA"
+                className="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-2 text-xs text-amber-200 font-sans font-medium placeholder-slate-500 outline-none focus:border-amber-400"
+              />
+            </div>
+
+            {/* Row 5: Officer Info Override */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800">
               <div>
                 <label className="text-[10px] font-bold text-slate-400 block mb-1">RAMP OFFICER NAME</label>
