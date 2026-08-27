@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import Tesseract from 'tesseract.js';
 import {
   X,
   Upload,
@@ -14,7 +15,9 @@ import {
   Shield,
   RefreshCw,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  Eye,
+  Check
 } from 'lucide-react';
 import { RampReportFormData, ReportType, FlightMode, SavedReport } from '../types';
 import { parseDateToIso } from '../utils/analyticalSnapshotBuilder';
@@ -89,6 +92,8 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
 }) => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [ocrProgressText, setOcrProgressText] = useState<string>('');
+  const [ocrSuccess, setOcrSuccess] = useState<boolean>(false);
   const [activeMode, setActiveMode] = useState<'IMAGE' | 'TEXT_PASTE'>('IMAGE');
   const [pastedText, setPastedText] = useState<string>('');
 
@@ -107,6 +112,9 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
   const handleClearAll = () => {
     setImagePreview(null);
     setPastedText('');
+    setOcrSuccess(false);
+    setOcrProgressText('');
+    setIsProcessing(false);
     setFormData(getEmptyFormData());
     setOfficerName('');
     setOfficerId('');
@@ -143,201 +151,248 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
     });
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Helper to extract clean 4-digit HHMM or special words
+  const cleanTimeVal = (val: string): string => {
+    if (!val) return '';
+    const upper = val.toUpperCase().trim();
+    if (upper.includes('EARLIER')) return 'EARLIER';
+    if (upper.includes('OK')) return 'OK';
+    const m = upper.match(/([012]\d[0-5]\d)/);
+    if (m) return m[1];
+    const colonMatch = upper.match(/([012]?\d):([0-5]\d)/);
+    if (colonMatch) {
+      return `${colonMatch[1].padStart(2, '0')}${colonMatch[2]}`;
+    }
+    return upper.replace(/[^A-Z0-9]/g, '');
+  };
 
-    // Reset previous data on new upload to avoid carrying over stale flight info
+  // Universal text & OCR parser for USBA Ramp Departure Report cards
+  const parseReportCardText = (rawText: string, fileName?: string) => {
+    if (!rawText && !fileName) return;
+
     const newForm = getEmptyFormData();
     let newOfficerName = '';
     let newOfficerId = '';
     let detectedType: ReportType = 'DOMESTIC';
 
-    // Parse filename heuristics (e.g., "BS-173 (DAC-CXB).jpg", "BS-541 (DAC-ZYL).jpg", "BS-333 (DAC-DOH) 25 AUG 26.jpg")
-    const fileNameUpper = file.name.toUpperCase();
-    const fltMatch = fileNameUpper.match(/BS-?\s*(\d{3,4})/i);
-    if (fltMatch) {
-      newForm.deptFlt = fltMatch[1];
-      const num = parseInt(fltMatch[1], 10);
-      if (num >= 200 && num <= 499) {
-        detectedType = 'INTERNATIONAL';
-      } else {
-        detectedType = 'DOMESTIC';
+    const fullText = (rawText || '').replace(/\r/g, '\n');
+    const lines = fullText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    // 1. Check filename first for baseline info
+    if (fileName) {
+      const fnUpper = fileName.toUpperCase();
+      const fnFlt = fnUpper.match(/BS-?\s*(\d{3,4})/i);
+      if (fnFlt) {
+        newForm.deptFlt = fnFlt[1];
+        const num = parseInt(fnFlt[1], 10);
+        if (num >= 200 && num <= 499) detectedType = 'INTERNATIONAL';
+      }
+      const fnRoute = fnUpper.match(/([A-Z]{3}\s*[-–]\s*[A-Z]{3})/i);
+      if (fnRoute) {
+        newForm.deptRoute = fnRoute[1].replace(/\s+/g, '').replace('–', '-');
+      }
+      const fnDate = fnUpper.match(/(\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{2,4})/i);
+      if (fnDate) newForm.date = fnDate[1];
+      const fnAc = fnUpper.match(/(S2-[A-Z0-9]{3}|HS-[A-Z0-9]{3})/i);
+      if (fnAc) newForm.ac = fnAc[1];
+    }
+
+    // 2. Global Regex Extractions from Card Text
+    // Card Title Flight & Route e.g. BS-173 (DAC-CXB)
+    const headerFltMatch = fullText.match(/BS-?\s*(\d{3,4})\s*\(\s*([A-Z]{3}\s*[-–]\s*[A-Z]{3})\s*\)/i);
+    if (headerFltMatch) {
+      newForm.deptFlt = headerFltMatch[1];
+      newForm.deptRoute = headerFltMatch[2].replace(/\s+/g, '').replace('–', '-');
+    }
+
+    // Date: e.g. 27 AUG 26 or 25 AUG 26
+    const dateMatch = fullText.match(/(\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{2,4})/i);
+    if (dateMatch) {
+      newForm.date = dateMatch[1].toUpperCase();
+    }
+
+    // A/C Registration: e.g. S2-AFP, S2-AJH
+    const acMatch = fullText.match(/(S2-[A-Z0-9]{3}|HS-[A-Z0-9]{3})/i);
+    if (acMatch) {
+      newForm.ac = acMatch[1].toUpperCase();
+    }
+
+    // Bay: e.g. C-27, BAY-C-21, D-16
+    const bayMatch =
+      fullText.match(/(?:BAY|GATE|STAND)[-:\s]*([A-Z0-9-]+)/i) ||
+      fullText.match(/\|\s*([A-Z]?[-–]?[0-9]{1,2}[A-Z]?)\s*$/im) ||
+      fullText.match(/\|\s*([A-Z]-\d{1,2})\b/i);
+    if (bayMatch) {
+      newForm.bay = bayMatch[1].trim().replace('–', '-');
+    }
+
+    // Arrival Table: FLIGHT ROUTE ON-BLOCK (e.g. BS-142 CXB-DAC 1005 (LT))
+    const arvBlockMatch = fullText.match(/BS-?\s*(\d{3,4})\s+([A-Z]{3}\s*[-–]\s*[A-Z]{3})\s+([012]\d[0-5]\d)/i);
+    if (arvBlockMatch) {
+      // If arrival flight is different from dept flight
+      if (!newForm.deptFlt || arvBlockMatch[1] !== newForm.deptFlt) {
+        newForm.arvFlt = arvBlockMatch[1];
+        newForm.arvRoute = arvBlockMatch[2].replace(/\s+/g, '').replace('–', '-');
+        newForm.con = arvBlockMatch[3];
       }
     }
 
-    const routeMatch = fileNameUpper.match(/([A-Z]{3}\s*-\s*[A-Z]{3})/i);
-    if (routeMatch) {
-      newForm.deptRoute = routeMatch[1].replace(/\s+/g, '');
+    // Departure Table: FLIGHT ROUTE STD (e.g. BS-173 DAC-CXB 1050 (LT))
+    const deptBlockMatch = fullText.match(/DEPARTURE[\s\S]*?BS-?\s*(\d{3,4})\s+([A-Z]{3}\s*[-–]\s*[A-Z]{3})\s+([012]\d[0-5]\d)/i);
+    if (deptBlockMatch) {
+      newForm.deptFlt = deptBlockMatch[1];
+      newForm.deptRoute = deptBlockMatch[2].replace(/\s+/g, '').replace('–', '-');
+      newForm.std = deptBlockMatch[3];
     }
 
-    const dateMatch = fileNameUpper.match(/(\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{2,4})/i);
-    if (dateMatch) {
-      newForm.date = dateMatch[1];
+    // 3 times in a row for Departure (DC, CO, AB) e.g. "1053 (LT) 1054 (LT) 1109 (LT)" or "1053 1054 1109"
+    const threeTimesMatch = fullText.match(/([012]\d[0-5]\d)(?:\s*\(?LT\)?)?\s+([012]\d[0-5]\d)(?:\s*\(?LT\)?)?\s+([012]\d[0-5]\d)(?:\s*\(?LT\)?)?/i);
+    if (threeTimesMatch && !newForm.dc) {
+      newForm.dc = threeTimesMatch[1];
+      newForm.co = threeTimesMatch[2];
+      newForm.ab = threeTimesMatch[3];
     }
 
-    const acMatch = fileNameUpper.match(/(S2-[A-Z]{3}|HS-[A-Z]{3})/i);
-    if (acMatch) {
-      newForm.ac = acMatch[1];
+    // Status: e.g. FLIGHT 06 MINS EARLY, FLIGHT ON TIME, FLIGHT 49 MINS DELAY
+    const statusMatch = fullText.match(/FLIGHT\s+.*?(?:EARLY|DELAY|ON\s*TIME).*/i);
+    if (statusMatch) {
+      newForm.status = statusMatch[0].trim().toUpperCase();
     }
 
-    setFormData(newForm);
-    setOfficerName(newOfficerName);
-    setOfficerId(newOfficerId);
-    setReportType(detectedType);
-    setPastedText('');
+    // Ground Time: e.g. GROUND TIME: 49 MINS
+    const groundMatch = fullText.match(/GROUND\s*TIME[:\s]*(\d{1,3}\s*MINS?)/i);
+    if (groundMatch) {
+      newForm.ground = groundMatch[1].toUpperCase();
+    }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      setImagePreview(result);
-      setIsProcessing(true);
-      setTimeout(() => {
-        setIsProcessing(false);
-      }, 300);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Text parser for copied WhatsApp ramp report message
-  const parsePastedReportText = (text: string) => {
-    if (!text) return;
-    const lines = text.split('\n').map((l) => l.trim());
-    // Start fresh from empty form so old data is cleanly cleared
-    const newForm = getEmptyFormData();
-    let newOfficerName = '';
-    let newOfficerId = '';
-    let detectedType: ReportType = reportType;
-
+    // 3. Line by Line Detailed Extraction for Numbered Items (1 to 14) & Timings
     lines.forEach((line) => {
       const upper = line.toUpperCase();
-      // Flight & Route: e.g. BS-333 (DAC-DOH) or FLIGHT: BS-333
-      if (upper.includes('BS-') || upper.includes('BS ') || upper.includes('FLIGHT')) {
-        const fltMatch = upper.match(/BS-?\s*(\d{3,4})/i);
-        if (fltMatch) {
-          newForm.deptFlt = fltMatch[1];
-          const num = parseInt(fltMatch[1], 10);
-          if (num >= 200 && num <= 499) {
-            detectedType = 'INTERNATIONAL';
-          } else if (num >= 100 && num <= 199) {
-            detectedType = 'DOMESTIC';
-          }
-        }
-        const routeMatch = upper.match(/([A-Z]{3}\s*-\s*[A-Z]{3})/i);
-        if (routeMatch) newForm.deptRoute = routeMatch[1].replace(/\s+/g, '');
-      }
-
-      // Date: e.g. 25 AUG 26 or 27 AUG 26
-      const dateMatch = upper.match(/(\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{2,4})/i);
-      if (dateMatch) newForm.date = dateMatch[1];
-
-      // A/C Reg: e.g. S2-AJH, S2-AFP, S2-AKK
-      const acMatch = upper.match(/(S2-[A-Z]{3}|HS-[A-Z]{3})/i);
-      if (acMatch) newForm.ac = acMatch[1];
-
-      // Bay: e.g. BAY-C-21 or C-27 or D16 or 25
-      if (upper.includes('BAY') || upper.includes('GATE') || upper.includes('STAND')) {
-        const bayMatch = upper.match(/(?:BAY|GATE|STAND)[-:\s]*([A-Z0-9-]+)/i);
-        if (bayMatch) newForm.bay = bayMatch[1];
-      }
 
       // STD
       if (upper.includes('STD')) {
-        const stdMatch = upper.match(/STD[-:\s]*(\d{4})/i);
-        if (stdMatch) newForm.std = stdMatch[1];
+        const m = upper.match(/STD[-:\s]*([012]\d[0-5]\d)/i);
+        if (m) newForm.std = m[1];
       }
 
-      // Door Close / DC
-      if (upper.includes('DOOR CLOSE') || upper.includes('DC')) {
-        const dcMatch = upper.match(/(?:DOOR CLOSE|DC)[-:\s]*(\d{4})/i);
-        if (dcMatch) newForm.dc = dcMatch[1];
+      // Door Closed / DC
+      if (upper.includes('DOOR CLOSED') || upper.includes('DOOR CLOSE') || upper.includes('DC:')) {
+        const m = upper.match(/(?:DOOR\s*CLOSED?|DC)[-:\s]*([012]\d[0-5]\d)/i);
+        if (m) newForm.dc = m[1];
       }
 
-      // C/OFF / CO
-      if (upper.includes('C/OFF') || upper.includes('CO') || upper.includes('CHOX')) {
-        const coMatch = upper.match(/(?:C\/OFF|CO|CHOX)[-:\s]*(\d{4})/i);
-        if (coMatch) newForm.co = coMatch[1];
+      // Chocks Off / CO
+      if (upper.includes('CHOCKS OFF') || upper.includes('C/OFF') || upper.includes('CO:')) {
+        const m = upper.match(/(?:CHOCKS?\s*OFF|C\/OFF|CO)[-:\s]*([012]\d[0-5]\d)/i);
+        if (m) newForm.co = m[1];
       }
 
-      // A/B / Airborne
-      if (upper.includes('A/B') || upper.includes('AIRBORNE')) {
-        const abMatch = upper.match(/(?:A\/B|AIRBORNE)[-:\s]*(\d{4})/i);
-        if (abMatch) newForm.ab = abMatch[1];
+      // Airborne / AB
+      if (upper.includes('AIRBORNE') || upper.includes('A/B') || upper.includes('AB:')) {
+        const m = upper.match(/(?:AIRBORNE|A\/B|AB)[-:\s]*([012]\d[0-5]\d)/i);
+        if (m) newForm.ab = m[1];
       }
 
-      // Status (e.g. FLIGHT 07 MINS EARLY, FLIGHT ON TIME, FLIGHT 49 MINS DELAY)
-      if (upper.includes('EARLY') || upper.includes('DELAY') || upper.includes('ON TIME')) {
-        const statusMatch = upper.match(/FLIGHT\s+.*(?:EARLY|DELAY|ON TIME).*/i);
-        if (statusMatch) {
-          newForm.status = statusMatch[0].trim();
-        }
-      }
-
-      // Security / Cleaning / Catering
+      // 1. Security Check ST
       if (upper.includes('SECURITY CHECK ST') || upper.includes('SECURITY ST')) {
-        const m = upper.match(/(?:SECURITY.*?ST)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.securitySt = m[1];
+        const m = upper.match(/(?:SECURITY.*?ST(?:ART)?)[-:\s]*([A-Z0-9]+)/i);
+        if (m) newForm.securitySt = cleanTimeVal(m[1]);
       }
+      // 2. Security Check END
       if (upper.includes('SECURITY CHECK END') || upper.includes('SECURITY END')) {
         const m = upper.match(/(?:SECURITY.*?END)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.securityEnd = m[1];
+        if (m) newForm.securityEnd = cleanTimeVal(m[1]);
       }
-      if (upper.includes('CLEANING START') || upper.includes('CLEANING ST')) {
-        const m = upper.match(/(?:CLEANING.*?ST(?:ART)?)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.cleaningSt = m[1];
-      }
-      if (upper.includes('CLEANING END')) {
-        const m = upper.match(/(?:CLEANING.*?END)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.cleaningEnd = m[1];
-      }
+      // 3. Catering START
       if (upper.includes('CATERING START') || upper.includes('CATERING ST')) {
         const m = upper.match(/(?:CATERING.*?ST(?:ART)?)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.cateringSt = m[1];
+        if (m) newForm.cateringSt = cleanTimeVal(m[1]);
       }
+      // 4. Catering END
       if (upper.includes('CATERING END')) {
         const m = upper.match(/(?:CATERING.*?END)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.cateringEnd = m[1];
+        if (m) newForm.cateringEnd = cleanTimeVal(m[1]);
       }
-      if (upper.includes('CREW REPORT')) {
-        const m = upper.match(/(?:CREW.*?REPORT)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.crew = m[1];
+      // 5. Cleaning START
+      if (upper.includes('CLEANING START') || upper.includes('CLEANING ST')) {
+        const m = upper.match(/(?:CLEANING.*?ST(?:ART)?)[-:\s]*([A-Z0-9]+)/i);
+        if (m) newForm.cleaningSt = cleanTimeVal(m[1]);
       }
-      if (upper.includes('REFUELING DONE') || upper.includes('REFUEL')) {
-        const m = upper.match(/(?:REFUEL(?:ING)?.*?DONE)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.refuel = m[1];
+      // 6. Cleaning END
+      if (upper.includes('CLEANING END')) {
+        const m = upper.match(/(?:CLEANING.*?END)[-:\s]*([A-Z0-9]+)/i);
+        if (m) newForm.cleaningEnd = cleanTimeVal(m[1]);
       }
-      if (upper.includes('LAST BAGGAGE') || upper.includes('LBAG')) {
-        const m = upper.match(/(?:LAST BAGGAGE|LBAG)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.lbag = m[1];
-      }
-      if (upper.includes('BOARDING PERMITTED') || upper.includes('BOARDING PERMIT')) {
-        const m = upper.match(/(?:BOARDING PERMIT(?:TED)?)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.permit = m[1];
-      }
-      if (upper.includes('LAST PAX ONBOARD') || upper.includes('PAX')) {
-        const m = upper.match(/(?:LAST PAX ONBOARD|PAX)[-:\s]*([A-Z0-9]+)/i);
+      // 7. Last Pax Onboard
+      if (upper.includes('LAST PAX') || (upper.includes('PAX') && !upper.includes('CABIN'))) {
+        const m = upper.match(/(?:LAST\s*PAX.*?|PAX.*?)[-:\s]*([012]\d[0-5]\d)/i);
         if (m) newForm.pax = m[1];
       }
-      if (upper.includes('TRIM SUBMITTED')) {
-        const m = upper.match(/(?:TRIM SUBMITTED)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.trimSubmitted = m[1];
+      // 8. Refueling ST
+      if (upper.includes('REFUELING ST') || upper.includes('REFUEL ST')) {
+        const m = upper.match(/(?:REFUEL(?:ING)?.*?ST(?:ART)?)[-:\s]*([A-Z0-9]+)/i);
+        if (m) newForm.refuel = cleanTimeVal(m[1]);
       }
-      if (upper.includes('TRIM SIGNED')) {
-        const m = upper.match(/(?:TRIM SIGNED)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.trimSigned = m[1];
+      // 9. Refueling DONE
+      if (upper.includes('REFUELING DONE') || upper.includes('REFUEL DONE')) {
+        const m = upper.match(/(?:REFUEL(?:ING)?.*?DONE)[-:\s]*([A-Z0-9]+)/i);
+        if (m) newForm.refuel = cleanTimeVal(m[1]);
+      }
+      // 10. Crew Report
+      if (upper.includes('CREW REPORT') || upper.includes('CREW')) {
+        const m = upper.match(/(?:CREW.*?REPORT|CREW)[-:\s]*([A-Z0-9]+)/i);
+        if (m) newForm.crew = cleanTimeVal(m[1]);
+      }
+      // 11. Boarding Permitted
+      if (upper.includes('BOARDING PERMITTED') || upper.includes('BOARDING PERMIT')) {
+        const m = upper.match(/(?:BOARDING.*?PERMIT(?:TED)?)[-:\s]*([A-Z0-9]+)/i);
+        if (m) newForm.permit = cleanTimeVal(m[1]);
+      }
+      // 12. Petroling / Patrol
+      if (upper.includes('PETROLING') || upper.includes('PATROL')) {
+        const m = upper.match(/(?:PETROL(?:ING)?|PATROL.*?DONE)[-:\s]*([A-Z0-9]+)/i);
+        if (m) newForm.lbag = cleanTimeVal(m[1]);
+      }
+      // 13. Trim Sheet Submitted
+      if (upper.includes('TRIM') && upper.includes('SUBMITTED')) {
+        const m = upper.match(/(?:TRIM.*?SUBMITTED)[-:\s]*([A-Z0-9]+)/i);
+        if (m) newForm.trimSubmitted = cleanTimeVal(m[1]);
+      }
+      // 14. Trim Sheet Signed
+      if (upper.includes('TRIM') && upper.includes('SIGNED')) {
+        const m = upper.match(/(?:TRIM.*?SIGNED)[-:\s]*([A-Z0-9]+)/i);
+        if (m) newForm.trimSigned = cleanTimeVal(m[1]);
       }
 
-      // Officer & ID
-      if (upper.includes('ID-') || upper.includes('ID:') || upper.includes('OFFICER')) {
-        const idMatch = upper.match(/ID[-:\s]*(\d{4,6})/i);
-        if (idMatch) newOfficerId = idMatch[1];
-        if (!upper.includes('RAMP OFFICER')) {
-          const nameClean = line.replace(/RAMP|OFFICER|USBA|ID|\d|[-:]/gi, '').trim();
-          if (nameClean.length > 2) newOfficerName = nameClean;
+      // Officer ID & Officer Name
+      if (upper.includes('USBA ID') || upper.includes('ID -') || upper.includes('ID:') || upper.includes('ID-')) {
+        const idM = upper.match(/(?:USBA\s*ID|ID)[-:\s]*([0-9]{4,6})/i);
+        if (idM) newOfficerId = idM[1];
+      }
+
+      // Check for Officer Name (e.g. KAZI AQID AL MANSOOR, MD.AKIFE ISLAM, RASEL HOSSAIN)
+      if (
+        (upper.includes('KAZI') ||
+          upper.includes('MANSOOR') ||
+          upper.includes('AKIFE') ||
+          upper.includes('ISLAM') ||
+          upper.includes('RASEL') ||
+          upper.includes('HOSSAIN') ||
+          upper.includes('AL-AMIN') ||
+          upper.includes('OFFICER')) &&
+        !upper.includes('RAMP OFFICER /') &&
+        !upper.includes('SECURITY')
+      ) {
+        const cleaned = line.replace(/RAMP|OFFICER|USBA|ID|\d|[-:\/]/gi, '').trim();
+        if (cleaned.length > 3 && !cleaned.includes('FLIGHT') && !cleaned.includes('REPORT')) {
+          newOfficerName = cleaned;
         }
       }
 
-      // Delay Remarks / Reason
+      // Delay Remarks
       if (upper.includes('REMARKS:') || upper.includes('REMARK:') || upper.includes('DELAY REASON')) {
         const remarksClean = line.replace(/^(?:REMARKS?|DELAY\s*REASON|DELAY\s*CODE)[:\s-]*/i, '').trim();
         if (remarksClean) {
@@ -346,10 +401,73 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
       }
     });
 
+    // Determine flight category
+    if (newForm.deptFlt) {
+      const fltNum = parseInt(newForm.deptFlt, 10);
+      if (fltNum >= 200 && fltNum <= 499) {
+        detectedType = 'INTERNATIONAL';
+      } else {
+        detectedType = 'DOMESTIC';
+      }
+    }
+
     setFormData(newForm);
-    setOfficerName(newOfficerName);
-    setOfficerId(newOfficerId);
+    if (newOfficerName) setOfficerName(newOfficerName);
+    if (newOfficerId) setOfficerId(newOfficerId);
     setReportType(detectedType);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Fast baseline heuristic from filename
+    parseReportCardText('', file.name);
+
+    setIsProcessing(true);
+    setOcrSuccess(false);
+    setOcrProgressText('Loading card image...');
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const dataUrl = event.target?.result as string;
+      setImagePreview(dataUrl);
+
+      try {
+        setOcrProgressText('AI OCR reading departure card text...');
+        const result = await Tesseract.recognize(dataUrl, 'eng', {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              const pct = Math.round((m.progress || 0) * 100);
+              setOcrProgressText(`Scanning image & extracting data... ${pct}%`);
+            }
+          }
+        });
+
+        const extractedText = result?.data?.text || '';
+        if (extractedText.trim()) {
+          parseReportCardText(extractedText, file.name);
+          setOcrSuccess(true);
+          setOcrProgressText('✓ All fields extracted automatically!');
+        } else {
+          setOcrProgressText('Image loaded. You can verify and edit fields below.');
+        }
+      } catch (ocrErr) {
+        console.error('OCR Extraction error:', ocrErr);
+        // Fallback gracefully to filename heuristics
+        parseReportCardText('', file.name);
+        setOcrProgressText('Image loaded. Please verify details in the form.');
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Text parser for copied WhatsApp ramp report message
+  const parsePastedReportText = (text: string) => {
+    if (!text) return;
+    parseReportCardText(text);
   };
 
   const handleSave = () => {
@@ -503,13 +621,30 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
                 >
                   {imagePreview ? (
                     <div className="space-y-2 w-full">
-                      <img
-                        src={imagePreview}
-                        alt="Uploaded Card"
-                        className="max-h-56 mx-auto rounded-xl object-contain shadow-md"
-                      />
+                      <div className="relative">
+                        <img
+                          src={imagePreview}
+                          alt="Uploaded Card"
+                          className="max-h-56 mx-auto rounded-xl object-contain shadow-md border border-slate-700/50"
+                        />
+                        {isProcessing && (
+                          <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs rounded-xl flex flex-col items-center justify-center p-3 text-center animate-in fade-in">
+                            <RefreshCw className="w-8 h-8 text-amber-400 animate-spin mb-2" />
+                            <p className="text-xs font-black text-amber-300 font-mono">
+                              {ocrProgressText || 'Scanning Card Data with AI OCR...'}
+                            </p>
+                            <p className="text-[10px] text-slate-300 mt-1">Reading flights, timings, officer details...</p>
+                          </div>
+                        )}
+                      </div>
+                      {ocrSuccess && !isProcessing && (
+                        <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center justify-center gap-1.5 font-mono">
+                          <Check className="w-4 h-4 text-emerald-400" />
+                          <span>ALL FIELDS AUTO-POPULATED FROM IMAGE</span>
+                        </div>
+                      )}
                       <p className="text-[11px] text-amber-400 font-bold flex items-center justify-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> Click to change image
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> Click to change / re-upload image
                       </p>
                     </div>
                   ) : (
@@ -519,7 +654,7 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
                       </div>
                       <h4 className="text-xs font-bold">CLICK OR DRAG REPORT CARD IMAGE HERE</h4>
                       <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        Supports JPG, PNG (e.g. WhatsApp departure cards like BS-173, BS-541, BS-333)
+                        Auto-extracts Flight, Times (STD/DC/AB), Turnaround & Officer Info with AI OCR
                       </p>
                     </div>
                   )}
