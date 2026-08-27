@@ -157,13 +157,15 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
     const upper = val.toUpperCase().trim();
     if (upper.includes('EARLIER')) return 'EARLIER';
     if (upper.includes('OK')) return 'OK';
+    if (upper.includes('OB')) return 'OB';
+    if (upper.includes('N/Y') || upper === 'NY') return 'N/Y';
     const m = upper.match(/([012]\d[0-5]\d)/);
     if (m) return m[1];
     const colonMatch = upper.match(/([012]?\d):([0-5]\d)/);
     if (colonMatch) {
       return `${colonMatch[1].padStart(2, '0')}${colonMatch[2]}`;
     }
-    return upper.replace(/[^A-Z0-9]/g, '');
+    return upper.replace(/[^A-Z0-9\/-]/g, '');
   };
 
   // Universal text & OCR parser for USBA Ramp Departure Report cards
@@ -176,10 +178,7 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
     let detectedType: ReportType = 'DOMESTIC';
 
     const fullText = (rawText || '').replace(/\r/g, '\n');
-    const lines = fullText
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean);
+    const upperFull = fullText.toUpperCase();
 
     // 1. Check filename first for baseline info
     if (fileName) {
@@ -200,208 +199,247 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
       if (fnAc) newForm.ac = fnAc[1];
     }
 
-    // 2. Global Regex Extractions from Card Text
-    // Card Title Flight & Route e.g. BS-173 (DAC-CXB)
-    const headerFltMatch = fullText.match(/BS-?\s*(\d{3,4})\s*\(\s*([A-Z]{3}\s*[-–]\s*[A-Z]{3})\s*\)/i);
+    // 2. PRIMARY: Header Title Flight & Route (e.g., "BS-173 (DAC-CXB)")
+    // This is the DEPARTURE flight at the top of the card
+    const headerFltMatch = upperFull.match(/BS-?\s*(\d{3,4})\s*\(\s*([A-Z]{3}\s*[-–]\s*[A-Z]{3})\s*\)/i);
     if (headerFltMatch) {
       newForm.deptFlt = headerFltMatch[1];
       newForm.deptRoute = headerFltMatch[2].replace(/\s+/g, '').replace('–', '-');
     }
 
-    // Date: e.g. 27 AUG 26 or 25 AUG 26
-    const dateMatch = fullText.match(/(\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{2,4})/i);
+    // 3. GENERAL INFORMATION (Date, A/C Reg, Bay No)
+    // Date: e.g. 27 AUG 26
+    const dateMatch = upperFull.match(/(\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{2,4})/i);
     if (dateMatch) {
       newForm.date = dateMatch[1].toUpperCase();
     }
 
-    // A/C Registration: e.g. S2-AFP, S2-AJH
-    const acMatch = fullText.match(/(S2-[A-Z0-9]{3}|HS-[A-Z0-9]{3})/i);
+    // A/C Registration: e.g. S2-AKP, S2-AFP, S2-AJH
+    const acMatch = upperFull.match(/(S2-[A-Z0-9]{3}|HS-[A-Z0-9]{3}|PK-[A-Z0-9]{3})/i);
     if (acMatch) {
       newForm.ac = acMatch[1].toUpperCase();
     }
 
-    // Bay: e.g. C-27, BAY-C-21, D-16
+    // Bay No: e.g. "BAY NO: C-27" or "BAY: C-27" or "BAY NO C-27" (prevent capturing 'NO')
     const bayMatch =
-      fullText.match(/(?:BAY|GATE|STAND)[-:\s]*([A-Z0-9-]+)/i) ||
-      fullText.match(/\|\s*([A-Z]?[-–]?[0-9]{1,2}[A-Z]?)\s*$/im) ||
-      fullText.match(/\|\s*([A-Z]-\d{1,2})\b/i);
+      upperFull.match(/BAY\s*(?:NO\.?|NUMBER)?[:\s-]*([A-Z0-9-]+)/i) ||
+      upperFull.match(/GATE\s*(?:NO\.?|NUMBER)?[:\s-]*([A-Z0-9-]+)/i) ||
+      upperFull.match(/STAND\s*(?:NO\.?|NUMBER)?[:\s-]*([A-Z0-9-]+)/i);
     if (bayMatch) {
-      newForm.bay = bayMatch[1].trim().replace('–', '-');
+      let rawBay = bayMatch[1].trim().replace(/^NO\.?\s*/i, '').replace('–', '-');
+      if (rawBay && rawBay !== 'NO' && rawBay !== 'NUMBER') {
+        newForm.bay = rawBay;
+      }
+    }
+    // Fallback for Bay pattern like "C-27" or "D-16" or "BAY-C-21"
+    if (!newForm.bay) {
+      const explicitBay = upperFull.match(/\b([A-Z]-\d{1,2})\b/);
+      if (explicitBay) newForm.bay = explicitBay[1];
     }
 
-    // Arrival Table: FLIGHT ROUTE ON-BLOCK (e.g. BS-142 CXB-DAC 1005 (LT))
-    const arvBlockMatch = fullText.match(/BS-?\s*(\d{3,4})\s+([A-Z]{3}\s*[-–]\s*[A-Z]{3})\s+([012]\d[0-5]\d)/i);
-    if (arvBlockMatch) {
-      // If arrival flight is different from dept flight
-      if (!newForm.deptFlt || arvBlockMatch[1] !== newForm.deptFlt) {
-        newForm.arvFlt = arvBlockMatch[1];
-        newForm.arvRoute = arvBlockMatch[2].replace(/\s+/g, '').replace('–', '-');
-        newForm.con = arvBlockMatch[3];
+    // 4. SECTION SPLIT: Separate ARRIVAL and DEPARTURE sections
+    const arrivalIdx = upperFull.indexOf('ARRIVAL INFORMATION');
+    const departureIdx = upperFull.indexOf('DEPARTURE INFORMATION');
+
+    // Parse ARRIVAL INFORMATION section
+    if (arrivalIdx !== -1) {
+      const arrivalText = departureIdx !== -1
+        ? upperFull.substring(arrivalIdx, departureIdx)
+        : upperFull.substring(arrivalIdx, arrivalIdx + 500);
+
+      // Inbound flight: e.g. BS-142
+      const arvFltM = arrivalText.match(/BS-?\s*(\d{3,4})/i);
+      if (arvFltM) {
+        newForm.arvFlt = arvFltM[1];
+      }
+
+      // Inbound route: e.g. CXB-DAC
+      const arvRouteM = arrivalText.match(/([A-Z]{3}\s*[-–]\s*[A-Z]{3})/i);
+      if (arvRouteM) {
+        newForm.arvRoute = arvRouteM[1].replace(/\s+/g, '').replace('–', '-');
+      }
+
+      // Inbound C/ON (Chocks on): e.g. 1005 (LT)
+      const conM = arrivalText.match(/(?:C\/ON|C\/O|ON\s*BLOCK|CON)[-:\s]*([012]\d[0-5]\d)/i) ||
+                   arrivalText.match(/([012]\d[0-5]\d)(?:\s*\(?LT\)?)?/);
+      if (conM) {
+        newForm.con = conM[1];
+      }
+
+      // Inbound Door Open: e.g. 1006 (LT)
+      const doM = arrivalText.match(/(?:DOOR\s*OPEN|DO)[-:\s]*([012]\d[0-5]\d)/i);
+      if (doM) {
+        newForm.do = doM[1];
+      }
+
+      // Inbound All Disembark: e.g. 1016 (LT)
+      const disemM = arrivalText.match(/(?:ALL\s*DISEM|DISEM|DISEMBARK)[-:\s]*([012]\d[0-5]\d)/i);
+      if (disemM) {
+        newForm.disem = disemM[1];
       }
     }
 
-    // Departure Table: FLIGHT ROUTE STD (e.g. BS-173 DAC-CXB 1050 (LT))
-    const deptBlockMatch = fullText.match(/DEPARTURE[\s\S]*?BS-?\s*(\d{3,4})\s+([A-Z]{3}\s*[-–]\s*[A-Z]{3})\s+([012]\d[0-5]\d)/i);
-    if (deptBlockMatch) {
-      newForm.deptFlt = deptBlockMatch[1];
-      newForm.deptRoute = deptBlockMatch[2].replace(/\s+/g, '').replace('–', '-');
-      newForm.std = deptBlockMatch[3];
+    // Parse DEPARTURE INFORMATION section (THIS IS THE MAIN REPORT DATA!)
+    if (departureIdx !== -1) {
+      const departureText = upperFull.substring(departureIdx, departureIdx + 600);
+
+      // Departure flight: e.g. BS-173
+      const deptFltM = departureText.match(/BS-?\s*(\d{3,4})/i);
+      if (deptFltM) {
+        newForm.deptFlt = deptFltM[1];
+      }
+
+      // Departure route: e.g. DAC-CXB
+      const deptRouteM = departureText.match(/([A-Z]{3}\s*[-–]\s*[A-Z]{3})/i);
+      if (deptRouteM) {
+        newForm.deptRoute = deptRouteM[1].replace(/\s+/g, '').replace('–', '-');
+      }
+
+      // Departure STD: e.g. 1100 (LT)
+      const stdM = departureText.match(/STD[-:\s]*([012]\d[0-5]\d)/i) ||
+                   departureText.match(/([012]\d[0-5]\d)(?:\s*\(?LT\)?)?/);
+      if (stdM) {
+        newForm.std = stdM[1];
+      }
+
+      // Door Close (DC): e.g. 1053 (LT)
+      const dcM = departureText.match(/(?:DOOR\s*CLOSE|DC)[-:\s]*([012]\d[0-5]\d)/i);
+      if (dcM) {
+        newForm.dc = dcM[1];
+      }
+
+      // Chocks Off (C/OFF / CO): e.g. 1054 (LT)
+      const coM = departureText.match(/(?:C\/OFF|CO|CHOX|CHOCKS?\s*OFF)[-:\s]*([012]\d[0-5]\d)/i);
+      if (coM) {
+        newForm.co = coM[1];
+      }
+
+      // Airborne (A/B): e.g. N/Y (LT) or 1109 (LT)
+      const abM = departureText.match(/(?:A\/B|AIRBORNE)[-:\s]*([012]\d[0-5]\d|N\/Y|NY)/i);
+      if (abM) {
+        newForm.ab = cleanTimeVal(abM[1]);
+      }
     }
 
-    // 3 times in a row for Departure (DC, CO, AB) e.g. "1053 (LT) 1054 (LT) 1109 (LT)" or "1053 1054 1109"
-    const threeTimesMatch = fullText.match(/([012]\d[0-5]\d)(?:\s*\(?LT\)?)?\s+([012]\d[0-5]\d)(?:\s*\(?LT\)?)?\s+([012]\d[0-5]\d)(?:\s*\(?LT\)?)?/i);
-    if (threeTimesMatch && !newForm.dc) {
-      newForm.dc = threeTimesMatch[1];
-      newForm.co = threeTimesMatch[2];
-      newForm.ab = threeTimesMatch[3];
+    // 5. Global Fallbacks for Departure Times if not caught by section index
+    if (!newForm.std) {
+      const stdM = upperFull.match(/STD[-:\s]*([012]\d[0-5]\d)/i);
+      if (stdM) newForm.std = stdM[1];
+    }
+    if (!newForm.dc) {
+      const dcM = upperFull.match(/(?:DOOR\s*CLOSE|DC)[-:\s]*([012]\d[0-5]\d)/i);
+      if (dcM) newForm.dc = dcM[1];
+    }
+    if (!newForm.co) {
+      const coM = upperFull.match(/(?:C\/OFF|CO|CHOX)[-:\s]*([012]\d[0-5]\d)/i);
+      if (coM) newForm.co = coM[1];
+    }
+    if (!newForm.ab) {
+      const abM = upperFull.match(/(?:A\/B|AIRBORNE)[-:\s]*([012]\d[0-5]\d|N\/Y|NY)/i);
+      if (abM) newForm.ab = cleanTimeVal(abM[1]);
     }
 
-    // Status: e.g. FLIGHT 06 MINS EARLY, FLIGHT ON TIME, FLIGHT 49 MINS DELAY
-    const statusMatch = fullText.match(/FLIGHT\s+.*?(?:EARLY|DELAY|ON\s*TIME).*/i);
+    // 6. STATUS BANNER (e.g., "FLIGHT 06 MINS EARLY" or "FLIGHT ON TIME")
+    const statusMatch = upperFull.match(/FLIGHT\s+.*?(?:EARLY|DELAY|ON\s*TIME).*/i);
     if (statusMatch) {
       newForm.status = statusMatch[0].trim().toUpperCase();
     }
 
-    // Ground Time: e.g. GROUND TIME: 49 MINS
-    const groundMatch = fullText.match(/GROUND\s*TIME[:\s]*(\d{1,3}\s*MINS?)/i);
+    // 7. GROUND TIME (e.g., "GROUND TIME 48 MINS")
+    const groundMatch = upperFull.match(/GROUND\s*TIME[:\s]*(\d{1,3}\s*MINS?)/i);
     if (groundMatch) {
       newForm.ground = groundMatch[1].toUpperCase();
     }
 
-    // 3. Line by Line Detailed Extraction for Numbered Items (1 to 14) & Timings
-    lines.forEach((line) => {
-      const upper = line.toUpperCase();
+    // 8. 13-POINT TURNAROUND CHECKLIST
+    // 1. Security Check ST
+    const secStM = upperFull.match(/(?:1\.?\s*SECURITY.*?ST(?:ART)?|SECURITY.*?ST)[-:\s]*([A-Z0-9]+)/i);
+    if (secStM) newForm.securitySt = cleanTimeVal(secStM[1]);
 
-      // STD
-      if (upper.includes('STD')) {
-        const m = upper.match(/STD[-:\s]*([012]\d[0-5]\d)/i);
-        if (m) newForm.std = m[1];
-      }
+    // 2. Security Check END
+    const secEndM = upperFull.match(/(?:2\.?\s*SECURITY.*?END|SECURITY.*?END)[-:\s]*([A-Z0-9]+)/i);
+    if (secEndM) newForm.securityEnd = cleanTimeVal(secEndM[1]);
 
-      // Door Closed / DC
-      if (upper.includes('DOOR CLOSED') || upper.includes('DOOR CLOSE') || upper.includes('DC:')) {
-        const m = upper.match(/(?:DOOR\s*CLOSED?|DC)[-:\s]*([012]\d[0-5]\d)/i);
-        if (m) newForm.dc = m[1];
-      }
+    // 3. Cleaning START
+    const clnStM = upperFull.match(/(?:3\.?\s*CLEANING.*?ST(?:ART)?|CLEANING.*?START)[-:\s]*([A-Z0-9]+)/i);
+    if (clnStM) newForm.cleaningSt = cleanTimeVal(clnStM[1]);
 
-      // Chocks Off / CO
-      if (upper.includes('CHOCKS OFF') || upper.includes('C/OFF') || upper.includes('CO:')) {
-        const m = upper.match(/(?:CHOCKS?\s*OFF|C\/OFF|CO)[-:\s]*([012]\d[0-5]\d)/i);
-        if (m) newForm.co = m[1];
-      }
+    // 4. Cleaning END
+    const clnEndM = upperFull.match(/(?:4\.?\s*CLEANING.*?END|CLEANING.*?END)[-:\s]*([A-Z0-9]+)/i);
+    if (clnEndM) newForm.cleaningEnd = cleanTimeVal(clnEndM[1]);
 
-      // Airborne / AB
-      if (upper.includes('AIRBORNE') || upper.includes('A/B') || upper.includes('AB:')) {
-        const m = upper.match(/(?:AIRBORNE|A\/B|AB)[-:\s]*([012]\d[0-5]\d)/i);
-        if (m) newForm.ab = m[1];
-      }
+    // 5. Catering START
+    const catStM = upperFull.match(/(?:5\.?\s*CATERING.*?ST(?:ART)?|CATERING.*?START)[-:\s]*([A-Z0-9]+)/i);
+    if (catStM) newForm.cateringSt = cleanTimeVal(catStM[1]);
 
-      // 1. Security Check ST
-      if (upper.includes('SECURITY CHECK ST') || upper.includes('SECURITY ST')) {
-        const m = upper.match(/(?:SECURITY.*?ST(?:ART)?)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.securitySt = cleanTimeVal(m[1]);
-      }
-      // 2. Security Check END
-      if (upper.includes('SECURITY CHECK END') || upper.includes('SECURITY END')) {
-        const m = upper.match(/(?:SECURITY.*?END)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.securityEnd = cleanTimeVal(m[1]);
-      }
-      // 3. Catering START
-      if (upper.includes('CATERING START') || upper.includes('CATERING ST')) {
-        const m = upper.match(/(?:CATERING.*?ST(?:ART)?)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.cateringSt = cleanTimeVal(m[1]);
-      }
-      // 4. Catering END
-      if (upper.includes('CATERING END')) {
-        const m = upper.match(/(?:CATERING.*?END)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.cateringEnd = cleanTimeVal(m[1]);
-      }
-      // 5. Cleaning START
-      if (upper.includes('CLEANING START') || upper.includes('CLEANING ST')) {
-        const m = upper.match(/(?:CLEANING.*?ST(?:ART)?)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.cleaningSt = cleanTimeVal(m[1]);
-      }
-      // 6. Cleaning END
-      if (upper.includes('CLEANING END')) {
-        const m = upper.match(/(?:CLEANING.*?END)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.cleaningEnd = cleanTimeVal(m[1]);
-      }
-      // 7. Last Pax Onboard
-      if (upper.includes('LAST PAX') || (upper.includes('PAX') && !upper.includes('CABIN'))) {
-        const m = upper.match(/(?:LAST\s*PAX.*?|PAX.*?)[-:\s]*([012]\d[0-5]\d)/i);
-        if (m) newForm.pax = m[1];
-      }
-      // 8. Refueling ST
-      if (upper.includes('REFUELING ST') || upper.includes('REFUEL ST')) {
-        const m = upper.match(/(?:REFUEL(?:ING)?.*?ST(?:ART)?)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.refuel = cleanTimeVal(m[1]);
-      }
-      // 9. Refueling DONE
-      if (upper.includes('REFUELING DONE') || upper.includes('REFUEL DONE')) {
-        const m = upper.match(/(?:REFUEL(?:ING)?.*?DONE)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.refuel = cleanTimeVal(m[1]);
-      }
-      // 10. Crew Report
-      if (upper.includes('CREW REPORT') || upper.includes('CREW')) {
-        const m = upper.match(/(?:CREW.*?REPORT|CREW)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.crew = cleanTimeVal(m[1]);
-      }
-      // 11. Boarding Permitted
-      if (upper.includes('BOARDING PERMITTED') || upper.includes('BOARDING PERMIT')) {
-        const m = upper.match(/(?:BOARDING.*?PERMIT(?:TED)?)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.permit = cleanTimeVal(m[1]);
-      }
-      // 12. Petroling / Patrol
-      if (upper.includes('PETROLING') || upper.includes('PATROL')) {
-        const m = upper.match(/(?:PETROL(?:ING)?|PATROL.*?DONE)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.lbag = cleanTimeVal(m[1]);
-      }
-      // 13. Trim Sheet Submitted
-      if (upper.includes('TRIM') && upper.includes('SUBMITTED')) {
-        const m = upper.match(/(?:TRIM.*?SUBMITTED)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.trimSubmitted = cleanTimeVal(m[1]);
-      }
-      // 14. Trim Sheet Signed
-      if (upper.includes('TRIM') && upper.includes('SIGNED')) {
-        const m = upper.match(/(?:TRIM.*?SIGNED)[-:\s]*([A-Z0-9]+)/i);
-        if (m) newForm.trimSigned = cleanTimeVal(m[1]);
-      }
+    // 6. Catering END
+    const catEndM = upperFull.match(/(?:6\.?\s*CATERING.*?END|CATERING.*?END)[-:\s]*([A-Z0-9]+)/i);
+    if (catEndM) newForm.cateringEnd = cleanTimeVal(catEndM[1]);
 
-      // Officer ID & Officer Name
-      if (upper.includes('USBA ID') || upper.includes('ID -') || upper.includes('ID:') || upper.includes('ID-')) {
-        const idM = upper.match(/(?:USBA\s*ID|ID)[-:\s]*([0-9]{4,6})/i);
-        if (idM) newOfficerId = idM[1];
-      }
+    // 7. Crew Report
+    const crewM = upperFull.match(/(?:7\.?\s*CREW.*?REPORT|CREW.*?REPORT)[-:\s]*([A-Z0-9]+)/i);
+    if (crewM) newForm.crew = cleanTimeVal(crewM[1]);
 
-      // Check for Officer Name (e.g. KAZI AQID AL MANSOOR, MD.AKIFE ISLAM, RASEL HOSSAIN)
+    // 8. Refueling Done
+    const refuelM = upperFull.match(/(?:8\.?\s*REFUEL(?:ING)?.*?DONE|REFUEL(?:ING)?.*?DONE)[-:\s]*([A-Z0-9]+)/i) ||
+                    upperFull.match(/(?:REFUEL(?:ING)?.*?ST(?:ART)?)[-:\s]*([A-Z0-9]+)/i);
+    if (refuelM) newForm.refuel = cleanTimeVal(refuelM[1]);
+
+    // 9. Last Baggage Report
+    const lbagM = upperFull.match(/(?:9\.?\s*LAST\s*BAGGAGE.*?|LAST\s*BAGGAGE.*?)[-:\s]*([A-Z0-9]+)/i);
+    if (lbagM) newForm.lbag = cleanTimeVal(lbagM[1]);
+
+    // 10. Boarding Permitted
+    const permitM = upperFull.match(/(?:10\.?\s*BOARDING.*?PERMIT(?:TED)?|BOARDING.*?PERMIT(?:TED)?)[-:\s]*([A-Z0-9]+)/i);
+    if (permitM) newForm.permit = cleanTimeVal(permitM[1]);
+
+    // 11. Last Pax Onboard
+    const paxM = upperFull.match(/(?:11\.?\s*LAST\s*PAX.*?|LAST\s*PAX.*?)[-:\s]*([012]\d[0-5]\d)/i);
+    if (paxM) newForm.pax = cleanTimeVal(paxM[1]);
+
+    // 12. Trim Submitted
+    const trimSubM = upperFull.match(/(?:12\.?\s*TRIM.*?SUBMITTED|TRIM.*?SUBMITTED)[-:\s]*([A-Z0-9]+)/i);
+    if (trimSubM) newForm.trimSubmitted = cleanTimeVal(trimSubM[1]);
+
+    // 13. Trim Signed
+    const trimSignM = upperFull.match(/(?:13\.?\s*TRIM.*?SIGNED|TRIM.*?SIGNED)[-:\s]*([A-Z0-9]+)/i);
+    if (trimSignM) newForm.trimSigned = cleanTimeVal(trimSignM[1]);
+
+    // 9. OFFICER NAME & USBA ID
+    // USBA ID: e.g. "USBA ID- USBA-27948" or "USBA ID 27948" or "ID: 4365"
+    const idMatch = upperFull.match(/USBA\s*ID[-:\s]*([A-Z0-9-]+)/i) ||
+                    upperFull.match(/\bID[-:\s]*([0-9]{4,6})\b/i);
+    if (idMatch) {
+      newOfficerId = idMatch[1].trim();
+    }
+
+    // Officer Name: e.g. "KAZI AQIB AL MANSOOR", "MD.AKIFE ISLAM", "RASEL HOSSAIN"
+    const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      const uLine = line.toUpperCase();
       if (
-        (upper.includes('KAZI') ||
-          upper.includes('MANSOOR') ||
-          upper.includes('AKIFE') ||
-          upper.includes('ISLAM') ||
-          upper.includes('RASEL') ||
-          upper.includes('HOSSAIN') ||
-          upper.includes('AL-AMIN') ||
-          upper.includes('OFFICER')) &&
-        !upper.includes('RAMP OFFICER /') &&
-        !upper.includes('SECURITY')
+        (uLine.includes('KAZI') ||
+         uLine.includes('AQIB') ||
+         uLine.includes('MANSOOR') ||
+         uLine.includes('AKIFE') ||
+         uLine.includes('ISLAM') ||
+         uLine.includes('RASEL') ||
+         uLine.includes('HOSSAIN') ||
+         uLine.includes('AL-AMIN') ||
+         uLine.includes('TAHMID') ||
+         uLine.includes('SAKIB')) &&
+        !uLine.includes('RAMP OFFICER') &&
+        !uLine.includes('SECURITY')
       ) {
         const cleaned = line.replace(/RAMP|OFFICER|USBA|ID|\d|[-:\/]/gi, '').trim();
         if (cleaned.length > 3 && !cleaned.includes('FLIGHT') && !cleaned.includes('REPORT')) {
           newOfficerName = cleaned;
+          break;
         }
       }
+    }
 
-      // Delay Remarks
-      if (upper.includes('REMARKS:') || upper.includes('REMARK:') || upper.includes('DELAY REASON')) {
-        const remarksClean = line.replace(/^(?:REMARKS?|DELAY\s*REASON|DELAY\s*CODE)[:\s-]*/i, '').trim();
-        if (remarksClean) {
-          newForm.delayRemarks = remarksClean;
-        }
-      }
-    });
-
-    // Determine flight category
+    // Determine flight category (Domestic vs International)
     if (newForm.deptFlt) {
       const fltNum = parseInt(newForm.deptFlt, 10);
       if (fltNum >= 200 && fltNum <= 499) {
@@ -697,33 +735,41 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block">FLIGHT:</span>
+                  <div className="p-2.5 rounded-xl bg-slate-900/90 border border-amber-500/40">
+                    <span className="text-[10px] font-bold text-amber-400 block tracking-wide">DEPARTURE FLIGHT:</span>
                     <span className="font-black text-amber-300 text-sm">
                       {formData.deptFlt ? `BS-${formData.deptFlt} (${formData.deptRoute || 'ROUTE'})` : 'NOT SPECIFIED'}
                     </span>
                   </div>
-                  <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block">A/C & BAY:</span>
+                  <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                    <span className="text-[10px] font-bold text-slate-400 block tracking-wide">A/C & BAY:</span>
                     <span className="font-black text-white text-sm">
                       {formData.ac || 'REG'} | {formData.bay || 'BAY'}
                     </span>
                   </div>
-                  <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block">TIMINGS (STD / DC / AB):</span>
-                    <span className="font-bold text-sky-300">
-                      {formData.std || '--'} / {formData.dc || '--'} / {formData.ab || '--'}
+                  <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                    <span className="text-[10px] font-bold text-slate-400 block tracking-wide">TIMINGS (STD / DC / CO / AB):</span>
+                    <span className="font-bold text-sky-300 text-xs">
+                      {formData.std || '--'} / {formData.dc || '--'} / {formData.co || '--'} / {formData.ab || '--'}
                     </span>
                   </div>
-                  <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block">STATUS:</span>
-                    <span className="font-black text-emerald-400">
+                  <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                    <span className="text-[10px] font-bold text-slate-400 block tracking-wide">FLIGHT STATUS:</span>
+                    <span className="font-black text-emerald-400 text-xs">
                       {formData.status || 'READY'}
                     </span>
                   </div>
                 </div>
 
-                <div className="p-2 rounded-lg bg-slate-900/90 border border-slate-800 text-[11px] space-y-1">
+                {/* Inbound Flight summary if available */}
+                {formData.arvFlt && (
+                  <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/30 text-[11px] font-mono flex items-center justify-between text-sky-300">
+                    <span className="font-bold">INBOUND FLIGHT: BS-{formData.arvFlt} ({formData.arvRoute || 'ROUTE'})</span>
+                    <span className="text-slate-300">C/ON: <b className="text-white">{formData.con || '--'}</b> | DO: <b className="text-white">{formData.do || '--'}</b></span>
+                  </div>
+                )}
+
+                <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] space-y-1">
                   <div className="flex items-center justify-between text-slate-300">
                     <span>Officer:</span>
                     <span className="font-bold text-white">
@@ -732,8 +778,8 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
                   </div>
                   <div className="flex items-center justify-between text-slate-300">
                     <span>Turnaround Durations:</span>
-                    <span className="text-amber-300 font-mono">
-                      Sec: {formData.securitySt || 'OK'} | Cln: {formData.cleaningSt || 'OK'} | Cat: {formData.cateringSt || 'OK'}
+                    <span className="text-amber-300 font-mono text-[10px]">
+                      Sec: {formData.securitySt || 'OK'} | Cln: {formData.cleaningSt || 'OK'} | Cat: {formData.cateringSt || 'OK'} | Gnd: {formData.ground || '--'}
                     </span>
                   </div>
                 </div>
@@ -933,6 +979,68 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
               </div>
             </div>
 
+            {/* Inbound / Arrival Information Row (Optional/Inbound details) */}
+            <div className="p-3 rounded-xl bg-sky-950/30 border border-sky-500/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black text-sky-400 uppercase tracking-wide font-mono">
+                  INBOUND / ARRIVAL INFORMATION (INBOUND FLIGHT)
+                </span>
+                <span className="text-[10px] text-slate-400">Captured for Turnaround & Ground Time tracking</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 block mb-1">INBOUND FLT</label>
+                  <input
+                    type="text"
+                    value={formData.arvFlt || ''}
+                    onChange={(e) => handleFieldChange('arvFlt', e.target.value)}
+                    placeholder="e.g. 142"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-sky-300 font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 block mb-1">INBOUND ROUTE</label>
+                  <input
+                    type="text"
+                    value={formData.arvRoute || ''}
+                    onChange={(e) => handleFieldChange('arvRoute', e.target.value)}
+                    placeholder="CXB-DAC"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 block mb-1">C/ON (CHOCKS ON)</label>
+                  <input
+                    type="text"
+                    value={formData.con || ''}
+                    onChange={(e) => handleFieldChange('con', e.target.value)}
+                    placeholder="1005"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 block mb-1">DOOR OPEN</label>
+                  <input
+                    type="text"
+                    value={formData.do || ''}
+                    onChange={(e) => handleFieldChange('do', e.target.value)}
+                    placeholder="1006"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 block mb-1">ALL DISEM</label>
+                  <input
+                    type="text"
+                    value={formData.disem || ''}
+                    onChange={(e) => handleFieldChange('disem', e.target.value)}
+                    placeholder="1016"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Row 3: Security, Cleaning, Catering, Boarding Permit, Last Pax */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div>
@@ -1008,6 +1116,59 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
                   onChange={(e) => handleFieldChange('pax', e.target.value)}
                   placeholder="1050"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Row 4: Refueling, Last Baggage, Trim Sheet, Ground Time */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">REFUELING DONE</label>
+                <input
+                  type="text"
+                  value={formData.refuel || ''}
+                  onChange={(e) => handleFieldChange('refuel', e.target.value)}
+                  placeholder="1035"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">LAST BAGGAGE REPORT</label>
+                <input
+                  type="text"
+                  value={formData.lbag || ''}
+                  onChange={(e) => handleFieldChange('lbag', e.target.value)}
+                  placeholder="1033"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">TRIM SUB / SIGNED</label>
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    value={formData.trimSubmitted || ''}
+                    onChange={(e) => handleFieldChange('trimSubmitted', e.target.value)}
+                    placeholder="1051"
+                    className="w-1/2 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono"
+                  />
+                  <input
+                    type="text"
+                    value={formData.trimSigned || ''}
+                    onChange={(e) => handleFieldChange('trimSigned', e.target.value)}
+                    placeholder="1052"
+                    className="w-1/2 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">GROUND TIME</label>
+                <input
+                  type="text"
+                  value={formData.ground || ''}
+                  onChange={(e) => handleFieldChange('ground', e.target.value)}
+                  placeholder="48 MINS"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-amber-300 font-mono font-bold"
                 />
               </div>
             </div>
