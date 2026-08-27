@@ -342,7 +342,7 @@ export function buildDailyAnalyticalSnapshot(
       onTimeCount,
       otpRate,
       delayRate,
-      topDelayItem: topDelayItem || undefined,
+      topDelayItem: topDelayItem || null,
       activeCategoryBreakdown,
       delayBreakdown
     },

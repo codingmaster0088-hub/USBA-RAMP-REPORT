@@ -524,7 +524,7 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
         : reportType;
 
     const dateIso = parseDateToIso(formData.date || 'TODAY');
-    const customId = `report-bs${flightNumClean.toLowerCase()}-${dateIso.replace(/-/g, '')}-${officerId || Date.now()}`;
+    const customId = `report-bs${flightNumClean.toLowerCase()}-${dateIso.replace(/-/g, '')}`;
 
     onSaveReport(
       {

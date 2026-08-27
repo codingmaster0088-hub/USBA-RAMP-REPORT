@@ -645,7 +645,14 @@ export default function App() {
           return rDateIso === reportDateIso;
         });
 
-    const id = existingReport ? existingReport.id : (existingId || `report-${targetFlightClean.toLowerCase()}-${reportDateIso.replace(/-/g, '')}-${Date.now()}`);
+    const id = existingReport ? existingReport.id : (existingId || `report-bs${targetFlightClean.toLowerCase()}-${reportDateIso.replace(/-/g, '')}`);
+
+    // Ensure this ID is removed from deleted ids cache so it is never hidden
+    try {
+      const deletedIds = JSON.parse(localStorage.getItem('usb_deleted_report_ids') || '[]');
+      const updatedDeleted = deletedIds.filter((dId: string) => dId !== id);
+      localStorage.setItem('usb_deleted_report_ids', JSON.stringify(updatedDeleted));
+    } catch (e) {}
 
     // Merge existing formData with new updates only when updating same report
     const mergedFormData: RampReportFormData = existingReport

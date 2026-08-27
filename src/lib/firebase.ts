@@ -23,6 +23,26 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000; // 30 Days auto-retention for Daily Analytical Snapshots
 
+// Helper to recursively remove undefined fields and ensure Firestore compatibility
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === undefined) {
+    return null as unknown as T;
+  }
+  if (data === null || typeof data !== 'object') {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeForFirestore(item)) as unknown as T;
+  }
+  const cleanObj: Record<string, any> = {};
+  for (const [key, val] of Object.entries(data as Record<string, any>)) {
+    if (val !== undefined) {
+      cleanObj[key] = sanitizeForFirestore(val);
+    }
+  }
+  return cleanObj as T;
+}
+
 // Helper to extract timestamp from notice or log ID/createdAt
 function getCreatedTimestamp(item: { createdAt?: number; id: string }): number {
   if (item.createdAt) return item.createdAt;
@@ -38,15 +58,17 @@ export function subscribeToSavedReports(
   onError?: (err: any) => void
 ) {
   try {
-    const q = query(collection(db, 'savedReports'), orderBy('timestamp', 'desc'));
+    const colRef = collection(db, 'savedReports');
     return onSnapshot(
-      q,
+      colRef,
       (snapshot) => {
         const reports: SavedReport[] = [];
         const seenKeys = new Set<string>();
 
         snapshot.forEach((docSnap) => {
-          const rep = docSnap.data() as SavedReport;
+          const raw = docSnap.data();
+          if (!raw) return;
+          const rep = { ...raw, id: raw.id || docSnap.id } as SavedReport;
 
           // Unique key combining flight, date, and document ID to avoid deleting valid reports
           const flightNum = (rep.flight || rep.formData?.deptFlt || rep.formData?.arvFlt || '')
@@ -61,6 +83,13 @@ export function subscribeToSavedReports(
             seenKeys.add(key);
             reports.push(rep);
           }
+        });
+
+        // In-memory sort ensures no document is excluded due to index/timestamp schema anomalies
+        reports.sort((a, b) => {
+          const tA = a.createdAt || (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+          const tB = b.createdAt || (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+          return tB - tA;
         });
 
         onUpdate(reports);
@@ -78,12 +107,19 @@ export function subscribeToSavedReports(
 }
 
 // Save or Update a report in Firestore
-export async function syncReportToFirestore(report: SavedReport) {
+export async function syncReportToFirestore(report: SavedReport): Promise<void> {
   try {
-    const docRef = doc(db, 'savedReports', report.id);
-    await setDoc(docRef, report, { merge: true });
+    const cleanReport = sanitizeForFirestore({
+      ...report,
+      id: report.id,
+      timestamp: report.timestamp || new Date().toISOString(),
+      createdAt: report.createdAt || Date.now()
+    });
+    const docRef = doc(db, 'savedReports', cleanReport.id);
+    await setDoc(docRef, cleanReport, { merge: true });
+    console.log(`[Firestore] Report synced: ${cleanReport.id} (${cleanReport.flight})`);
   } catch (err) {
-    console.error('Failed to sync report to Firestore:', err);
+    console.error(`[Firestore Error] Failed to sync report ${report?.id}:`, err);
     throw err;
   }
 }
@@ -270,8 +306,9 @@ export function subscribeToUserLogs(
 // Log User Activity to Firestore
 export async function logUserActivityToFirestore(log: UserLog) {
   try {
-    const docRef = doc(db, 'userLogs', log.id);
-    await setDoc(docRef, log);
+    const cleanLog = sanitizeForFirestore(log);
+    const docRef = doc(db, 'userLogs', cleanLog.id);
+    await setDoc(docRef, cleanLog);
   } catch (err) {
     console.error('Failed to log user activity to Firestore:', err);
   }
@@ -297,7 +334,9 @@ export async function saveDailyAnalyticalSnapshotToFirestore(snapshot: DailyAnal
       expiresAt: expiresAt
     };
 
-    await setDoc(docRef, payload, { merge: true });
+    const cleanPayload = sanitizeForFirestore(payload);
+    await setDoc(docRef, cleanPayload, { merge: true });
+    console.log(`[Firestore] Daily analytical snapshot saved: ${docId}`);
   } catch (err) {
     console.error('Failed to save daily analytical snapshot to Firestore:', err);
     throw err;
