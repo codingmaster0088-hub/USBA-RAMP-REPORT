@@ -633,7 +633,15 @@ export default function App() {
 
     const targetFlightClean = cleanFlightNum(data.deptFlt || data.arvFlt || '');
     const flightKey = targetFlightClean ? `BS-${targetFlightClean}` : 'BS-FLT';
-    const reportDateIso = parseDateToIso(data.date || 'TODAY');
+
+    const getTodayFormattedDate = (): string => {
+      return new Date()
+        .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
+        .toUpperCase();
+    };
+
+    const finalReportDate = (data.date && data.date.trim()) ? data.date : getTodayFormattedDate();
+    const reportDateIso = parseDateToIso(finalReportDate || 'TODAY');
 
     // Find existing report by existingId OR by BOTH (flight number + same date)
     const existingReport = existingId
@@ -659,9 +667,10 @@ export default function App() {
       ? {
           ...existingReport.formData,
           ...data,
+          date: finalReportDate,
           station: activeUser.station
         }
-      : { ...data, station: activeUser.station };
+      : { ...data, date: finalReportDate, station: activeUser.station };
 
     // Clean undefined or empty overrides if existing had value, BUT do NOT keep old delay reasons if new report is early/on-time
     if (existingReport) {
@@ -693,7 +702,7 @@ export default function App() {
       type: resolvedType,
       mode,
       flight: flightKey,
-      date: data.date || existingReport?.date || '',
+      date: finalReportDate,
       route: data.deptRoute || data.arvRoute || existingReport?.route || 'N/A',
       timestamp: new Date().toISOString(),
       createdAt: Date.now(),

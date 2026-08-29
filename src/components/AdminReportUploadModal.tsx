@@ -888,12 +888,22 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">DATE *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] font-bold text-slate-400 block">DATE *</label>
+                  <button
+                    type="button"
+                    onClick={() => handleFieldChange('date', getTodayDateFormatted())}
+                    className="text-[8px] font-black text-amber-400 hover:text-amber-300 px-1 rounded bg-amber-500/10 border border-amber-500/30"
+                    title="Reset to today's date"
+                  >
+                    TODAY
+                  </button>
+                </div>
                 <input
                   type="text"
-                  value={formData.date || ''}
+                  value={formData.date || getTodayDateFormatted()}
                   onChange={(e) => handleFieldChange('date', e.target.value)}
-                  placeholder="27 AUG 26"
+                  placeholder={getTodayDateFormatted()}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono font-bold"
                 />
               </div>

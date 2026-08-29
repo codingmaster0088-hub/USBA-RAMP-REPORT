@@ -160,12 +160,22 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   const [formData, setFormData] = useState<RampReportFormData>(() => {
     if (reportToEdit) return reportToEdit.formData;
 
+    const todayStr = getTodayFormattedDate();
+
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && parsed.formData) {
-          return parsed.formData;
+          // Check if draft was created on the current calendar day
+          const draftDateStr = parsed.savedAt ? new Date(parsed.savedAt).toDateString() : null;
+          const isDraftFromToday = draftDateStr === new Date().toDateString();
+
+          return {
+            ...parsed.formData,
+            // If the draft is from a previous day, ALWAYS force date to today's date!
+            date: isDraftFromToday && parsed.formData.date ? parsed.formData.date : todayStr
+          };
         }
       }
     } catch (e) {}
@@ -197,6 +207,13 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       setFormData(reportToEdit.formData);
       setReportType(reportToEdit.type);
       setFlightMode(reportToEdit.mode);
+    } else {
+      // Switching to a new report: ensure date is always Today's date
+      const todayStr = getTodayFormattedDate();
+      setFormData((prev) => ({
+        ...prev,
+        date: todayStr
+      }));
     }
   }, [reportToEdit]);
 
@@ -640,6 +657,20 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                   }}
                 />
               </label>
+            </div>
+            {/* Status helper under date field */}
+            <div className="mt-1 flex items-center justify-between text-[9px]">
+              {formData.date && formData.date.toUpperCase() === getTodayFormattedDate() ? (
+                <span className="text-emerald-400 flex items-center gap-1 font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  TODAY (AUTOMATIC)
+                </span>
+              ) : (
+                <span className="text-amber-400 flex items-center gap-1 font-bold">
+                  <AlertTriangle className="w-2.5 h-2.5" />
+                  CUSTOM DATE SELECTED
+                </span>
+              )}
             </div>
           </div>
 
