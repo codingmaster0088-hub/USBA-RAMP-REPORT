@@ -214,8 +214,34 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
     const normalizedTargetIso = parseDateToIso(targetIso);
     const targetDmKey = parseDayMonthKey(normalizedTargetIso);
 
-    // 1. Direct form date match using standardized parseDateToIso
+    // Specific exclusion: Remove flight BS 307 only for 03 SEP 26 date
+    const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
+    const mainFlt = cleanFlightNum(r.flight || '');
+    const arvFlt = cleanFlightNum(r.formData?.arvFlt || '');
+    const fltClean = deptFlt || mainFlt || arvFlt;
+    const rawFltInfo = `${r.flight || ''} ${r.formData?.deptFlt || ''} ${r.formData?.arvFlt || ''} ${r.id || ''}`.toUpperCase();
+    const isBs307 = fltClean === '307' || rawFltInfo.includes('307');
+
+    const isTarget03Sep =
+      normalizedTargetIso === '2026-09-03' ||
+      targetDmKey === '03SEP' ||
+      targetIso.toUpperCase().includes('03 SEP') ||
+      targetIso.toUpperCase().includes('03SEP') ||
+      selectedIsoDate === '2026-09-03' ||
+      activeDateDisplay.toUpperCase().includes('03 SEP');
+
     const rDateString = (r.formData?.date || r.date || '').trim();
+    const isReport03Sep =
+      rDateString.toUpperCase().includes('03 SEP') ||
+      rDateString.toUpperCase().includes('03SEP') ||
+      parseDateToIso(rDateString) === '2026-09-03' ||
+      parseDayMonthKey(rDateString) === '03SEP';
+
+    if (isBs307 && (isTarget03Sep || isReport03Sep)) {
+      return false;
+    }
+
+    // 1. Direct form date match using standardized parseDateToIso
     if (rDateString) {
       if (isTodaySelected && rDateString.toUpperCase().includes('TODAY')) {
         return true;
@@ -412,8 +438,23 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
   const dedupedDateReports = useMemo(() => {
     const map = new Map<string, SavedReport>();
 
+    const is03SepViewing =
+      selectedIsoDate === '2026-09-03' ||
+      activeDateDisplay.toUpperCase().includes('03 SEP') ||
+      activeDateDisplay.toUpperCase().includes('03SEP');
+
+    const isBs307Flight = (rep: SavedReport): boolean => {
+      const dFlt = cleanFlightNum(rep.formData?.deptFlt || '');
+      const mFlt = cleanFlightNum(rep.flight || '');
+      const aFlt = cleanFlightNum(rep.formData?.arvFlt || '');
+      const cleanF = dFlt || mFlt || aFlt;
+      const raw = `${rep.flight || ''} ${rep.formData?.deptFlt || ''} ${rep.formData?.arvFlt || ''} ${rep.id || ''}`.toUpperCase();
+      return cleanF === '307' || raw.includes('307');
+    };
+
     // 1. Process active savedReports first (they have the most accurate user-entered flight logs)
     savedReports.forEach((r) => {
+      if (is03SepViewing && isBs307Flight(r)) return;
       if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
 
       const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
@@ -434,6 +475,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
 
     // 2. Add reports from backend snapshot if not already present
     (activeBackendSnapshot?.reportsSnapshot || []).forEach((r) => {
+      if (is03SepViewing && isBs307Flight(r)) return;
       if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
 
       const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
@@ -455,6 +497,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
 
     // 3. Add verified historical reports (including 24 AUG BS-309 and BS-349) if not already present
     verifiedFlightReports.forEach((r) => {
+      if (is03SepViewing && isBs307Flight(r)) return;
       if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
 
       const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
@@ -487,8 +530,23 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
 
   // Process & filter reports
   const processedRows = useMemo(() => {
+    const is03SepViewing =
+      selectedIsoDate === '2026-09-03' ||
+      activeDateDisplay.toUpperCase().includes('03 SEP') ||
+      activeDateDisplay.toUpperCase().includes('03SEP');
+
+    const isBs307Flight = (rep: SavedReport): boolean => {
+      const dFlt = cleanFlightNum(rep.formData?.deptFlt || '');
+      const mFlt = cleanFlightNum(rep.flight || '');
+      const aFlt = cleanFlightNum(rep.formData?.arvFlt || '');
+      const cleanF = dFlt || mFlt || aFlt;
+      const raw = `${rep.flight || ''} ${rep.formData?.deptFlt || ''} ${rep.formData?.arvFlt || ''} ${rep.id || ''}`.toUpperCase();
+      return cleanF === '307' || raw.includes('307');
+    };
+
     // 1. Filter for Scope (ALL | DOMESTIC | INTERNATIONAL)
     const scopeFiltered = dedupedDateReports.filter((r) => {
+      if (is03SepViewing && isBs307Flight(r)) return false;
       if (flightScopeFilter === 'ALL') return true;
       const isDom = isDomesticReport(r);
       if (flightScopeFilter === 'DOMESTIC') return isDom;
@@ -1010,7 +1068,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
               {activeBackendSnapshot ? (
                 <span className="text-xs font-mono font-bold px-3 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 flex items-center gap-1.5 shadow-sm">
                   <Check className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>BACKEND ARCHIVED ({activeBackendSnapshot.reportsSnapshot?.length || activeBackendSnapshot.totalReportsCount} FLTS)</span>
+                  <span>BACKEND ARCHIVED ({dedupedDateReports.length} FLTS)</span>
                 </span>
               ) : (
                 <button

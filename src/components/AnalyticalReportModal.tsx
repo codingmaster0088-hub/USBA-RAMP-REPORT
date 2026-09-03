@@ -298,9 +298,43 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
     const rDateStr = r.formData?.date || r.date || '';
     const rDateIso = parseDateToIso(rDateStr);
 
+    // Management requirement: Exclude flight BS 307 from 03 SEP 26 / today's flight data record
+    const rawFlt = r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '';
+    const fltNum = cleanFlightNum(rawFlt);
+    const isFlight307 =
+      fltNum === '307' ||
+      rawFlt.includes('307') ||
+      (r.id && (r.id.toLowerCase().includes('bs307') || r.id.toLowerCase().includes('bs-307')));
+
+    const todayIso = parseDateToIso('TODAY');
+    const isToday =
+      rDateIso === todayIso ||
+      isSameDay(rDateObj, now) ||
+      rDateStr.toUpperCase().includes('TODAY') ||
+      rDateStr === todayDateStr;
+
+    const is03Sep26 =
+      rDateIso === '2026-09-03' ||
+      rDateStr.toUpperCase().includes('03 SEP') ||
+      rDateStr.toUpperCase().includes('03SEP') ||
+      selectedDateFilter === '2026-09-03' ||
+      selectedDateFilter.toUpperCase().includes('03 SEP') ||
+      selectedDateFilter.toUpperCase().includes('03SEP') ||
+      (selectedDateFilter === 'CUSTOM_CALENDAR' && (calendarDate === '2026-09-03' || calendarDate.endsWith('-09-03')));
+
+    // Exclude BS 307 from 03 SEP 26 date record
+    if (
+      isFlight307 &&
+      (is03Sep26 ||
+        isToday ||
+        selectedDateFilter === 'TODAY' ||
+        (selectedDateFilter === 'CUSTOM_CALENDAR' && (calendarDate === todayIso || calendarDate === '2026-09-03')))
+    ) {
+      return false;
+    }
+
     if (selectedDateFilter === 'TODAY') {
-      const todayIso = parseDateToIso('TODAY');
-      return rDateIso === todayIso || isSameDay(rDateObj, now) || rDateStr.toUpperCase().includes('TODAY');
+      return isToday;
     }
     if (selectedDateFilter === 'LAST_30_DAYS') {
       return true; // Already filtered to 30 days
@@ -317,6 +351,14 @@ export const AnalyticalReportModal: React.FC<AnalyticalReportModalProps> = ({
     }
     // Specific date selected from list
     const filterIso = parseDateToIso(selectedDateFilter);
+    if (
+      isFlight307 &&
+      (filterIso === todayIso ||
+        selectedDateFilter.toUpperCase().includes('TODAY') ||
+        selectedDateFilter === todayDateStr)
+    ) {
+      return false;
+    }
     return rDateIso === filterIso || rDateStr === selectedDateFilter;
   });
 
