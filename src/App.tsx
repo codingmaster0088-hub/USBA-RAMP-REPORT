@@ -884,7 +884,7 @@ export default function App() {
             onStartReportWithFlight={handleStartReportWithFlight}
             onStartReport={handleStartReport}
             isDarkMode={isDarkMode}
-            isAdmin={user?.id === '1425' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126'}
+            isAdmin={user?.id === '1425' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126377'}
             onDeleteNotice={handleDeleteNotice}
           />
         )}
@@ -912,7 +912,7 @@ export default function App() {
             onDownloadJPG={handleDownloadFromSaved}
             onSaveUploadedReport={handleSaveReport}
             isDarkMode={isDarkMode}
-            isAdmin={user?.id === '1425' || user?.id === '0088' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126'}
+            isAdmin={user?.id === '1425' || user?.id === '0088' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126377'}
           />
         )}
 
@@ -939,7 +939,7 @@ export default function App() {
           notice={activePopupNotice}
           onClose={handleAcknowledgeNotice}
           isDarkMode={isDarkMode}
-          isAdmin={user?.id === '1425' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126'}
+          isAdmin={user?.id === '1425' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126377'}
           onDeleteNotice={handleDeleteNotice}
         />
       )}

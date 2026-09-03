@@ -53,11 +53,22 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   onDeleteNotice,
   showToast
 }) => {
-  // Secret Admin PIN authentication state
+  // Role-based Admin Authentication State
+  // 11126: Office Management (Only 1. NOTICE and 2. TIME ANALYTICAL)
+  // 11126377: Super Admin (Full master access to all 6 modules)
+  type AdminRole = 'MANAGEMENT' | 'SUPER_ADMIN';
+
   const [adminPin, setAdminPin] = useState('');
-  const [isPinUnlocked, setIsPinUnlocked] = useState<boolean>(() => {
-    return sessionStorage.getItem('usb_admin_unlocked_pin') === '11126';
+  const [unlockedRole, setUnlockedRole] = useState<AdminRole | null>(() => {
+    const savedPin = sessionStorage.getItem('usb_admin_unlocked_pin');
+    if (savedPin === '11126377') return 'SUPER_ADMIN';
+    if (savedPin === '11126') return 'MANAGEMENT';
+    return null;
   });
+  const isPinUnlocked = unlockedRole !== null;
+  const isSuperAdmin = unlockedRole === 'SUPER_ADMIN';
+  const isManagement = unlockedRole === 'MANAGEMENT';
+
   const [pinError, setPinError] = useState('');
   const [showPin, setShowPin] = useState(false);
 
@@ -79,23 +90,33 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
 
   const handleVerifyPin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPin.trim() === '11126') {
-      setIsPinUnlocked(true);
-      sessionStorage.setItem('usb_admin_unlocked_pin', '11126');
+    const entered = adminPin.trim();
+    if (entered === '11126377') {
+      setUnlockedRole('SUPER_ADMIN');
+      sessionStorage.setItem('usb_admin_unlocked_pin', '11126377');
+      sessionStorage.setItem('usb_admin_role', 'SUPER_ADMIN');
       setPinError('');
-      showToast('Admin Security Verified', 'Welcome to Master Admin Panel', 'success');
+      showToast('Super Admin Verified', 'Master Control Unlocked (Full Access)', 'success');
+    } else if (entered === '11126') {
+      setUnlockedRole('MANAGEMENT');
+      sessionStorage.setItem('usb_admin_unlocked_pin', '11126');
+      sessionStorage.setItem('usb_admin_role', 'MANAGEMENT');
+      setPinError('');
+      showToast('Management Access Verified', 'Authorized: 1. Notice & 2. Time Analytical', 'success');
     } else {
-      setPinError('Incorrect Secret Admin PIN. Access Denied!');
+      setPinError('Incorrect Admin Password / PIN. Access Denied!');
       setAdminPin('');
-      showToast('Access Denied', 'Invalid Secret PIN', 'error');
+      showToast('Access Denied', 'Invalid Password / PIN', 'error');
     }
   };
 
   const handleLockAdmin = () => {
-    setIsPinUnlocked(false);
+    setUnlockedRole(null);
     sessionStorage.removeItem('usb_admin_unlocked_pin');
+    sessionStorage.removeItem('usb_admin_role');
     setAdminPin('');
-    showToast('Admin Panel Locked', 'PIN required to re-enter', 'info');
+    setActiveModal(null);
+    showToast('Admin Panel Locked', 'Password required to re-enter', 'info');
   };
 
   if (!isPinUnlocked) {
@@ -114,26 +135,26 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
             RESTRICTED ADMIN ACCESS
           </h2>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Entering the <strong className="text-amber-300">Secret Admin PIN</strong> is strictly required to unlock control features, broadcasts & activity logs.
+            Please enter your authorized <strong className="text-amber-300">Admin Password</strong> to unlock the designated operational modules.
           </p>
         </div>
 
         <form onSubmit={handleVerifyPin} className="space-y-4 pt-2">
           <div className="space-y-1 text-left">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-              ENTER SECRET ADMIN PIN (5-DIGITS)
+              ENTER ADMIN PASSWORD / PIN
             </label>
             <div className="relative">
               <input
                 type={showPin ? 'text' : 'password'}
-                maxLength={5}
+                maxLength={12}
                 value={adminPin}
                 onChange={(e) => {
                   setAdminPin(e.target.value);
                   if (pinError) setPinError('');
                 }}
-                placeholder="•••••"
-                className="w-full bg-slate-950 border border-slate-800 focus:border-amber-400 rounded-xl px-4 py-3 text-center text-lg font-mono font-bold tracking-[0.5em] text-amber-300 outline-none transition-all placeholder:tracking-normal placeholder:text-slate-700"
+                placeholder="••••••••"
+                className="w-full bg-slate-950 border border-slate-800 focus:border-amber-400 rounded-xl px-4 py-3 text-center text-lg font-mono font-bold tracking-[0.3em] text-amber-300 outline-none transition-all placeholder:tracking-normal placeholder:text-slate-700"
                 autoFocus
               />
               <button
@@ -303,6 +324,17 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
                 <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/40 tracking-wider">
                   RAMP HUD
                 </span>
+                {isManagement ? (
+                  <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-500/40 tracking-wider flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-cyan-400" />
+                    MANAGEMENT (2 MODULES)
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/40 tracking-wider flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-amber-400" />
+                    SUPER ADMIN (FULL ACCESS)
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1.5 text-[11px] font-mono mt-0.5 flex-wrap">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
@@ -331,172 +363,238 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
         </div>
       </div>
 
-      {/* 4 SEPARATE ACTION BUTTONS / MODULE CARDS */}
-      <div className="space-y-2">
-        <label className="text-xs font-black text-amber-300 uppercase tracking-wider block pl-1">
-          SELECT ADMIN ACTION MODULE:
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-          {/* 1. LOG CHECK BUTTON */}
-          <button
-            onClick={() => setActiveModal('LOG_CHECK')}
-            className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
-              activeModal === 'LOG_CHECK' ? 'border-amber-400 bg-amber-500/10' : 'border-amber-500/40 hover:border-amber-400'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors shadow-md">
-                <Users className="w-5 h-5" />
+      {/* MODULE CARDS: MANAGEMENT SEES ONLY 02 OPTIONS, SUPER ADMIN SEES ALL */}
+      {isManagement ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-black text-cyan-300 uppercase tracking-wider block pl-1">
+              MANAGEMENT ACCESS (2 MODULES AUTHORIZED):
+            </label>
+            <span className="text-[10px] font-mono text-slate-400">
+              Password Authenticated: <strong className="text-cyan-400">11126</strong>
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* 1. NOTICE BUTTON (MANAGEMENT) */}
+            <button
+              onClick={() => setActiveModal('NOTICE')}
+              className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-5 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-3 group ${
+                activeModal === 'NOTICE' ? 'border-purple-400 bg-purple-500/10' : 'border-purple-500/40 hover:border-purple-400'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-xl bg-purple-500/15 border border-purple-400/40 flex items-center justify-center text-purple-400 group-hover:bg-purple-500 group-hover:text-slate-950 transition-colors shadow-md">
+                  <Bell className="w-6 h-6" />
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-slate-950 text-purple-300 border border-slate-800">
+                  {notices.length} ACTIVE
+                </span>
               </div>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-amber-400 border border-slate-800">
-                {userLogs.length} LOGS
-              </span>
-            </div>
-            <div>
-              <div className="text-xs font-black text-white group-hover:text-amber-300 uppercase tracking-wide flex items-center justify-between">
-                <span>1. LOG CHECK</span>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-300 transition-transform group-hover:translate-x-0.5" />
+              <div>
+                <div className="text-sm font-black text-white group-hover:text-purple-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>1. NOTICE</span>
+                  <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-purple-300 transition-transform group-hover:translate-x-0.5" />
+                </div>
+                <p className="text-xs text-slate-400 leading-snug mt-1">
+                  Broadcast special notice pop-ups to all active officers (24h auto-vanish).
+                </p>
               </div>
-              <p className="text-[11px] text-slate-400 leading-snug mt-1">
-                View officer login, logout, & report activity logs (48h auto-purge).
-              </p>
-            </div>
-          </button>
+            </button>
 
-          {/* 2. FLST INPUT BUTTON */}
-          <button
-            onClick={() => setActiveModal('FLST_INPUT')}
-            className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
-              activeModal === 'FLST_INPUT' ? 'border-blue-400 bg-blue-500/10' : 'border-blue-500/40 hover:border-blue-400'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/15 border border-blue-400/40 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-slate-950 transition-colors shadow-md">
-                <Database className="w-5 h-5" />
+            {/* 2. TIME ANALYTICAL BUTTON (MANAGEMENT) */}
+            <button
+              onClick={() => setActiveModal('TIME_ANALYTICAL')}
+              className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-5 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-3 group ${
+                activeModal === 'TIME_ANALYTICAL' ? 'border-cyan-400 bg-cyan-500/10' : 'border-cyan-500/50 hover:border-cyan-400'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-400/40 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500 group-hover:text-slate-950 transition-colors shadow-md">
+                  <Clock className="w-6 h-6" />
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-slate-950 text-cyan-400 border border-slate-800">
+                  TIMINGS
+                </span>
               </div>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-blue-300 border border-slate-800">
-                {scheduleFlights.length} FLTS
-              </span>
-            </div>
-            <div>
-              <div className="text-xs font-black text-white group-hover:text-blue-300 uppercase tracking-wide flex items-center justify-between">
-                <span>2. FLST INPUT</span>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-blue-300 transition-transform group-hover:translate-x-0.5" />
+              <div>
+                <div className="text-sm font-black text-white group-hover:text-cyan-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>2. TIME ANALYTICAL</span>
+                  <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-cyan-300 transition-transform group-hover:translate-x-0.5" />
+                </div>
+                <p className="text-xs text-slate-400 leading-snug mt-1">
+                  Turnaround duration analysis (Security, Cleaning, Catering, Boarding & Ground Time).
+                </p>
               </div>
-              <p className="text-[11px] text-slate-400 leading-snug mt-1">
-                Paste raw flight schedule string & generate LIVE flight monitor.
-              </p>
-            </div>
-          </button>
-
-          {/* 3. NOTICE BUTTON */}
-          <button
-            onClick={() => setActiveModal('NOTICE')}
-            className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
-              activeModal === 'NOTICE' ? 'border-purple-400 bg-purple-500/10' : 'border-purple-500/40 hover:border-purple-400'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-400/40 flex items-center justify-center text-purple-400 group-hover:bg-purple-500 group-hover:text-slate-950 transition-colors shadow-md">
-                <Bell className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-purple-300 border border-slate-800">
-                {notices.length} ACTIVE
-              </span>
-            </div>
-            <div>
-              <div className="text-xs font-black text-white group-hover:text-purple-300 uppercase tracking-wide flex items-center justify-between">
-                <span>3. NOTICE</span>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-purple-300 transition-transform group-hover:translate-x-0.5" />
-              </div>
-              <p className="text-[11px] text-slate-400 leading-snug mt-1">
-                Broadcast special notice pop-ups to all active officers (24h auto-vanish).
-              </p>
-            </div>
-          </button>
-
-          {/* 4. ANALYTICAL REPORT BUTTON */}
-          <button
-            onClick={() => setActiveModal('ANALYTICAL_REPORT')}
-            className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
-              activeModal === 'ANALYTICAL_REPORT' ? 'border-emerald-400 bg-emerald-500/10' : 'border-emerald-500/50 hover:border-emerald-400'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-400/40 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors shadow-md">
-                <BarChart3 className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-emerald-400 border border-slate-800">
-                ANALYTICS
-              </span>
-            </div>
-            <div>
-              <div className="text-xs font-black text-white group-hover:text-emerald-300 uppercase tracking-wide flex items-center justify-between">
-                <span>4. ANALYTICAL REPORT</span>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-300 transition-transform group-hover:translate-x-0.5" />
-              </div>
-              <p className="text-[11px] text-slate-400 leading-snug mt-1">
-                Day-wise delay code statistics, breakdown & downloadable JPG report.
-              </p>
-            </div>
-          </button>
-
-          {/* 5. COMPLETE FLIGHT BUTTON */}
-          <button
-            onClick={() => setActiveModal('COMPLETE_FLIGHT')}
-            className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
-              activeModal === 'COMPLETE_FLIGHT' ? 'border-amber-400 bg-amber-500/10' : 'border-amber-500/50 hover:border-amber-400'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors shadow-md">
-                <FileCheck2 className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-amber-400 border border-slate-800">
-                RECONCILE
-              </span>
-            </div>
-            <div>
-              <div className="text-xs font-black text-white group-hover:text-amber-300 uppercase tracking-wide flex items-center justify-between">
-                <span>5. COMPLETE FLIGHT</span>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-300 transition-transform group-hover:translate-x-0.5" />
-              </div>
-              <p className="text-[11px] text-slate-400 leading-snug mt-1">
-                Reconcile FLST schedule vs generated reports to detect missing flights.
-              </p>
-            </div>
-          </button>
-
-          {/* 6. TIME ANALYTICAL BUTTON */}
-          <button
-            onClick={() => setActiveModal('TIME_ANALYTICAL')}
-            className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
-              activeModal === 'TIME_ANALYTICAL' ? 'border-cyan-400 bg-cyan-500/10' : 'border-cyan-500/50 hover:border-cyan-400'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-400/40 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500 group-hover:text-slate-950 transition-colors shadow-md">
-                <Clock className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-cyan-400 border border-slate-800">
-                TIMINGS
-              </span>
-            </div>
-            <div>
-              <div className="text-xs font-black text-white group-hover:text-cyan-300 uppercase tracking-wide flex items-center justify-between">
-                <span>6. TIME ANALYTICAL</span>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-300 transition-transform group-hover:translate-x-0.5" />
-              </div>
-              <p className="text-[11px] text-slate-400 leading-snug mt-1">
-                Turnaround duration analysis (Security, Cleaning, Catering, Boarding & Ground Time).
-              </p>
-            </div>
-          </button>
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-2">
+          <label className="text-xs font-black text-amber-300 uppercase tracking-wider block pl-1">
+            SELECT ADMIN ACTION MODULE:
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            {/* 1. LOG CHECK BUTTON */}
+            <button
+              onClick={() => setActiveModal('LOG_CHECK')}
+              className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
+                activeModal === 'LOG_CHECK' ? 'border-amber-400 bg-amber-500/10' : 'border-amber-500/40 hover:border-amber-400'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors shadow-md">
+                  <Users className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-amber-400 border border-slate-800">
+                  {userLogs.length} LOGS
+                </span>
+              </div>
+              <div>
+                <div className="text-xs font-black text-white group-hover:text-amber-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>1. LOG CHECK</span>
+                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-300 transition-transform group-hover:translate-x-0.5" />
+                </div>
+                <p className="text-[11px] text-slate-400 leading-snug mt-1">
+                  View officer login, logout, & report activity logs (48h auto-purge).
+                </p>
+              </div>
+            </button>
+
+            {/* 2. FLST INPUT BUTTON */}
+            <button
+              onClick={() => setActiveModal('FLST_INPUT')}
+              className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
+                activeModal === 'FLST_INPUT' ? 'border-blue-400 bg-blue-500/10' : 'border-blue-500/40 hover:border-blue-400'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/15 border border-blue-400/40 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-slate-950 transition-colors shadow-md">
+                  <Database className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-blue-300 border border-slate-800">
+                  {scheduleFlights.length} FLTS
+                </span>
+              </div>
+              <div>
+                <div className="text-xs font-black text-white group-hover:text-blue-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>2. FLST INPUT</span>
+                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-blue-300 transition-transform group-hover:translate-x-0.5" />
+                </div>
+                <p className="text-[11px] text-slate-400 leading-snug mt-1">
+                  Paste raw flight schedule string & generate LIVE flight monitor.
+                </p>
+              </div>
+            </button>
+
+            {/* 3. NOTICE BUTTON */}
+            <button
+              onClick={() => setActiveModal('NOTICE')}
+              className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
+                activeModal === 'NOTICE' ? 'border-purple-400 bg-purple-500/10' : 'border-purple-500/40 hover:border-purple-400'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-400/40 flex items-center justify-center text-purple-400 group-hover:bg-purple-500 group-hover:text-slate-950 transition-colors shadow-md">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-purple-300 border border-slate-800">
+                  {notices.length} ACTIVE
+                </span>
+              </div>
+              <div>
+                <div className="text-xs font-black text-white group-hover:text-purple-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>3. NOTICE</span>
+                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-purple-300 transition-transform group-hover:translate-x-0.5" />
+                </div>
+                <p className="text-[11px] text-slate-400 leading-snug mt-1">
+                  Broadcast special notice pop-ups to all active officers (24h auto-vanish).
+                </p>
+              </div>
+            </button>
+
+            {/* 4. ANALYTICAL REPORT BUTTON */}
+            <button
+              onClick={() => setActiveModal('ANALYTICAL_REPORT')}
+              className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
+                activeModal === 'ANALYTICAL_REPORT' ? 'border-emerald-400 bg-emerald-500/10' : 'border-emerald-500/50 hover:border-emerald-400'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-400/40 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors shadow-md">
+                  <BarChart3 className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-emerald-400 border border-slate-800">
+                  ANALYTICS
+                </span>
+              </div>
+              <div>
+                <div className="text-xs font-black text-white group-hover:text-emerald-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>4. ANALYTICAL REPORT</span>
+                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-300 transition-transform group-hover:translate-x-0.5" />
+                </div>
+                <p className="text-[11px] text-slate-400 leading-snug mt-1">
+                  Day-wise delay code statistics, breakdown & downloadable JPG report.
+                </p>
+              </div>
+            </button>
+
+            {/* 5. COMPLETE FLIGHT BUTTON */}
+            <button
+              onClick={() => setActiveModal('COMPLETE_FLIGHT')}
+              className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
+                activeModal === 'COMPLETE_FLIGHT' ? 'border-amber-400 bg-amber-500/10' : 'border-amber-500/50 hover:border-amber-400'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors shadow-md">
+                  <FileCheck2 className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-amber-400 border border-slate-800">
+                  RECONCILE
+                </span>
+              </div>
+              <div>
+                <div className="text-xs font-black text-white group-hover:text-amber-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>5. COMPLETE FLIGHT</span>
+                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-300 transition-transform group-hover:translate-x-0.5" />
+                </div>
+                <p className="text-[11px] text-slate-400 leading-snug mt-1">
+                  Reconcile FLST schedule vs generated reports to detect missing flights.
+                </p>
+              </div>
+            </button>
+
+            {/* 6. TIME ANALYTICAL BUTTON */}
+            <button
+              onClick={() => setActiveModal('TIME_ANALYTICAL')}
+              className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
+                activeModal === 'TIME_ANALYTICAL' ? 'border-cyan-400 bg-cyan-500/10' : 'border-cyan-500/50 hover:border-cyan-400'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-400/40 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500 group-hover:text-slate-950 transition-colors shadow-md">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-cyan-400 border border-slate-800">
+                  TIMINGS
+                </span>
+              </div>
+              <div>
+                <div className="text-xs font-black text-white group-hover:text-cyan-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>6. TIME ANALYTICAL</span>
+                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-300 transition-transform group-hover:translate-x-0.5" />
+                </div>
+                <p className="text-[11px] text-slate-400 leading-snug mt-1">
+                  Turnaround duration analysis (Security, Cleaning, Catering, Boarding & Ground Time).
+                </p>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* POPUP WINDOW MODAL 1: LOG CHECK */}
-      {activeModal === 'LOG_CHECK' && (
+      {activeModal === 'LOG_CHECK' && isSuperAdmin && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto fade-in">
           <div className="bg-slate-900 border border-amber-500/50 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto space-y-0">
             {/* Modal Header */}
@@ -632,7 +730,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
       )}
 
       {/* POPUP WINDOW MODAL 2: FLST INPUT */}
-      {activeModal === 'FLST_INPUT' && (
+      {activeModal === 'FLST_INPUT' && isSuperAdmin && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto fade-in">
           <div className="bg-slate-900 border border-blue-500/50 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto">
             {/* Modal Header */}
@@ -806,7 +904,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
       )}
 
       {/* POPUP WINDOW MODAL 4: ANALYTICAL REPORT */}
-      {activeModal === 'ANALYTICAL_REPORT' && (
+      {activeModal === 'ANALYTICAL_REPORT' && isSuperAdmin && (
         <AnalyticalReportModal
           savedReports={savedReports}
           scheduleFlights={scheduleFlights}
@@ -819,7 +917,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
       )}
 
       {/* POPUP WINDOW MODAL 5: COMPLETE FLIGHT RECONCILIATION */}
-      {activeModal === 'COMPLETE_FLIGHT' && (
+      {activeModal === 'COMPLETE_FLIGHT' && isSuperAdmin && (
         <CompleteFlightModal
           scheduleFlights={scheduleFlights}
           savedReports={savedReports}

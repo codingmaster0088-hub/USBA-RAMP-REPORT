@@ -26,13 +26,14 @@ export const DeleteNoticePinModal: React.FC<DeleteNoticePinModalProps> = ({
     e.preventDefault();
     setError('');
 
-    if (pin.trim() !== '11126') {
-      setError('Incorrect Admin Password! Delete authorized only with password 11126.');
+    const trimmedPin = pin.trim();
+    if (trimmedPin !== '11126' && trimmedPin !== '11126377') {
+      setError('Incorrect Admin Password! Delete authorized only with admin password.');
       return;
     }
 
     setIsSubmitting(true);
-    const success = await onConfirmDelete(noticeId, pin.trim());
+    const success = await onConfirmDelete(noticeId, trimmedPin);
     setIsSubmitting(false);
 
     if (success) {
@@ -79,7 +80,7 @@ export const DeleteNoticePinModal: React.FC<DeleteNoticePinModalProps> = ({
         </div>
 
         <p className="text-xs font-semibold mb-4 text-slate-300 dark:text-slate-300 leading-relaxed">
-          Please insert Admin Password <span className="font-mono font-black text-amber-400 underline">11126</span> to delete this notice.
+          Please insert authorized <span className="font-mono font-black text-amber-400">Admin Password</span> to delete this notice.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -97,13 +98,13 @@ export const DeleteNoticePinModal: React.FC<DeleteNoticePinModalProps> = ({
             <input
               type="password"
               autoFocus
-              maxLength={10}
+              maxLength={12}
               value={pin}
               onChange={(e) => {
                 setPin(e.target.value);
                 setError('');
               }}
-              placeholder="Enter password (11126)"
+              placeholder="Enter password"
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-center text-amber-300 font-mono font-bold tracking-widest focus:border-red-500 outline-none"
             />
           </div>
