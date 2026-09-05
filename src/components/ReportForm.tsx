@@ -34,6 +34,159 @@ import { DELAY_CODES } from '../constants/delayCodes';
 
 const DRAFT_KEY = 'usb_ramp_report_draft';
 
+// Helper to convert time string (HHMM or HH:MM) to total minutes from 00:00
+const parseTimeToMinutes = (tStr?: string): number | null => {
+  if (!tStr) return null;
+  const clean = tStr.trim().replace(/[^0-9:]/g, '');
+  if (!clean) return null;
+  let hh = 0;
+  let mm = 0;
+
+  if (clean.includes(':')) {
+    const parts = clean.split(':');
+    hh = parseInt(parts[0], 10);
+    mm = parseInt(parts[1], 10);
+  } else if (clean.length === 4) {
+    hh = parseInt(clean.slice(0, 2), 10);
+    mm = parseInt(clean.slice(2, 4), 10);
+  } else if (clean.length === 3) {
+    hh = parseInt(clean.slice(0, 1), 10);
+    mm = parseInt(clean.slice(1, 3), 10);
+  } else {
+    return null;
+  }
+
+  if (isNaN(hh) || isNaN(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+    return null;
+  }
+  return hh * 60 + mm;
+};
+
+// Check if value is presetted / earlier
+const isEarlierOrPresetted = (val?: string): boolean => {
+  if (!val) return false;
+  const upper = val.trim().toUpperCase();
+  return (
+    upper === 'E' ||
+    upper === 'EARLIER' ||
+    upper === 'EARLY' ||
+    upper === 'OB' ||
+    upper === 'PRE' ||
+    upper === 'N/A' ||
+    upper === 'NA'
+  );
+};
+
+export interface TimingErrorDetail {
+  pairKey: 'security' | 'cleaning' | 'catering' | 'boarding';
+  fieldLabel: string;
+  startLabel: string;
+  endLabel: string;
+  startVal: string;
+  endVal: string;
+  message: string;
+}
+
+export const checkPairTiming = (
+  pair: 'security' | 'cleaning' | 'catering' | 'boarding',
+  form: RampReportFormData
+): TimingErrorDetail | null => {
+  let startVal = '';
+  let endVal = '';
+  let fieldLabel = '';
+  let startLabel = '';
+  let endLabel = '';
+
+  if (pair === 'security') {
+    startVal = form.securitySt || '';
+    endVal = form.securityEnd || '';
+    fieldLabel = '1 & 2. SECURITY CHECK';
+    startLabel = 'Security Check Start';
+    endLabel = 'Security Check End';
+  } else if (pair === 'cleaning') {
+    startVal = form.cleaningSt || '';
+    endVal = form.cleaningEnd || '';
+    fieldLabel = '3 & 4. CLEANING';
+    startLabel = 'Cleaning Start';
+    endLabel = 'Cleaning End';
+  } else if (pair === 'catering') {
+    startVal = form.cateringSt || '';
+    endVal = form.cateringEnd || '';
+    fieldLabel = '5 & 6. CATERING';
+    startLabel = 'Catering Start';
+    endLabel = 'Catering End';
+  } else if (pair === 'boarding') {
+    startVal = form.permit || '';
+    endVal = form.pax || '';
+    fieldLabel = '10 & 11. BOARDING';
+    startLabel = 'Boarding Permitted';
+    endLabel = 'Last Pax Onboard';
+  }
+
+  const sClean = startVal.trim().toUpperCase();
+  const eClean = endVal.trim().toUpperCase();
+
+  // If either field is missing/empty, do not flag yet (user still entering)
+  if (!sClean || !eClean) return null;
+
+  // If either field is marked as EARLIER / OB / PRE / NA, it is acceptable
+  if (isEarlierOrPresetted(sClean) || isEarlierOrPresetted(eClean)) return null;
+
+  const sMin = parseTimeToMinutes(sClean);
+  const eMin = parseTimeToMinutes(eClean);
+
+  // If time digits are not yet complete (e.g. user typed only 1 or 2 digits), do not flag
+  if (sMin === null || eMin === null) return null;
+
+  // Normal rule: Ending time must be strictly after starting time
+  if (eMin > sMin) {
+    return null; // Valid!
+  }
+
+  // Check valid midnight crossover (e.g., flight turnaround started 23:50 and ended 00:10 next day)
+  // Started late evening (>= 18:00) and ended early morning (<= 06:00), with duration <= 300 minutes (5 hours)
+  const isLateEveningStart = sMin >= 18 * 60; // 18:00 onwards
+  const isEarlyMorningEnd = eMin <= 6 * 60;   // up to 06:00
+  const rolloverDuration = (eMin + 1440) - sMin;
+
+  if (isLateEveningStart && isEarlyMorningEnd && rolloverDuration > 0 && rolloverDuration <= 300) {
+    return null; // Valid midnight turnaround!
+  }
+
+  // Otherwise, ending time is earlier than or equal to starting time -> WRONG TIMING!
+  let message = '';
+  if (pair === 'boarding') {
+    message = `Last Pax Onboard time (${endVal}) cannot be earlier than or equal to Boarding Permitted time (${startVal}).`;
+  } else {
+    message = `${endLabel} time (${endVal}) cannot be earlier than or equal to ${startLabel} time (${startVal}).`;
+  }
+
+  return {
+    pairKey: pair,
+    fieldLabel,
+    startLabel,
+    endLabel,
+    startVal,
+    endVal,
+    message
+  };
+};
+
+export const getAllTimingErrors = (form: RampReportFormData): TimingErrorDetail[] => {
+  const errors: TimingErrorDetail[] = [];
+  const pairs: Array<'security' | 'cleaning' | 'catering' | 'boarding'> = [
+    'security',
+    'cleaning',
+    'catering',
+    'boarding'
+  ];
+  for (const p of pairs) {
+    const err = checkPairTiming(p, form);
+    if (err) errors.push(err);
+  }
+  return errors;
+};
+
 interface ReportFormProps {
   user: UserProfile;
   initialType: ReportType;
@@ -185,6 +338,8 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
   const [skippedModalOpen, setSkippedModalOpen] = useState<boolean>(false);
   const [skippedFieldsList, setSkippedFieldsList] = useState<string[]>([]);
+  const [timingErrorModalOpen, setTimingErrorModalOpen] = useState<boolean>(false);
+  const [timingErrorsList, setTimingErrorsList] = useState<TimingErrorDetail[]>([]);
   const [delaySearch, setDelaySearch] = useState<string>('');
 
   // Parse currently selected delay codes array from formData.delayReason string
@@ -355,6 +510,14 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       setSkippedModalOpen(true);
       return;
     }
+
+    const timingErrors = getAllTimingErrors(formData);
+    if (timingErrors.length > 0) {
+      setTimingErrorsList(timingErrors);
+      setTimingErrorModalOpen(true);
+      return;
+    }
+
     clearDraft();
     const targetFlightClean = (formData.deptFlt || formData.arvFlt || '').replace(/[^0-9]/g, '');
     const fltNum = parseInt(targetFlightClean, 10);
@@ -376,6 +539,14 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       setSkippedModalOpen(true);
       return;
     }
+
+    const timingErrors = getAllTimingErrors(formData);
+    if (timingErrors.length > 0) {
+      setTimingErrorsList(timingErrors);
+      setTimingErrorModalOpen(true);
+      return;
+    }
+
     clearDraft();
     const targetFlightClean = (formData.deptFlt || formData.arvFlt || '').replace(/[^0-9]/g, '');
     const fltNum = parseInt(targetFlightClean, 10);
@@ -390,6 +561,20 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     // Automatically save report with modified data when download is clicked
     onSaveReport(formData, resolvedType, flightMode, reportToEdit?.id);
     onDownloadJPG(formData, resolvedType, flightMode);
+  };
+
+  // Validate milestone pairs on Blur (option B: immediate feedback upon leaving input)
+  const handleMilestoneBlur = (pair: 'security' | 'cleaning' | 'catering' | 'boarding') => {
+    const err = checkPairTiming(pair, formData);
+    if (err) {
+      setTimingErrorsList((prev) => {
+        const filtered = prev.filter((item) => item.pairKey !== pair);
+        return [...filtered, err];
+      });
+      setTimingErrorModalOpen(true);
+    } else {
+      setTimingErrorsList((prev) => prev.filter((item) => item.pairKey !== pair));
+    }
   };
 
   // Handle Field Changes
@@ -444,7 +629,28 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
-    handleChange(field, `${hh}${mm}`);
+    const timeVal = `${hh}${mm}`;
+    handleChange(field, timeVal);
+
+    let pairToCheck: 'security' | 'cleaning' | 'catering' | 'boarding' | null = null;
+    if (field === 'securitySt' || field === 'securityEnd') pairToCheck = 'security';
+    else if (field === 'cleaningSt' || field === 'cleaningEnd') pairToCheck = 'cleaning';
+    else if (field === 'cateringSt' || field === 'cateringEnd') pairToCheck = 'catering';
+    else if (field === 'permit' || field === 'pax') pairToCheck = 'boarding';
+
+    if (pairToCheck) {
+      const updatedForm = { ...formData, [field]: timeVal };
+      const err = checkPairTiming(pairToCheck, updatedForm);
+      if (err) {
+        setTimingErrorsList((prev) => {
+          const filtered = prev.filter((item) => item.pairKey !== pairToCheck);
+          return [...filtered, err];
+        });
+        setTimingErrorModalOpen(true);
+      } else {
+        setTimingErrorsList((prev) => prev.filter((item) => item.pairKey !== pairToCheck));
+      }
+    }
   };
 
   // Helper: Set OB Preset
@@ -455,8 +661,25 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   // Helper: Set E (EARLIER) Preset
   const setEPreset = (field: keyof RampReportFormData) => {
     const currentVal = formData[field] || '';
-    handleChange(field, currentVal === 'EARLIER' ? '' : 'EARLIER');
+    const nextVal = currentVal === 'EARLIER' ? '' : 'EARLIER';
+    handleChange(field, nextVal);
+
+    let pairToCheck: 'security' | 'cleaning' | 'catering' | 'boarding' | null = null;
+    if (field === 'securitySt' || field === 'securityEnd') pairToCheck = 'security';
+    else if (field === 'cleaningSt' || field === 'cleaningEnd') pairToCheck = 'cleaning';
+    else if (field === 'cateringSt' || field === 'cateringEnd') pairToCheck = 'catering';
+    else if (field === 'permit' || field === 'pax') pairToCheck = 'boarding';
+
+    if (pairToCheck && nextVal === 'EARLIER') {
+      setTimingErrorsList((prev) => prev.filter((item) => item.pairKey !== pairToCheck));
+    }
   };
+
+  // Check if any error is active for pairs
+  const hasSecurityTimingError = timingErrorsList.some((e) => e.pairKey === 'security');
+  const hasCleaningTimingError = timingErrorsList.some((e) => e.pairKey === 'cleaning');
+  const hasCateringTimingError = timingErrorsList.some((e) => e.pairKey === 'catering');
+  const hasBoardingTimingError = timingErrorsList.some((e) => e.pairKey === 'boarding');
 
   // Aircraft Registration Formatter on Blur
   const handleRegBlur = () => {
@@ -1114,8 +1337,11 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                     type="text"
                     value={formData.securitySt || ''}
                     onChange={(e) => handleChange('securitySt', e.target.value)}
+                    onBlur={() => handleMilestoneBlur('security')}
                     placeholder="1310"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                    className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
+                      hasSecurityTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
+                    }`}
                   />
                   <button
                     type="button"
@@ -1151,8 +1377,11 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                     type="text"
                     value={formData.securityEnd || ''}
                     onChange={(e) => handleChange('securityEnd', e.target.value)}
+                    onBlur={() => handleMilestoneBlur('security')}
                     placeholder="1320"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                    className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
+                      hasSecurityTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
+                    }`}
                   />
                   <button
                     type="button"
@@ -1188,8 +1417,11 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                     type="text"
                     value={formData.cleaningSt || ''}
                     onChange={(e) => handleChange('cleaningSt', e.target.value)}
+                    onBlur={() => handleMilestoneBlur('cleaning')}
                     placeholder="1320"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                    className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
+                      hasCleaningTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
+                    }`}
                   />
                   <button
                     type="button"
@@ -1225,8 +1457,11 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                     type="text"
                     value={formData.cleaningEnd || ''}
                     onChange={(e) => handleChange('cleaningEnd', e.target.value)}
+                    onBlur={() => handleMilestoneBlur('cleaning')}
                     placeholder="1328"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                    className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
+                      hasCleaningTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
+                    }`}
                   />
                   <button
                     type="button"
@@ -1262,8 +1497,11 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                     type="text"
                     value={formData.cateringSt || ''}
                     onChange={(e) => handleChange('cateringSt', e.target.value)}
+                    onBlur={() => handleMilestoneBlur('catering')}
                     placeholder="1325"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                    className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
+                      hasCateringTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
+                    }`}
                   />
                   <button
                     type="button"
@@ -1299,8 +1537,11 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                     type="text"
                     value={formData.cateringEnd || ''}
                     onChange={(e) => handleChange('cateringEnd', e.target.value)}
+                    onBlur={() => handleMilestoneBlur('catering')}
                     placeholder="1335"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                    className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
+                      hasCateringTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
+                    }`}
                   />
                   <button
                     type="button"
@@ -1410,8 +1651,11 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                   type="text"
                   value={formData.permit}
                   onChange={(e) => handleChange('permit', e.target.value)}
+                  onBlur={() => handleMilestoneBlur('boarding')}
                   placeholder="1335"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                  className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
+                    hasBoardingTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
+                  }`}
                 />
                 <button
                   type="button"
@@ -1433,8 +1677,11 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                   type="text"
                   value={formData.pax}
                   onChange={(e) => handleChange('pax', e.target.value)}
+                  onBlur={() => handleMilestoneBlur('boarding')}
                   placeholder="1350"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                  className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
+                    hasBoardingTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
+                  }`}
                 />
                 <button
                   type="button"
@@ -1634,6 +1881,88 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <span>GO BACK & FILL FIELDS</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* YOU INPUTTED WRONG TIMING POPUP MODAL */}
+      {timingErrorModalOpen && timingErrorsList.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md fade-in">
+          <div className="bg-slate-900 border-2 border-rose-500 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-rose-950 via-slate-900 to-rose-950 p-4 border-b border-rose-500/40 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-400/50 flex items-center justify-center text-rose-400 shadow-inner shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-rose-400 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-rose-300 uppercase tracking-wider">
+                    YOU INPUTTED WRONG TIMING
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    Ending time must be after starting time
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setTimingErrorModalOpen(false)}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center border border-slate-700 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-3 overflow-y-auto flex-1 bg-slate-950/80">
+              <p className="text-xs text-amber-200 font-medium">
+                The turnaround sequence has incorrect times. Please correct the timing:
+              </p>
+
+              <div className="space-y-2.5">
+                {timingErrorsList.map((err, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/50 space-y-1.5 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-300 uppercase font-mono tracking-wide">
+                        {err.fieldLabel}
+                      </span>
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                        TIMING CONFLICT
+                      </span>
+                    </div>
+                    <p className="text-xs text-rose-100 font-medium leading-relaxed">
+                      {err.message}
+                    </p>
+                    <div className="flex items-center gap-3 pt-1 text-[11px] font-mono text-slate-300">
+                      <div>
+                        <span className="text-slate-500">{err.startLabel}:</span>{' '}
+                        <span className="font-bold text-amber-300">{err.startVal}</span>
+                      </div>
+                      <div className="text-slate-600">→</div>
+                      <div>
+                        <span className="text-slate-500">{err.endLabel}:</span>{' '}
+                        <span className="font-bold text-rose-400">{err.endVal}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 bg-slate-900 border-t border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setTimingErrorModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>GO BACK & CORRECT TIMING</span>
               </button>
             </div>
           </div>
