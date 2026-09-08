@@ -116,67 +116,11 @@ export const checkPairTiming = (
     startLabel = 'Catering Start';
     endLabel = 'Catering End';
   } else if (pair === 'boarding') {
-    const permitVal = (form.permit || '').trim();
-    const firstBusVal = (form.firstBusPax || '').trim();
-    const paxVal = (form.pax || '').trim();
-
-    const isOrderInvalid = (st: string, en: string) => {
-      const sC = st.toUpperCase();
-      const eC = en.toUpperCase();
-      if (!sC || !eC) return false;
-      if (isEarlierOrPresetted(sC) || isEarlierOrPresetted(eC)) return false;
-      const sM = parseTimeToMinutes(sC);
-      const eM = parseTimeToMinutes(eC);
-      if (sM === null || eM === null) return false;
-      if (eM > sM) return false;
-      // Midnight crossover
-      const isLateEvening = sM >= 18 * 60;
-      const isEarlyMorning = eM <= 6 * 60;
-      const rollover = (eM + 1440) - sM;
-      if (isLateEvening && isEarlyMorning && rollover > 0 && rollover <= 300) return false;
-      return true;
-    };
-
-    // 1. Check First Bus vs Boarding Permitted
-    if (firstBusVal && permitVal && isOrderInvalid(permitVal, firstBusVal)) {
-      return {
-        pairKey: 'boarding',
-        fieldLabel: '10 & 11. BOARDING SEQUENCE',
-        startLabel: 'Boarding Permitted',
-        endLabel: 'First Bus/Pax Report',
-        startVal: permitVal,
-        endVal: firstBusVal,
-        message: `First Bus/Pax Report time (${firstBusVal}) cannot be earlier than or equal to Boarding Permitted time (${permitVal}).`
-      };
-    }
-
-    // 2. Check Last Pax vs First Bus
-    if (paxVal && firstBusVal && isOrderInvalid(firstBusVal, paxVal)) {
-      return {
-        pairKey: 'boarding',
-        fieldLabel: '11 & 12. BOARDING SEQUENCE',
-        startLabel: 'First Bus/Pax Report',
-        endLabel: 'Last Pax Onboard',
-        startVal: firstBusVal,
-        endVal: paxVal,
-        message: `Last Pax Onboard time (${paxVal}) cannot be earlier than or equal to First Bus/Pax Report time (${firstBusVal}).`
-      };
-    }
-
-    // 3. Check Last Pax vs Boarding Permitted
-    if (paxVal && permitVal && isOrderInvalid(permitVal, paxVal)) {
-      return {
-        pairKey: 'boarding',
-        fieldLabel: '10 & 12. BOARDING',
-        startLabel: 'Boarding Permitted',
-        endLabel: 'Last Pax Onboard',
-        startVal: permitVal,
-        endVal: paxVal,
-        message: `Last Pax Onboard time (${paxVal}) cannot be earlier than or equal to Boarding Permitted time (${permitVal}).`
-      };
-    }
-
-    return null;
+    startVal = form.permit || '';
+    endVal = form.pax || '';
+    fieldLabel = '10 & 12. BOARDING';
+    startLabel = 'Boarding Permitted';
+    endLabel = 'Last Pax Onboard';
   }
 
   const sClean = startVal.trim().toUpperCase();
@@ -689,7 +633,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     if (field === 'securitySt' || field === 'securityEnd') pairToCheck = 'security';
     else if (field === 'cleaningSt' || field === 'cleaningEnd') pairToCheck = 'cleaning';
     else if (field === 'cateringSt' || field === 'cateringEnd') pairToCheck = 'catering';
-    else if (field === 'permit' || field === 'firstBusPax' || field === 'pax') pairToCheck = 'boarding';
+    else if (field === 'permit' || field === 'pax') pairToCheck = 'boarding';
 
     if (pairToCheck) {
       const updatedForm = { ...formData, [field]: timeVal };
@@ -721,7 +665,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     if (field === 'securitySt' || field === 'securityEnd') pairToCheck = 'security';
     else if (field === 'cleaningSt' || field === 'cleaningEnd') pairToCheck = 'cleaning';
     else if (field === 'cateringSt' || field === 'cateringEnd') pairToCheck = 'catering';
-    else if (field === 'permit' || field === 'firstBusPax' || field === 'pax') pairToCheck = 'boarding';
+    else if (field === 'permit' || field === 'pax') pairToCheck = 'boarding';
 
     if (pairToCheck && nextVal === 'EARLIER') {
       setTimingErrorsList((prev) => prev.filter((item) => item.pairKey !== pairToCheck));
@@ -1730,11 +1674,8 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                   type="text"
                   value={formData.firstBusPax || ''}
                   onChange={(e) => handleChange('firstBusPax', e.target.value)}
-                  onBlur={() => handleMilestoneBlur('boarding')}
                   placeholder="1342"
-                  className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
-                    hasBoardingTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
-                  }`}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
                 />
                 <button
                   type="button"
