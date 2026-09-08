@@ -72,6 +72,7 @@ const getEmptyFormData = (): RampReportFormData => ({
   refuel: '',
   lbag: '',
   permit: '',
+  firstBusPax: '',
   pax: '',
   trimSubmitted: '',
   trimSigned: '',
@@ -393,16 +394,20 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
     const permitM = upperFull.match(/(?:10\.?\s*BOARDING.*?PERMIT(?:TED)?|BOARDING.*?PERMIT(?:TED)?)[-:\s]*([A-Z0-9]+)/i);
     if (permitM) newForm.permit = cleanTimeVal(permitM[1]);
 
-    // 11. Last Pax Onboard
-    const paxM = upperFull.match(/(?:11\.?\s*LAST\s*PAX.*?|LAST\s*PAX.*?)[-:\s]*([012]\d[0-5]\d)/i);
+    // 11. First Bus/Pax Report
+    const firstBusM = upperFull.match(/(?:11\.?\s*FIRST\s*BUS.*?|FIRST\s*BUS.*?)[-:\s]*([A-Z0-9]+)/i);
+    if (firstBusM) newForm.firstBusPax = cleanTimeVal(firstBusM[1]);
+
+    // 12. Last Pax Onboard
+    const paxM = upperFull.match(/(?:12\.?\s*LAST\s*PAX.*?|11\.?\s*LAST\s*PAX.*?|LAST\s*PAX.*?)[-:\s]*([012]\d[0-5]\d|[A-Z0-9]+)/i);
     if (paxM) newForm.pax = cleanTimeVal(paxM[1]);
 
-    // 12. Trim Submitted
-    const trimSubM = upperFull.match(/(?:12\.?\s*TRIM.*?SUBMITTED|TRIM.*?SUBMITTED)[-:\s]*([A-Z0-9]+)/i);
+    // 13. Trim Submitted
+    const trimSubM = upperFull.match(/(?:13\.?\s*TRIM.*?SUBMITTED|12\.?\s*TRIM.*?SUBMITTED|TRIM.*?SUBMITTED)[-:\s]*([A-Z0-9]+)/i);
     if (trimSubM) newForm.trimSubmitted = cleanTimeVal(trimSubM[1]);
 
-    // 13. Trim Signed
-    const trimSignM = upperFull.match(/(?:13\.?\s*TRIM.*?SIGNED|TRIM.*?SIGNED)[-:\s]*([A-Z0-9]+)/i);
+    // 14. Trim Signed
+    const trimSignM = upperFull.match(/(?:14\.?\s*TRIM.*?SIGNED|13\.?\s*TRIM.*?SIGNED|TRIM.*?SIGNED)[-:\s]*([A-Z0-9]+)/i);
     if (trimSignM) newForm.trimSigned = cleanTimeVal(trimSignM[1]);
 
     // 9. OFFICER NAME & USBA ID
@@ -1114,6 +1119,17 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
                   value={formData.permit || ''}
                   onChange={(e) => handleFieldChange('permit', e.target.value)}
                   placeholder="1030"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">FIRST BUS/PAX</label>
+                <input
+                  type="text"
+                  value={formData.firstBusPax || ''}
+                  onChange={(e) => handleFieldChange('firstBusPax', e.target.value)}
+                  placeholder="1040"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono"
                 />
               </div>

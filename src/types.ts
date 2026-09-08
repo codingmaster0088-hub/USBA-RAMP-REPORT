@@ -62,6 +62,7 @@ export interface RampReportFormData {
   refuel: string; // REFUELING DONE
   lbag: string; // LAST BAGGAGE REPORT
   permit: string; // BOARDING PERMITTED
+  firstBusPax?: string; // FIRST BUS/PAX REPORT
   pax: string; // LAST PAX ONBOARD
   trimSubmitted?: string; // TRIM SUBMITTED
   trimSigned?: string; // TRIM SIGNED

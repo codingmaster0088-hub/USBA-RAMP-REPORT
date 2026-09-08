@@ -420,25 +420,30 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
             </tr>
 
             <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>11. LAST PAX ONBOARD</td>
-              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.pax)}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>12. TRIM SUBMITTED</td>
-              <td className="rpt-cell-val">{formatTimeLT(formData.trimSubmitted)}</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>11. FIRST BUS/PAX REPORT</td>
+              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.firstBusPax)}</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>12. LAST PAX ONBOARD</td>
+              <td className="rpt-cell-val">{formatTimeLT(formData.pax)}</td>
             </tr>
 
-            {/* Item 13 (TRIM SIGNED) and Optional Baggage Fields: 14. PRIORITY BAG, 15. VIP BAG, 16. OFFLOAD BAG */}
+            <tr>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>13. TRIM SUBMITTED</td>
+              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.trimSubmitted)}</td>
+              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>14. TRIM SIGNED</td>
+              <td className="rpt-cell-val">{formatTimeLT(formData.trimSigned)}</td>
+            </tr>
+
+            {/* Optional Baggage Fields: 15. PRIORITY BAG, 16. VIP BAG, 17. OFFLOAD BAG */}
             {(() => {
               const pBag = formatBagCount(formData.priorityBag);
               const vBag = formatBagCount(formData.vipBag);
               const oBag = formatBagCount(formData.offloadBag);
 
-              const items: { label: string; val: string }[] = [
-                { label: '13. TRIM SIGNED', val: formatTimeLT(formData.trimSigned) }
-              ];
+              const items: { label: string; val: string }[] = [];
 
-              if (pBag) items.push({ label: '14. PRIORITY BAG', val: pBag });
-              if (vBag) items.push({ label: '15. VIP BAG', val: vBag });
-              if (oBag) items.push({ label: '16. OFFLOAD BAG', val: oBag });
+              if (pBag) items.push({ label: '15. PRIORITY BAG', val: pBag });
+              if (vBag) items.push({ label: '16. VIP BAG', val: vBag });
+              if (oBag) items.push({ label: '17. OFFLOAD BAG', val: oBag });
 
               const rows = [];
               for (let i = 0; i < items.length; i += 2) {

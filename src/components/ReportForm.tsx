@@ -116,11 +116,67 @@ export const checkPairTiming = (
     startLabel = 'Catering Start';
     endLabel = 'Catering End';
   } else if (pair === 'boarding') {
-    startVal = form.permit || '';
-    endVal = form.pax || '';
-    fieldLabel = '10 & 11. BOARDING';
-    startLabel = 'Boarding Permitted';
-    endLabel = 'Last Pax Onboard';
+    const permitVal = (form.permit || '').trim();
+    const firstBusVal = (form.firstBusPax || '').trim();
+    const paxVal = (form.pax || '').trim();
+
+    const isOrderInvalid = (st: string, en: string) => {
+      const sC = st.toUpperCase();
+      const eC = en.toUpperCase();
+      if (!sC || !eC) return false;
+      if (isEarlierOrPresetted(sC) || isEarlierOrPresetted(eC)) return false;
+      const sM = parseTimeToMinutes(sC);
+      const eM = parseTimeToMinutes(eC);
+      if (sM === null || eM === null) return false;
+      if (eM > sM) return false;
+      // Midnight crossover
+      const isLateEvening = sM >= 18 * 60;
+      const isEarlyMorning = eM <= 6 * 60;
+      const rollover = (eM + 1440) - sM;
+      if (isLateEvening && isEarlyMorning && rollover > 0 && rollover <= 300) return false;
+      return true;
+    };
+
+    // 1. Check First Bus vs Boarding Permitted
+    if (firstBusVal && permitVal && isOrderInvalid(permitVal, firstBusVal)) {
+      return {
+        pairKey: 'boarding',
+        fieldLabel: '10 & 11. BOARDING SEQUENCE',
+        startLabel: 'Boarding Permitted',
+        endLabel: 'First Bus/Pax Report',
+        startVal: permitVal,
+        endVal: firstBusVal,
+        message: `First Bus/Pax Report time (${firstBusVal}) cannot be earlier than or equal to Boarding Permitted time (${permitVal}).`
+      };
+    }
+
+    // 2. Check Last Pax vs First Bus
+    if (paxVal && firstBusVal && isOrderInvalid(firstBusVal, paxVal)) {
+      return {
+        pairKey: 'boarding',
+        fieldLabel: '11 & 12. BOARDING SEQUENCE',
+        startLabel: 'First Bus/Pax Report',
+        endLabel: 'Last Pax Onboard',
+        startVal: firstBusVal,
+        endVal: paxVal,
+        message: `Last Pax Onboard time (${paxVal}) cannot be earlier than or equal to First Bus/Pax Report time (${firstBusVal}).`
+      };
+    }
+
+    // 3. Check Last Pax vs Boarding Permitted
+    if (paxVal && permitVal && isOrderInvalid(permitVal, paxVal)) {
+      return {
+        pairKey: 'boarding',
+        fieldLabel: '10 & 12. BOARDING',
+        startLabel: 'Boarding Permitted',
+        endLabel: 'Last Pax Onboard',
+        startVal: permitVal,
+        endVal: paxVal,
+        message: `Last Pax Onboard time (${paxVal}) cannot be earlier than or equal to Boarding Permitted time (${permitVal}).`
+      };
+    }
+
+    return null;
   }
 
   const sClean = startVal.trim().toUpperCase();
@@ -154,12 +210,7 @@ export const checkPairTiming = (
   }
 
   // Otherwise, ending time is earlier than or equal to starting time -> WRONG TIMING!
-  let message = '';
-  if (pair === 'boarding') {
-    message = `Last Pax Onboard time (${endVal}) cannot be earlier than or equal to Boarding Permitted time (${startVal}).`;
-  } else {
-    message = `${endLabel} time (${endVal}) cannot be earlier than or equal to ${startLabel} time (${startVal}).`;
-  }
+  const message = `${endLabel} time (${endVal}) cannot be earlier than or equal to ${startLabel} time (${startVal}).`;
 
   return {
     pairKey: pair,
@@ -298,6 +349,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       refuel: '',
       lbag: '',
       permit: '',
+      firstBusPax: '',
       pax: '',
       trimSubmitted: '',
       trimSigned: '',
@@ -471,7 +523,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     if (!formData.co.trim()) skipped.push('C/OFF (LT)');
     if (!formData.ab.trim()) skipped.push('A/B (LT)');
 
-    // Turnaround Milestones (13 fields)
+    // Turnaround Milestones (14 fields)
     if (!formData.securitySt?.trim()) skipped.push('1. SECURITY CHECK ST');
     if (!formData.securityEnd?.trim()) skipped.push('2. SECURITY CHECK END');
     if (!formData.cleaningSt?.trim()) skipped.push('3. CLEANING START');
@@ -482,9 +534,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     if (!formData.refuel.trim()) skipped.push('8. REFUELING DONE');
     if (!formData.lbag.trim()) skipped.push('9. LAST BAGGAGE REPORT');
     if (!formData.permit.trim()) skipped.push('10. BOARDING PERMITTED');
-    if (!formData.pax.trim()) skipped.push('11. LAST PAX ONBOARD');
-    if (!formData.trimSubmitted?.trim()) skipped.push('12. TRIM SUBMITTED');
-    if (!formData.trimSigned?.trim()) skipped.push('13. TRIM SIGNED');
+    if (!formData.firstBusPax?.trim()) skipped.push('11. FIRST BUS/PAX REPORT');
+    if (!formData.pax.trim()) skipped.push('12. LAST PAX ONBOARD');
+    if (!formData.trimSubmitted?.trim()) skipped.push('13. TRIM SUBMITTED');
+    if (!formData.trimSigned?.trim()) skipped.push('14. TRIM SIGNED');
 
     // Delay Remarks if Flight Status is strictly DELAY
     const statusUpper = (formData.status || '').toUpperCase();
@@ -636,7 +689,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     if (field === 'securitySt' || field === 'securityEnd') pairToCheck = 'security';
     else if (field === 'cleaningSt' || field === 'cleaningEnd') pairToCheck = 'cleaning';
     else if (field === 'cateringSt' || field === 'cateringEnd') pairToCheck = 'catering';
-    else if (field === 'permit' || field === 'pax') pairToCheck = 'boarding';
+    else if (field === 'permit' || field === 'firstBusPax' || field === 'pax') pairToCheck = 'boarding';
 
     if (pairToCheck) {
       const updatedForm = { ...formData, [field]: timeVal };
@@ -668,7 +721,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     if (field === 'securitySt' || field === 'securityEnd') pairToCheck = 'security';
     else if (field === 'cleaningSt' || field === 'cleaningEnd') pairToCheck = 'cleaning';
     else if (field === 'cateringSt' || field === 'cateringEnd') pairToCheck = 'catering';
-    else if (field === 'permit' || field === 'pax') pairToCheck = 'boarding';
+    else if (field === 'permit' || field === 'firstBusPax' || field === 'pax') pairToCheck = 'boarding';
 
     if (pairToCheck && nextVal === 'EARLIER') {
       setTimingErrorsList((prev) => prev.filter((item) => item.pairKey !== pairToCheck));
@@ -1307,10 +1360,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
           </div>
         )}
 
-        {/* TURNAROUND MILESTONES (16 FIELDS) */}
+        {/* TURNAROUND MILESTONES (17 FIELDS) */}
         <div className="space-y-2.5 pt-2 border-t border-slate-800">
           <label className="text-[10px] font-extrabold text-amber-300 uppercase tracking-wider block">
-            TURNAROUND MILESTONES (16 FIELDS)
+            TURNAROUND MILESTONES (17 FIELDS)
           </label>
 
           <div className="grid grid-cols-2 gap-2">
@@ -1667,10 +1720,36 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 11. LAST PAX ONBOARD */}
+            {/* 11. FIRST BUS/PAX REPORT */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                11. LAST PAX ONBOARD
+                11. FIRST BUS/PAX REPORT
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData.firstBusPax || ''}
+                  onChange={(e) => handleChange('firstBusPax', e.target.value)}
+                  onBlur={() => handleMilestoneBlur('boarding')}
+                  placeholder="1342"
+                  className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
+                    hasBoardingTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setNowTime('firstBusPax')}
+                  className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                >
+                  🕒
+                </button>
+              </div>
+            </div>
+
+            {/* 12. LAST PAX ONBOARD */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
+                12. LAST PAX ONBOARD
               </label>
               <div className="relative">
                 <input
@@ -1693,10 +1772,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 12. TRIM SUBMITTED */}
+            {/* 13. TRIM SUBMITTED */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                12. TRIM SUBMITTED
+                13. TRIM SUBMITTED
               </label>
               <div className="relative">
                 <input
@@ -1716,10 +1795,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 13. TRIM SIGNED */}
+            {/* 14. TRIM SIGNED */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                13. TRIM SIGNED
+                14. TRIM SIGNED
               </label>
               <div className="relative">
                 <input
@@ -1739,10 +1818,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 14. PRIORITY BAG (OPTIONAL) */}
+            {/* 15. PRIORITY BAG (OPTIONAL) */}
             <div>
               <label className="text-[10px] font-bold text-cyan-300 uppercase mb-1 block">
-                14. PRIORITY BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
+                15. PRIORITY BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
               </label>
               <input
                 type="number"
@@ -1754,10 +1833,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               />
             </div>
 
-            {/* 15. VIP BAG (OPTIONAL) */}
+            {/* 16. VIP BAG (OPTIONAL) */}
             <div>
               <label className="text-[10px] font-bold text-amber-300 uppercase mb-1 block">
-                15. VIP BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
+                16. VIP BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
               </label>
               <input
                 type="number"
@@ -1769,10 +1848,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               />
             </div>
 
-            {/* 16. OFFLOAD BAG (OPTIONAL) */}
+            {/* 17. OFFLOAD BAG (OPTIONAL) */}
             <div className="col-span-2 sm:col-span-1">
               <label className="text-[10px] font-bold text-rose-300 uppercase mb-1 block">
-                16. OFFLOAD BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
+                17. OFFLOAD BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
               </label>
               <input
                 type="number"
