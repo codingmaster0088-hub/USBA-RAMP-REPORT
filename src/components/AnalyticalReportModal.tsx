@@ -4,7 +4,7 @@ import { captureHtml2CanvasSafe } from '../utils/html2canvasHelper';
 import { saveDailyAnalyticalSnapshotToFirestore, subscribeToDailyAnalyticalSnapshots } from '../lib/firebase';
 import { parseDateToIso, formatIsoToDisplay } from '../utils/analyticalSnapshotBuilder';
 import { BackendStorageConfirmationModal } from './BackendStorageConfirmationModal';
-import aircraftImage from '../assets/images/us_bangla_real_hd_plane_1786386727381.jpg';
+import aircraftImage from '../assets/images/airplane_flying_sky_1788975401314.jpg';
 import {
   X,
   BarChart3,

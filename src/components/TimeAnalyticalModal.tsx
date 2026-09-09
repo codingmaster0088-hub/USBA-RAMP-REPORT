@@ -5,7 +5,7 @@ import { saveDailyAnalyticalSnapshotToFirestore, subscribeToDailyAnalyticalSnaps
 import { parseDateToIso, formatIsoToDisplay, cleanFlightNum } from '../utils/analyticalSnapshotBuilder';
 import { verifiedFlightReports } from '../data/verifiedFlightReports';
 import { BackendStorageConfirmationModal } from './BackendStorageConfirmationModal';
-import aircraftImage from '../assets/images/us_bangla_real_hd_plane_1786386727381.jpg';
+import aircraftImage from '../assets/images/airplane_flying_sky_1788975401314.jpg';
 import {
   X,
   Clock,
