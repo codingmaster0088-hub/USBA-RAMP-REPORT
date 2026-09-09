@@ -606,6 +606,11 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       const dcVal = r.formData?.dc || '';
       const coVal = r.formData?.co || '';
 
+      const isDelayed = (status || '').toUpperCase().includes('DELAY');
+      const delayReason = isDelayed
+        ? (r.formData?.delayRemarks?.trim() || r.formData?.delayReason?.trim() || '')
+        : '';
+
       return {
         id: r.id || `row-${index}`,
         flight: flight.startsWith('BS') ? flight : `BS-${flight}`,
@@ -616,6 +621,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         date,
         officer,
         status,
+        delayReason,
         groundTime,
         conVal,
         dcVal,
@@ -779,6 +785,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       'Pax Onboard',
       'Boarding Duration',
       'Flight Status',
+      'Delay Reason',
       'Duty Officer'
     ];
 
@@ -806,6 +813,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       `"${r.pax}"`,
       `"${r.boardingDuration.durationText}"`,
       `"${r.status}"`,
+      `"${(r.delayReason || '').replace(/\r?\n/g, ' ').replace(/"/g, '""')}"`,
       `"${r.officer}"`
     ]);
 
