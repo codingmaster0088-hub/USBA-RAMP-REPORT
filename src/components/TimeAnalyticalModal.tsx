@@ -592,6 +592,20 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         r.mode
       );
 
+      // Turnaround vs Direct flight identification for C/ON, D/C, C/OFF
+      const isTurnaround =
+        r.mode === 'ROUND' ||
+        (r.mode !== 'DIRECT' &&
+          Boolean(
+            (r.formData?.con && r.formData.con.trim()) ||
+            (r.formData?.arvFlt && r.formData.arvFlt.trim()) ||
+            (r.formData?.do && r.formData.do.trim())
+          ));
+
+      const conVal = isTurnaround ? (r.formData?.con || '') : 'nil';
+      const dcVal = r.formData?.dc || '';
+      const coVal = r.formData?.co || '';
+
       return {
         id: r.id || `row-${index}`,
         flight: flight.startsWith('BS') ? flight : `BS-${flight}`,
@@ -603,6 +617,10 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         officer,
         status,
         groundTime,
+        conVal,
+        dcVal,
+        coVal,
+        isTurnaround,
         securitySt,
         securityEnd,
         securityDuration,
@@ -744,6 +762,9 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       'Sector / Route',
       'A/C Reg',
       'Bay / Gate',
+      'C/ON',
+      'D/C',
+      'C/OFF',
       'Ground Time',
       'Security Start',
       'Security End',
@@ -768,6 +789,9 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       `"${r.route}"`,
       `"${r.ac}"`,
       `"${r.bay}"`,
+      `"${r.conVal}"`,
+      `"${r.dcVal}"`,
+      `"${r.coVal}"`,
       `"${r.groundTime.text}"`,
       `"${r.securitySt}"`,
       `"${r.securityEnd}"`,
