@@ -928,6 +928,7 @@ export default function App() {
             onUpdateSchedule={handleUpdateSchedule}
             onBroadcastNotice={handleBroadcastNotice}
             onDeleteNotice={handleDeleteNotice}
+            onDeleteReport={handleDeleteReport}
             showToast={showToast}
           />
         )}

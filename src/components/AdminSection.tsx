@@ -39,6 +39,7 @@ interface AdminSectionProps {
   onBroadcastNotice?: (message: string) => Promise<void>;
   onDeleteNotice?: (noticeId: string) => void;
   showToast: (title: string, subtitle?: string, type?: 'success' | 'info' | 'error') => void;
+  onDeleteReport?: (id: string) => void;
 }
 
 export const AdminSection: React.FC<AdminSectionProps> = ({
@@ -51,7 +52,8 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   onUpdateSchedule,
   onBroadcastNotice,
   onDeleteNotice,
-  showToast
+  showToast,
+  onDeleteReport
 }) => {
   // Role-based Admin Authentication State
   // 11126: Office Management (Only 1. NOTICE and 2. TIME ANALYTICAL)
@@ -936,6 +938,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
           adminId={user.id}
           onClose={() => setActiveModal(null)}
           showToast={showToast}
+          onDeleteReport={onDeleteReport}
         />
       )}
     </div>

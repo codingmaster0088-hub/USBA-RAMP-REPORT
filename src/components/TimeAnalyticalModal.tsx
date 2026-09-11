@@ -1,7 +1,11 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { SavedReport, ScheduleFlight, DailyAnalyticalSnapshot } from '../types';
 import { captureHtml2CanvasSafe } from '../utils/html2canvasHelper';
-import { saveDailyAnalyticalSnapshotToFirestore, subscribeToDailyAnalyticalSnapshots } from '../lib/firebase';
+import {
+  saveDailyAnalyticalSnapshotToFirestore,
+  subscribeToDailyAnalyticalSnapshots,
+  deleteReportFromFirestore
+} from '../lib/firebase';
 import { parseDateToIso, formatIsoToDisplay, cleanFlightNum } from '../utils/analyticalSnapshotBuilder';
 import { verifiedFlightReports } from '../data/verifiedFlightReports';
 import { BackendStorageConfirmationModal } from './BackendStorageConfirmationModal';
@@ -23,7 +27,10 @@ import {
   Eye,
   Table as TableIcon,
   Database,
-  Check
+  Check,
+  Trash2,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 
 interface TimeAnalyticalModalProps {
@@ -34,6 +41,7 @@ interface TimeAnalyticalModalProps {
   adminId: string;
   onClose: () => void;
   showToast: (title: string, subtitle?: string, type?: 'success' | 'info' | 'error') => void;
+  onDeleteReport?: (id: string) => void;
 }
 
 export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
@@ -43,7 +51,8 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
   adminName,
   adminId,
   onClose,
-  showToast
+  showToast,
+  onDeleteReport
 }) => {
   const printCardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +114,19 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
     totalFlights: number;
     expiresDateStr: string;
   } | null>(null);
+
+  // Track flights deleted by admin from report & database
+  const [deletedFlightIds, setDeletedFlightIds] = useState<Set<string>>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('usb_deleted_report_ids') || '[]');
+      return new Set(Array.isArray(stored) ? stored : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const [deletedFlightNumbers, setDeletedFlightNumbers] = useState<Set<string>>(new Set());
+  const [flightToDelete, setFlightToDelete] = useState<any | null>(null);
+  const [isDeletingFlight, setIsDeletingFlight] = useState<boolean>(false);
 
   // Real-time listener for 30-Day Daily Analytical Snapshots
   useEffect(() => {
@@ -452,9 +474,24 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       return cleanF === '307' || raw.includes('307');
     };
 
+    const isFlightDeleted = (rep: SavedReport): boolean => {
+      if (rep.id && deletedFlightIds.has(rep.id)) return true;
+      const dFlt = cleanFlightNum(rep.formData?.deptFlt || '');
+      const mFlt = cleanFlightNum(rep.flight || '');
+      const aFlt = cleanFlightNum(rep.formData?.arvFlt || '');
+      const cleanF = dFlt || mFlt || aFlt;
+      if (cleanF && deletedFlightNumbers.has(cleanF)) return true;
+      try {
+        const stored = JSON.parse(localStorage.getItem('usb_deleted_report_ids') || '[]');
+        if (rep.id && stored.includes(rep.id)) return true;
+      } catch {}
+      return false;
+    };
+
     // 1. Process active savedReports first (they have the most accurate user-entered flight logs)
     savedReports.forEach((r) => {
       if (is03SepViewing && isBs307Flight(r)) return;
+      if (isFlightDeleted(r)) return;
       if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
 
       const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
@@ -476,6 +513,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
     // 2. Add reports from backend snapshot if not already present
     (activeBackendSnapshot?.reportsSnapshot || []).forEach((r) => {
       if (is03SepViewing && isBs307Flight(r)) return;
+      if (isFlightDeleted(r)) return;
       if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
 
       const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
@@ -498,6 +536,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
     // 3. Add verified historical reports (including 24 AUG BS-309 and BS-349) if not already present
     verifiedFlightReports.forEach((r) => {
       if (is03SepViewing && isBs307Flight(r)) return;
+      if (isFlightDeleted(r)) return;
       if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
 
       const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
@@ -525,8 +564,8 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       }
     });
 
-    return Array.from(map.values());
-  }, [savedReports, activeBackendSnapshot, selectedIsoDate]);
+    return Array.from(map.values()).filter((r) => !isFlightDeleted(r));
+  }, [savedReports, activeBackendSnapshot, selectedIsoDate, deletedFlightIds, deletedFlightNumbers]);
 
   // Process & filter reports
   const processedRows = useMemo(() => {
@@ -639,7 +678,8 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         permit,
         pax,
         boardingDuration,
-        isDomestic: isDomesticReport(r)
+        isDomestic: isDomesticReport(r),
+        originalReport: r
       };
     });
 
@@ -748,6 +788,110 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       }
     } catch (e) {
       console.error('Error saving snapshot to backend', e);
+    }
+  };
+
+  // Permanently delete a flight from Time Analytical Report, Firestore database, and cloud snapshots
+  const handleConfirmDeleteFlight = async () => {
+    if (!flightToDelete) return;
+    setIsDeletingFlight(true);
+
+    const targetId = flightToDelete.id;
+    const targetFlightRaw = flightToDelete.rawFlight || flightToDelete.flight || '';
+    const targetFlightNum = cleanFlightNum(targetFlightRaw);
+    const targetDate = flightToDelete.date || activeDateDisplay;
+
+    try {
+      // 1. Immediately update local state so UI updates in real-time
+      if (targetId) {
+        setDeletedFlightIds((prev) => new Set([...prev, targetId]));
+      }
+      if (targetFlightNum) {
+        setDeletedFlightNumbers((prev) => new Set([...prev, targetFlightNum]));
+      }
+
+      // 2. Persist to localStorage deleted IDs & update usb_reports
+      try {
+        const storedIds: string[] = JSON.parse(localStorage.getItem('usb_deleted_report_ids') || '[]');
+        if (targetId && !storedIds.includes(targetId)) {
+          storedIds.push(targetId);
+        }
+        localStorage.setItem('usb_deleted_report_ids', JSON.stringify(storedIds));
+
+        const savedLocal = localStorage.getItem('usb_reports');
+        if (savedLocal) {
+          const parsed: SavedReport[] = JSON.parse(savedLocal);
+          const filtered = parsed.filter((r) => {
+            const fNum = cleanFlightNum(r.formData?.deptFlt || r.flight || '');
+            return r.id !== targetId && fNum !== targetFlightNum;
+          });
+          localStorage.setItem('usb_reports', JSON.stringify(filtered));
+        }
+      } catch (err) {
+        console.warn('LocalStorage deletion sync error:', err);
+      }
+
+      // 3. Inform parent App.tsx if onDeleteReport provided
+      if (onDeleteReport && targetId) {
+        try {
+          await onDeleteReport(targetId);
+        } catch (err) {
+          console.warn('Parent onDeleteReport error:', err);
+        }
+      }
+
+      // 4. Delete from Firestore savedReports collection
+      if (targetId) {
+        try {
+          await deleteReportFromFirestore(targetId);
+        } catch (err) {
+          console.warn('Firestore savedReports delete error:', err);
+        }
+      }
+
+      // 5. Delete from Firestore dailyAnalyticalSnapshots for matching date
+      try {
+        for (const snap of snapshots) {
+          const snapDateIso = snap.dateIso;
+          const snapDateDisplay = snap.dateDisplay;
+          const isDateMatch =
+            snapDateIso === selectedIsoDate ||
+            snapDateDisplay === activeDateDisplay ||
+            snapDateDisplay === targetDate;
+
+          if (isDateMatch && Array.isArray(snap.reportsSnapshot)) {
+            const remainingReports = snap.reportsSnapshot.filter((r) => {
+              const rId = r.id;
+              const fNum = cleanFlightNum(r.formData?.deptFlt || r.flight || '');
+              return rId !== targetId && fNum !== targetFlightNum;
+            });
+
+            if (remainingReports.length !== snap.reportsSnapshot.length) {
+              const updatedSnap: DailyAnalyticalSnapshot = {
+                ...snap,
+                totalReportsCount: remainingReports.length,
+                reportsSnapshot: remainingReports,
+                savedAt: Date.now()
+              };
+              await saveDailyAnalyticalSnapshotToFirestore(updatedSnap);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Firestore snapshot deletion error:', err);
+      }
+
+      showToast(
+        'Flight Deleted',
+        `Flight ${flightToDelete.flight} permanently removed from report & database.`,
+        'success'
+      );
+    } catch (error) {
+      console.error('Error deleting flight:', error);
+      showToast('Deletion Failed', 'Failed to delete flight from database.', 'error');
+    } finally {
+      setIsDeletingFlight(false);
+      setFlightToDelete(null);
     }
   };
 
@@ -1161,12 +1305,13 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
                       <th className="py-3 px-3 text-emerald-300">BOARDING <span className="text-[9px] text-slate-500">(PERMIT - PAX)</span></th>
                       <th className="py-3 px-3">STATUS</th>
                       <th className="py-3 px-3">OFFICER</th>
+                      <th className="py-3 px-3 text-center">ACTION</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-sans text-slate-200">
                     {processedRows.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-slate-500 font-mono text-xs">
+                        <td colSpan={12} className="py-12 text-center text-slate-500 font-mono text-xs">
                           No turnaround duration records found for {activeDateDisplay} ({flightScopeFilter}).
                         </td>
                       </tr>
@@ -1289,6 +1434,16 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
                           </td>
                           <td className="py-2.5 px-3 text-[11px] text-slate-300 font-medium">
                             {row.officer}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setFlightToDelete(row)}
+                              title={`Delete flight ${row.flight} from report & database`}
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 hover:text-rose-300 border border-rose-500/30 transition-all cursor-pointer inline-flex items-center justify-center group active:scale-95 shadow-sm"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform text-rose-400" />
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -1756,6 +1911,99 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         expiresDateStr={savedSnapshotInfo?.expiresDateStr || ''}
         onClose={() => setShowSaveSuccessModal(false)}
       />
+
+      {/* WARNING CONFIRMATION MODAL FOR PERMANENT FLIGHT REMOVAL */}
+      {flightToDelete && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-rose-500/50 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shrink-0">
+                <AlertTriangle className="w-6 h-6 text-rose-500 animate-pulse" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                  CONFIRM FLIGHT REMOVAL
+                </h3>
+                <p className="text-xs text-rose-400/90 font-medium mt-0.5">
+                  Permanent Database & Report Deletion
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isDeletingFlight && setFlightToDelete(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Flight Metadata Box */}
+            <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3.5 space-y-2 text-xs">
+              <div className="flex justify-between items-center border-b border-slate-800/80 pb-2">
+                <span className="text-slate-400 font-mono">FLIGHT:</span>
+                <span className="font-mono font-black text-cyan-400 text-sm">{flightToDelete.flight}</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-800/80 pb-2">
+                <span className="text-slate-400 font-mono">SECTOR / ROUTE:</span>
+                <span className="font-mono font-bold text-amber-300">{flightToDelete.route}</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-800/80 pb-2">
+                <span className="text-slate-400 font-mono">A/C & BAY:</span>
+                <span className="font-mono text-slate-200">{flightToDelete.ac} (BAY {flightToDelete.bay})</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-800/80 pb-2">
+                <span className="text-slate-400 font-mono">SCHEDULED TIME:</span>
+                <span className="font-mono text-slate-200">{flightToDelete.groundTime?.text || '1800 LT'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 font-mono">LOGGED OFFICER:</span>
+                <span className="font-medium text-slate-300">{flightToDelete.officer || 'N/A'}</span>
+              </div>
+            </div>
+
+            {/* Warning Text */}
+            <div className="bg-rose-950/40 border border-rose-500/30 rounded-xl p-3 text-[11px] text-rose-300 space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-rose-200">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                This action is irreversible!
+              </p>
+              <p className="text-rose-300/80">
+                Deleting this flight will permanently remove it from this Time Analytical Report, saved turnaround logs, and the 30-day Firestore database snapshot.
+              </p>
+            </div>
+
+            {/* Confirmation Action Buttons */}
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingFlight}
+                onClick={() => setFlightToDelete(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+              >
+                Cancel / Keep Flight
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingFlight}
+                onClick={handleConfirmDeleteFlight}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-black transition-all cursor-pointer flex items-center gap-2 shadow-lg shadow-rose-600/30 disabled:opacity-50"
+              >
+                {isDeletingFlight ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>DELETING...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>CONFIRM & DELETE</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
