@@ -623,6 +623,14 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       const pax = r.formData?.pax || '';
       const boardingDuration = calculateTurnaroundDuration(permit, pax);
 
+      // 5. Additional timing reports
+      const crewReport = r.formData?.crew || (r.formData as any)?.crewReport || '';
+      const firstBusPax =
+        r.formData?.firstBusPax ||
+        (r.formData as any)?.firstBus ||
+        (r.formData as any)?.paxReport ||
+        '';
+
       // Ground Time
       const groundTime = getGroundTimeDisplay(
         r.formData?.ground,
@@ -675,6 +683,8 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         cateringSt,
         cateringEnd,
         cateringDuration,
+        crewReport,
+        firstBusPax,
         permit,
         pax,
         boardingDuration,
@@ -925,6 +935,8 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       'Catering Start',
       'Catering End',
       'Catering Duration',
+      'Crew Report',
+      'First bus/Pax report',
       'Boarding Permit',
       'Pax Onboard',
       'Boarding Duration',
@@ -953,6 +965,8 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       `"${r.cateringSt}"`,
       `"${r.cateringEnd}"`,
       `"${r.cateringDuration.durationText}"`,
+      `"${r.crewReport}"`,
+      `"${r.firstBusPax}"`,
       `"${r.permit}"`,
       `"${r.pax}"`,
       `"${r.boardingDuration.durationText}"`,
