@@ -598,6 +598,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       const flight = r.formData?.deptFlt || r.formData?.arvFlt || r.flight || 'FLT';
       const route = r.formData?.deptRoute || r.formData?.arvRoute || r.route || '-';
       const ac = r.formData?.ac || '-';
+      const std = r.formData?.std || (r as any).std || '';
       const bay = r.formData?.bay || '-';
       const date = r.formData?.date || r.date || activeDateDisplay;
       const officer = r.officerName || 'Officer';
@@ -664,6 +665,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         rawFlight: flight,
         route,
         ac,
+        std,
         bay,
         date,
         officer,
@@ -921,6 +923,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       'Flight No',
       'Sector / Route',
       'A/C Reg',
+      'STD',
       'Bay / Gate',
       'C/ON',
       'D/C',
@@ -951,6 +954,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       `"${r.flight}"`,
       `"${r.route}"`,
       `"${r.ac}"`,
+      `"${r.std}"`,
       `"${r.bay}"`,
       `"${r.conVal}"`,
       `"${r.dcVal}"`,
