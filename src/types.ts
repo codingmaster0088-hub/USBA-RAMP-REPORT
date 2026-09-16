@@ -43,6 +43,7 @@ export interface RampReportFormData {
   // Departure Info
   deptFlt: string; // e.g. 122
   deptRoute: string; // e.g. JSR-DAC
+  pic?: string; // Pilot In Command (PIC)
   std: string; // Scheduled Time of Departure
   dc: string; // Door Close LT
   co: string; // Chocks Off LT

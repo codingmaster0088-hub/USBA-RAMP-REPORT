@@ -57,6 +57,7 @@ const getEmptyFormData = (): RampReportFormData => ({
   disem: '',
   deptFlt: '',
   deptRoute: '',
+  pic: '',
   std: '',
   dc: '',
   co: '',

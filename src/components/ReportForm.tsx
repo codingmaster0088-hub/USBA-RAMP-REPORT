@@ -276,6 +276,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       disem: '',
       deptFlt: '',
       deptRoute: '',
+      pic: '',
       std: '',
       dc: '',
       co: '',
@@ -462,6 +463,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     // Departure Info
     if (!formData.deptFlt.trim()) skipped.push('DEPT FLIGHT (BS-)');
     if (!formData.deptRoute.trim()) skipped.push('DEPT ROUTE');
+    if (!formData.pic?.trim()) skipped.push('PIC (PILOT IN COMMAND)');
     if (!formData.std.trim()) skipped.push('STD (LT)');
     if (!formData.dc.trim()) skipped.push('D/C (LT)');
     if (!formData.co.trim()) skipped.push('C/OFF (LT)');
@@ -1150,7 +1152,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                 type="number"
                 value={formData.deptFlt}
                 onChange={(e) => handleChange('deptFlt', e.target.value)}
-                placeholder="122"
+                placeholder="191"
                 className="w-full bg-slate-950 border border-amber-500/40 rounded-xl pl-9 pr-3 py-2 text-xs text-amber-300 font-mono font-extrabold focus:border-amber-400 outline-none"
               />
             </div>
@@ -1164,10 +1166,25 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               type="text"
               value={formData.deptRoute}
               onChange={(e) => handleChange('deptRoute', e.target.value)}
-              placeholder="JSR-DAC"
+              placeholder="DAC-SPD"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold focus:border-amber-400 outline-none uppercase"
             />
           </div>
+        </div>
+
+        {/* PIC (Pilot In Command) - Mandatory */}
+        <div>
+          <label className="text-[10px] font-bold text-amber-200 uppercase mb-1 flex items-center justify-between">
+            <span>PIC (PILOT IN COMMAND) *</span>
+            <span className="text-[9px] text-amber-400/80 font-normal font-mono">MANDATORY</span>
+          </label>
+          <input
+            type="text"
+            value={formData.pic || ''}
+            onChange={(e) => handleChange('pic', e.target.value)}
+            placeholder="ENTER PILOT / CAPTAIN NAME (E.G. RASHED)"
+            className="w-full bg-slate-950 border border-amber-500/40 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono font-bold focus:border-amber-400 outline-none uppercase"
+          />
         </div>
 
         {/* Timings: STD, D/C, C/O, A/B */}

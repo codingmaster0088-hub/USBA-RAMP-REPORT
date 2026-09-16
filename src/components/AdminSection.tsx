@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile, ScheduleFlight, UserLog, UserActionType, AdminNotice, SavedReport } from '../types';
 import { parseFLSTData, sampleFLSTInput } from '../utils/flstParser';
-import { AnalyticalReportModal } from './AnalyticalReportModal';
+import { SpecificFlightModal } from './SpecificFlightModal';
 import { CompleteFlightModal } from './CompleteFlightModal';
 import { TimeAnalyticalModal } from './TimeAnalyticalModal';
 import {
@@ -22,6 +22,7 @@ import {
   Calendar,
   Activity,
   BarChart3,
+  Plane,
   X,
   ChevronRight,
   FileCheck2,
@@ -74,9 +75,9 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   const [pinError, setPinError] = useState('');
   const [showPin, setShowPin] = useState(false);
 
-  // Active Admin Modal Popup State ('LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'ANALYTICAL_REPORT' | 'COMPLETE_FLIGHT' | 'TIME_ANALYTICAL' | null)
+  // Active Admin Modal Popup State ('LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'SPECIFIC_FLIGHT' | 'COMPLETE_FLIGHT' | 'TIME_ANALYTICAL' | null)
   const [activeModal, setActiveModal] = useState<
-    'LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'ANALYTICAL_REPORT' | 'COMPLETE_FLIGHT' | 'TIME_ANALYTICAL' | null
+    'LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'SPECIFIC_FLIGHT' | 'COMPLETE_FLIGHT' | 'TIME_ANALYTICAL' | null
   >(null);
 
   const [flstInput, setFlstInput] = useState<string>(() => {
@@ -365,18 +366,18 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
         </div>
       </div>
 
-      {/* MODULE CARDS: MANAGEMENT SEES ONLY 02 OPTIONS, SUPER ADMIN SEES ALL */}
+      {/* MODULE CARDS: MANAGEMENT SEES ONLY 03 OPTIONS, SUPER ADMIN SEES ALL */}
       {isManagement ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-xs font-black text-cyan-300 uppercase tracking-wider block pl-1">
-              MANAGEMENT ACCESS (2 MODULES AUTHORIZED):
+              MANAGEMENT ACCESS (3 MODULES AUTHORIZED):
             </label>
             <span className="text-[10px] font-mono text-slate-400">
               Password Authenticated: <strong className="text-cyan-400">11126</strong>
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* 1. NOTICE BUTTON (MANAGEMENT) */}
             <button
               onClick={() => setActiveModal('NOTICE')}
@@ -425,6 +426,32 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
                 </div>
                 <p className="text-xs text-slate-400 leading-snug mt-1">
                   Turnaround duration analysis (Security, Cleaning, Catering, Boarding & Ground Time).
+                </p>
+              </div>
+            </button>
+
+            {/* 3. SPECIFIC FLIGHT BUTTON (MANAGEMENT) */}
+            <button
+              onClick={() => setActiveModal('SPECIFIC_FLIGHT')}
+              className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-5 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-3 group ${
+                activeModal === 'SPECIFIC_FLIGHT' ? 'border-emerald-400 bg-emerald-500/10' : 'border-emerald-500/50 hover:border-emerald-400'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-400/40 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors shadow-md">
+                  <Plane className="w-6 h-6" />
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-slate-950 text-emerald-400 border border-slate-800">
+                  30 DAYS
+                </span>
+              </div>
+              <div>
+                <div className="text-sm font-black text-white group-hover:text-emerald-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>3. SPECIFIC FLIGHT</span>
+                  <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-emerald-300 transition-transform group-hover:translate-x-0.5" />
+                </div>
+                <p className="text-xs text-slate-400 leading-snug mt-1">
+                  Serial date-wise tracking for BS-101, 531, 141, 161, 183 with Excel export.
                 </p>
               </div>
             </button>
@@ -514,28 +541,28 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
               </div>
             </button>
 
-            {/* 4. ANALYTICAL REPORT BUTTON */}
+            {/* 4. SPECIFIC FLIGHT BUTTON */}
             <button
-              onClick={() => setActiveModal('ANALYTICAL_REPORT')}
+              onClick={() => setActiveModal('SPECIFIC_FLIGHT')}
               className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
-                activeModal === 'ANALYTICAL_REPORT' ? 'border-emerald-400 bg-emerald-500/10' : 'border-emerald-500/50 hover:border-emerald-400'
+                activeModal === 'SPECIFIC_FLIGHT' ? 'border-emerald-400 bg-emerald-500/10' : 'border-emerald-500/50 hover:border-emerald-400'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-400/40 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors shadow-md">
-                  <BarChart3 className="w-5 h-5" />
+                  <Plane className="w-5 h-5" />
                 </div>
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-emerald-400 border border-slate-800">
-                  ANALYTICS
+                  SPECIFIC
                 </span>
               </div>
               <div>
                 <div className="text-xs font-black text-white group-hover:text-emerald-300 uppercase tracking-wide flex items-center justify-between">
-                  <span>4. ANALYTICAL REPORT</span>
+                  <span>4. SPECIFIC FLIGHT</span>
                   <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-300 transition-transform group-hover:translate-x-0.5" />
                 </div>
                 <p className="text-[11px] text-slate-400 leading-snug mt-1">
-                  Day-wise delay code statistics, breakdown & downloadable JPG report.
+                  BS-101, 531, 141, 161, 183 serial date format & 30-day Excel export.
                 </p>
               </div>
             </button>
@@ -905,15 +932,13 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
         </div>
       )}
 
-      {/* POPUP WINDOW MODAL 4: ANALYTICAL REPORT */}
-      {activeModal === 'ANALYTICAL_REPORT' && isSuperAdmin && (
-        <AnalyticalReportModal
-          savedReports={savedReports}
-          scheduleFlights={scheduleFlights}
-          station={user.station}
-          adminName={user.name}
-          adminId={user.id}
+      {/* POPUP WINDOW MODAL: SPECIFIC FLIGHT */}
+      {activeModal === 'SPECIFIC_FLIGHT' && (
+        <SpecificFlightModal
+          isOpen={activeModal === 'SPECIFIC_FLIGHT'}
           onClose={() => setActiveModal(null)}
+          savedReports={savedReports}
+          user={user}
           showToast={showToast}
         />
       )}

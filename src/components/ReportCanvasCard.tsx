@@ -36,6 +36,16 @@ const formatBagCount = (val?: string) => {
   return `${padNum} ${unit}`;
 };
 
+const getPicFontSize = (rawName: string): string => {
+  const text = rawName.toUpperCase().startsWith('PIC') ? rawName : `PIC: ${rawName}`;
+  const len = text.length;
+  if (len > 30) return '18px';
+  if (len > 24) return '20px';
+  if (len > 18) return '23px';
+  if (len > 14) return '25px';
+  return '28px';
+};
+
 export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
   formData,
   type,
@@ -136,14 +146,43 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
             background: '#003366',
             color: '#ffffff',
             padding: '10px 30px',
-            fontSize: '28px',
-            fontWeight: 900,
             borderTop: '3px solid #000000',
             borderBottom: '3px solid #000000',
-            textTransform: 'uppercase'
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            boxSizing: 'border-box'
           }}
         >
-          GENERAL INFORMATION
+          <span
+            style={{
+              fontSize: '28px',
+              fontWeight: 900,
+              textTransform: 'uppercase'
+            }}
+          >
+            GENERAL INFORMATION
+          </span>
+          {formData.pic && formData.pic.trim() && (
+            <span
+              style={{
+                fontSize: getPicFontSize(formData.pic.trim()),
+                fontWeight: 900,
+                color: '#ffffff',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                textAlign: 'right',
+                maxWidth: '60%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {formData.pic.trim().toUpperCase().startsWith('PIC')
+                ? formData.pic.trim().toUpperCase()
+                : `PIC: ${formData.pic.trim().toUpperCase()}`}
+            </span>
+          )}
         </div>
 
         <div
