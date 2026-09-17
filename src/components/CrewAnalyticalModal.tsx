@@ -160,16 +160,29 @@ export const calculateCrewLateReport = (
   crtStr: string
 ): { lateText: string; lateMinutes: number } => {
   const stdMin = parseTimeToMinutes(stdStr);
-  const crtMin = parseTimeToMinutes(crtStr);
+  const trimmedCrt = (crtStr || '').trim().toUpperCase();
 
   if (stdMin === -1) return { lateText: '-', lateMinutes: 0 };
 
-  // If crew is "OB" (On Board), they are already on board on-time
-  if (crtStr && crtStr.trim().toUpperCase() === 'OB') {
+  // If CRT is empty or '-'
+  if (!trimmedCrt || trimmedCrt === '-') {
+    return { lateText: '-', lateMinutes: 0 };
+  }
+
+  // Keywords indicating crew was already onboard or ready - should show 'NO'
+  const nonTimeKeywords = [
+    'ONBOARD', 'ON', 'PRE', 'OB', 'EARLIER', 'EARLY', 'OK', 'READY', 'N/A', 'ON GROUND'
+  ];
+  if (nonTimeKeywords.some(kw => trimmedCrt === kw || trimmedCrt.includes(kw))) {
     return { lateText: 'NO', lateMinutes: 0 };
   }
 
-  if (crtMin === -1) return { lateText: '-', lateMinutes: 0 };
+  const crtMin = parseTimeToMinutes(crtStr);
+
+  // If CRT has any text other than time, show 'NO'
+  if (crtMin === -1) {
+    return { lateText: 'NO', lateMinutes: 0 };
+  }
 
   const acUpper = (ac || '').trim().toUpperCase();
 
@@ -451,13 +464,35 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
   const dailySummary = useMemo(() => {
     const flights = allProcessedRows.filter((r) => r.dateIso === activeIsoDate);
 
-    // 1. Most Late Reported PIC
+    // 1. Most Late Reported PIC List (Show at least 03 PIC names serially on late time based)
     const lateFlights = flights.filter((r) => r.lateMinutes > 0);
+    // Sort descending by lateMinutes (most late report first)
+    lateFlights.sort((a, b) => b.lateMinutes - a.lateMinutes);
+
+    interface LatePicItem {
+      rank: number;
+      pic: string;
+      lateMinutes: number;
+      lateReport: string;
+      flightNo: string;
+      text: string;
+    }
+
+    const latePicList: LatePicItem[] = lateFlights.map((f, idx) => ({
+      rank: idx + 1,
+      pic: f.pic || 'UNKNOWN',
+      lateMinutes: f.lateMinutes,
+      lateReport: f.lateReport,
+      flightNo: f.flightNo,
+      text: `${String(idx + 1).padStart(2, '0')}. CAPT. ${f.pic} — ${f.lateReport} LATE (${f.flightNo})`
+    }));
+
     let mostLatePicSummary = 'ALL CREW REPORTED ON TIME TODAY (0 LATE REPORTS)';
-    if (lateFlights.length > 0) {
-      lateFlights.sort((a, b) => b.lateMinutes - a.lateMinutes);
-      const top = lateFlights[0];
-      mostLatePicSummary = `CAPT. ${top.pic} — ${top.lateReport} LATE IN ${top.flightNo}`;
+    if (latePicList.length > 0) {
+      mostLatePicSummary = latePicList
+        .slice(0, Math.max(3, latePicList.length))
+        .map((p) => p.text)
+        .join(' | ');
     }
 
     // 2. Pax Hold Summary
@@ -471,6 +506,7 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
 
     return {
       mostLatePicSummary,
+      latePicList,
       paxHoldSummary,
       totalFlights: flights.length,
       lateCount: lateFlights.length,
@@ -1009,7 +1045,7 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                     <th className="py-2.5 px-3 border-r border-slate-800 text-cyan-300">FLIGHT</th>
                     <th className="py-2.5 px-3 border-r border-slate-800">ROUTE</th>
                     <th className="py-2.5 px-3 border-r border-slate-800">A/C</th>
-                    <th className="py-2.5 px-3 border-r border-slate-800 text-amber-300">PIC</th>
+                    <th className="py-2.5 px-3 border-r border-slate-800 text-amber-300 font-black min-w-[140px]">PIC (CAPTAIN)</th>
                     <th className="py-2.5 px-3 border-r border-slate-800">STD</th>
                     <th className="py-2.5 px-3 border-r border-slate-800">CRT</th>
                     <th className="py-2.5 px-3 border-r border-slate-800 bg-yellow-400 text-slate-950 font-black tracking-wide">
@@ -1055,8 +1091,10 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                           <td className="py-2.5 px-3 border-r border-slate-800 font-bold text-amber-300">
                             {r.ac}
                           </td>
-                          <td className="py-2.5 px-3 border-r border-slate-800 font-black text-cyan-300">
-                            {r.pic}
+                          <td className="py-2.5 px-3 border-r border-slate-800 text-center min-w-[140px]">
+                            <span className="inline-block px-2.5 py-1 rounded-lg bg-amber-400/20 text-amber-300 font-black text-xs tracking-wider border border-amber-400/50 shadow-sm uppercase">
+                              {r.pic || '-'}
+                            </span>
                           </td>
                           <td className="py-2.5 px-3 border-r border-slate-800 text-slate-200">
                             {r.std || '-'}
@@ -1107,27 +1145,54 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                 {/* Most Late Reported PIC */}
-                <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-start gap-2.5">
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-2.5">
                   <div className="w-6 h-6 rounded-md bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
                     <Clock className="w-3.5 h-3.5" />
                   </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                      MOST LATE REPORTED PIC TODAY
-                    </span>
-                    <span className="text-xs font-black text-white font-mono">
-                      {dailySummary.mostLatePicSummary}
-                    </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                        MOST LATE REPORTED PIC TODAY (SERIALLY BY LATE TIME)
+                      </span>
+                      {dailySummary.latePicList.length > 0 && (
+                        <span className="text-[9px] font-mono font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                          {dailySummary.latePicList.length} LATE
+                        </span>
+                      )}
+                    </div>
+                    {dailySummary.latePicList.length === 0 ? (
+                      <span className="text-xs font-bold text-emerald-400 font-mono flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        ALL CREW REPORTED ON TIME TODAY (0 LATE REPORTS)
+                      </span>
+                    ) : (
+                      <div className="space-y-1.5 font-mono">
+                        {dailySummary.latePicList.slice(0, Math.max(3, dailySummary.latePicList.length)).map((lp) => (
+                          <div
+                            key={lp.rank}
+                            className="flex items-center justify-between text-xs py-1 px-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20"
+                          >
+                            <span className="font-black text-rose-300">
+                              <span className="text-slate-400 mr-1.5">#{String(lp.rank).padStart(2, '0')}</span>
+                              CAPT. {lp.pic}
+                            </span>
+                            <span className="text-[11px] font-black text-white bg-rose-600/80 px-2 py-0.5 rounded">
+                              {lp.lateReport} LATE • {lp.flightNo}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Pax Hold Status */}
-                <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-start gap-2.5">
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-2.5">
                   <div className="w-6 h-6 rounded-md bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
                     <AlertTriangle className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
                       RAMP PASSENGER HOLD TODAY
                     </span>
                     <span className="text-xs font-black text-white font-mono">
@@ -1239,7 +1304,9 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                       <td style={{ border: '1px solid #94A3B8', padding: '6px 4px', fontWeight: 900 }}>{r.flightNo}</td>
                       <td style={{ border: '1px solid #94A3B8', padding: '6px 4px', fontWeight: 'bold' }}>{r.route}</td>
                       <td style={{ border: '1px solid #94A3B8', padding: '6px 4px' }}>{r.ac}</td>
-                      <td style={{ border: '1px solid #94A3B8', padding: '6px 4px', fontWeight: 'bold' }}>{r.pic}</td>
+                      <td style={{ border: '1px solid #94A3B8', padding: '6px 4px', fontWeight: 900, color: '#002244', backgroundColor: '#FEF3C7' }}>
+                        {r.pic || '-'}
+                      </td>
                       <td style={{ border: '1px solid #94A3B8', padding: '6px 4px' }}>{r.std}</td>
                       <td style={{ border: '1px solid #94A3B8', padding: '6px 4px' }}>{r.crt}</td>
                       <td style={{ border: '1px solid #94A3B8', padding: '6px 4px', backgroundColor: isLate ? '#FFFF00' : '#FFFFFF', fontWeight: isLate ? 900 : 'normal' }}>
@@ -1262,12 +1329,44 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
             <div style={{ backgroundColor: '#0B1F3F', color: '#ffffff', padding: '8px 16px', fontWeight: 'bold', fontSize: '13px' }}>
               DAILY SUMMARY ({activeDateDot})
             </div>
-            <div style={{ padding: '12px 16px', backgroundColor: '#F8FAFC', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ padding: '12px 16px', backgroundColor: '#F8FAFC', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
-                <b style={{ color: '#0B1F3F' }}>1. MOST LATE REPORTED PIC TODAY:</b>{' '}
-                <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#B91C1C' }}>
-                  {dailySummary.mostLatePicSummary}
-                </span>
+                <b style={{ color: '#0B1F3F', display: 'block', marginBottom: '4px' }}>
+                  1. MOST LATE REPORTED PIC TODAY (SERIALLY ON LATE TIME BASED):
+                </b>
+                {dailySummary.latePicList.length === 0 ? (
+                  <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#16A34A' }}>
+                    ALL CREW REPORTED ON TIME TODAY (0 LATE REPORTS)
+                  </span>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {dailySummary.latePicList.slice(0, Math.max(3, dailySummary.latePicList.length)).map((lp) => (
+                      <div
+                        key={lp.rank}
+                        style={{
+                          fontFamily: 'monospace',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          color: '#B91C1C',
+                          backgroundColor: '#FEE2E2',
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          border: '1px solid #FCA5A5',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <span>
+                          <b>#{String(lp.rank).padStart(2, '0')}</b> CAPT. {lp.pic}
+                        </span>
+                        <span style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '2px 8px', borderRadius: '3px', fontSize: '11px' }}>
+                          {lp.lateReport} LATE • {lp.flightNo}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <b style={{ color: '#0B1F3F' }}>2. RAMP PASSENGER HOLD TODAY:</b>{' '}
