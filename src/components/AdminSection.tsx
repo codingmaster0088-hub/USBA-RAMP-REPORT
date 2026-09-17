@@ -4,6 +4,7 @@ import { parseFLSTData, sampleFLSTInput } from '../utils/flstParser';
 import { SpecificFlightModal } from './SpecificFlightModal';
 import { CompleteFlightModal } from './CompleteFlightModal';
 import { TimeAnalyticalModal } from './TimeAnalyticalModal';
+import { CrewAnalyticalModal } from './CrewAnalyticalModal';
 import {
   ShieldCheck,
   Lock,
@@ -75,9 +76,9 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   const [pinError, setPinError] = useState('');
   const [showPin, setShowPin] = useState(false);
 
-  // Active Admin Modal Popup State ('LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'SPECIFIC_FLIGHT' | 'COMPLETE_FLIGHT' | 'TIME_ANALYTICAL' | null)
+  // Active Admin Modal Popup State ('LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'SPECIFIC_FLIGHT' | 'COMPLETE_FLIGHT' | 'TIME_ANALYTICAL' | 'CREW_ANALYTICAL' | null)
   const [activeModal, setActiveModal] = useState<
-    'LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'SPECIFIC_FLIGHT' | 'COMPLETE_FLIGHT' | 'TIME_ANALYTICAL' | null
+    'LOG_CHECK' | 'FLST_INPUT' | 'NOTICE' | 'SPECIFIC_FLIGHT' | 'COMPLETE_FLIGHT' | 'TIME_ANALYTICAL' | 'CREW_ANALYTICAL' | null
   >(null);
 
   const [flstInput, setFlstInput] = useState<string>(() => {
@@ -618,6 +619,32 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
                 </p>
               </div>
             </button>
+
+            {/* 7. CREW ANALYTICAL BUTTON */}
+            <button
+              onClick={() => setActiveModal('CREW_ANALYTICAL')}
+              className={`bg-slate-900 hover:bg-slate-800 border rounded-2xl p-4 text-left transition-all active:scale-95 cursor-pointer shadow-xl space-y-2 group ${
+                activeModal === 'CREW_ANALYTICAL' ? 'border-yellow-400 bg-yellow-500/10' : 'border-yellow-500/50 hover:border-yellow-400'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-yellow-500/15 border border-yellow-400/40 flex items-center justify-center text-yellow-400 group-hover:bg-yellow-500 group-hover:text-slate-950 transition-colors shadow-md">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-yellow-400 border border-slate-800">
+                  CREW & PAX
+                </span>
+              </div>
+              <div>
+                <div className="text-xs font-black text-white group-hover:text-yellow-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>7. CREW ANALYTICAL</span>
+                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-yellow-300 transition-transform group-hover:translate-x-0.5" />
+                </div>
+                <p className="text-[11px] text-slate-400 leading-snug mt-1">
+                  Crew reporting timeliness, late report audit, and ramp passenger hold analytics.
+                </p>
+              </div>
+            </button>
           </div>
         </div>
       )}
@@ -964,6 +991,19 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
           onClose={() => setActiveModal(null)}
           showToast={showToast}
           onDeleteReport={onDeleteReport}
+        />
+      )}
+
+      {/* POPUP WINDOW MODAL 7: CREW ANALYTICAL */}
+      {activeModal === 'CREW_ANALYTICAL' && (
+        <CrewAnalyticalModal
+          savedReports={savedReports}
+          scheduleFlights={scheduleFlights}
+          station={user.station}
+          adminName={user.name}
+          adminId={user.id}
+          onClose={() => setActiveModal(null)}
+          showToast={showToast}
         />
       )}
     </div>
