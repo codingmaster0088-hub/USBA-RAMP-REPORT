@@ -161,4 +161,25 @@ export interface DailyAnalyticalSnapshot {
     avgCatering: string;
     avgBoarding: string;
   };
+  crewAnalyticalData?: {
+    totalFlights: number;
+    lateReportCount: number;
+    paxHoldCount: number;
+    mostLatePicSummary?: string;
+    paxHoldSummary?: string;
+    latePicList?: Array<{
+      rank: number;
+      pic: string;
+      lateMinutes: number;
+      lateReport: string;
+      flightNo: string;
+      text: string;
+    }>;
+    monthlyPICSummaries?: Array<{
+      captain: string;
+      totalFlights: number;
+      reportedLate: number;
+      flightDataStr: string;
+    }>;
+  };
 }

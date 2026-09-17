@@ -6,7 +6,7 @@ interface BackendStorageConfirmationModalProps {
   dateDisplay: string;
   dateIso: string;
   station: string;
-  reportType: 'ANALYTICAL' | 'TIME_ANALYTICAL';
+  reportType: 'ANALYTICAL' | 'TIME_ANALYTICAL' | 'CREW_ANALYTICAL';
   totalFlights: number;
   expiresDateStr: string;
   onClose: () => void;
@@ -44,7 +44,9 @@ export const BackendStorageConfirmationModal: React.FC<BackendStorageConfirmatio
                 </span>
               </div>
               <h3 className="text-base sm:text-lg font-black text-white tracking-wide mt-1">
-                DATA SAVED IN BACKEND CLOUD STORAGE
+                {reportType === 'CREW_ANALYTICAL'
+                  ? 'CREW ANALYTICAL DATA SAVED IN BACKEND CLOUD'
+                  : 'DATA SAVED IN BACKEND CLOUD STORAGE'}
               </h3>
             </div>
           </div>
@@ -65,7 +67,15 @@ export const BackendStorageConfirmationModal: React.FC<BackendStorageConfirmatio
             </div>
             <div>
               <p className="text-xs sm:text-sm font-bold text-white leading-relaxed">
-                Full-day reports for <span className="text-emerald-300 font-black font-mono">{dateDisplay}</span> ({totalFlights} Flights) have been permanently saved into Firestore Cloud Storage!
+                {reportType === 'CREW_ANALYTICAL' ? (
+                  <>
+                    Full-day crew analytical reports for <span className="text-emerald-300 font-black font-mono">{dateDisplay}</span> ({totalFlights} Flights) have been permanently saved into Firestore Cloud Storage!
+                  </>
+                ) : (
+                  <>
+                    Full-day reports for <span className="text-emerald-300 font-black font-mono">{dateDisplay}</span> ({totalFlights} Flights) have been permanently saved into Firestore Cloud Storage!
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -95,9 +105,13 @@ export const BackendStorageConfirmationModal: React.FC<BackendStorageConfirmatio
             <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 flex items-start gap-3">
               <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-emerald-300">Complete Multi-Scope Data:</span>
+                <span className="font-bold text-emerald-300">
+                  {reportType === 'CREW_ANALYTICAL' ? 'Comprehensive Crew & PIC Records:' : 'Complete Multi-Scope Data:'}
+                </span>
                 <p className="text-slate-400 text-[11px] mt-0.5">
-                  All scopes (ALL, DOMESTIC, INTERNATIONAL) along with Turnaround Timings, OTP calculations & Delay Categories are safely backed up.
+                  {reportType === 'CREW_ANALYTICAL'
+                    ? 'All crew turnaround timings, captain late reports, CRT, First Bus/Pax, Pax Hold, and monthly PIC summaries are safely backed up.'
+                    : 'All scopes (ALL, DOMESTIC, INTERNATIONAL) along with Turnaround Timings, OTP calculations & Delay Categories are safely backed up.'}
                 </p>
               </div>
             </div>

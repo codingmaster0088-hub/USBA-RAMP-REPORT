@@ -1,8 +1,13 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { SavedReport, ScheduleFlight } from '../types';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { SavedReport, ScheduleFlight, DailyAnalyticalSnapshot } from '../types';
 import { verifiedFlightReports } from '../data/verifiedFlightReports';
-import { parseDateToIso } from '../utils/analyticalSnapshotBuilder';
+import { parseDateToIso, cleanFlightNum } from '../utils/analyticalSnapshotBuilder';
 import { captureHtml2CanvasSafe } from '../utils/html2canvasHelper';
+import {
+  saveDailyAnalyticalSnapshotToFirestore,
+  subscribeToDailyAnalyticalSnapshots
+} from '../lib/firebase';
+import { BackendStorageConfirmationModal } from './BackendStorageConfirmationModal';
 import {
   X,
   Calendar,
@@ -20,7 +25,9 @@ import {
   BarChart2,
   ShieldCheck,
   UserCheck,
-  Building2
+  Building2,
+  Database,
+  Check
 } from 'lucide-react';
 
 interface CrewAnalyticalModalProps {
@@ -264,6 +271,24 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
   const [isMonthlySummaryOpen, setIsMonthlySummaryOpen] = useState<boolean>(false);
   const [monthlySearchQuery, setMonthlySearchQuery] = useState<string>('');
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
+
+  // 30-Day Backend Storage Snapshot States (Same logic as Time Analytical)
+  const [snapshots, setSnapshots] = useState<DailyAnalyticalSnapshot[]>([]);
+  const [showSaveSuccessModal, setShowSaveSuccessModal] = useState<boolean>(false);
+  const [savedSnapshotInfo, setSavedSnapshotInfo] = useState<{
+    dateDisplay: string;
+    dateIso: string;
+    totalFlights: number;
+    expiresDateStr: string;
+  } | null>(null);
+
+  // Real-time listener for 30-Day Daily Analytical Snapshots
+  useEffect(() => {
+    const unsub = subscribeToDailyAnalyticalSnapshots((list) => {
+      setSnapshots(list);
+    });
+    return () => unsub();
+  }, []);
 
   // Implementation of PIC & Crew Analytical started TODAY (2026-09-17).
   // Dates prior to today had no verified PIC entries, so they are strictly excluded.
@@ -588,12 +613,115 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
     return `REPORT : ${startDot} TO ${endDot}`;
   }, [availableDates, todayIso]);
 
+  // Check if an archived snapshot exists in backend for the active date
+  const activeBackendSnapshot = useMemo(() => {
+    return snapshots.find(
+      (s) => s.dateIso === activeIsoDate || s.dateDisplay === activeDateDisplay
+    );
+  }, [snapshots, activeIsoDate, activeDateDisplay]);
+
+  // Save Full Day Crew Analytical Snapshot to Backend Firestore with 30-day retention
+  const handleSaveToBackend = async (showModal = true) => {
+    try {
+      const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+      const expiresDateObj = new Date(expiresAt);
+      const expiresDateStr = `${String(expiresDateObj.getDate()).padStart(2, '0')} ${expiresDateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase()} ${expiresDateObj.getFullYear()}`;
+
+      // Extract raw reports matching active date
+      const dateReports = savedReports.filter((r) => {
+        const dIso = parseDateToIso(r.date || r.formData?.date);
+        return dIso === activeIsoDate;
+      });
+
+      const snapshotPayload: DailyAnalyticalSnapshot = {
+        id: `SNAPSHOT_${activeIsoDate}_${station || 'ALL'}`,
+        dateIso: activeIsoDate,
+        dateDisplay: activeDateDisplay,
+        station: station || 'ALL',
+        savedAt: Date.now(),
+        savedBy: {
+          name: adminName || 'Admin',
+          id: adminId || '001'
+        },
+        expiresAt,
+        totalReportsCount: activeDateRows.length,
+        reportsSnapshot: dateReports,
+        crewAnalyticalData: {
+          totalFlights: activeDateRows.length,
+          lateReportCount: dailySummary.lateCount,
+          paxHoldCount: dailySummary.holdCount,
+          mostLatePicSummary: dailySummary.mostLatePicSummary,
+          paxHoldSummary: dailySummary.paxHoldSummary,
+          latePicList: dailySummary.latePicList,
+          monthlyPICSummaries: monthlySummaryData.slice(0, 15).map((m) => ({
+            captain: m.captain,
+            totalFlights: m.totalFlights,
+            reportedLate: m.reportedLate,
+            flightDataStr: m.flightDataStr
+          }))
+        }
+      };
+
+      await saveDailyAnalyticalSnapshotToFirestore(snapshotPayload);
+
+      if (showModal) {
+        setSavedSnapshotInfo({
+          dateDisplay: activeDateDisplay,
+          dateIso: activeIsoDate,
+          totalFlights: activeDateRows.length,
+          expiresDateStr
+        });
+        setShowSaveSuccessModal(true);
+      }
+    } catch (e) {
+      console.error('Error saving crew analytical snapshot to backend', e);
+      showToast('Backend Sync Error', 'Could not save snapshot to backend', 'error');
+    }
+  };
+
+  // Calculate completion of scheduled departure flights for the active date
+  const departureSchedule = useMemo(() => {
+    const list = scheduleFlights.filter((f) => f.isDeparture !== false);
+    return list.length > 0 ? list : scheduleFlights;
+  }, [scheduleFlights]);
+
+  const targetScheduleFlightsCount = useMemo(() => {
+    return departureSchedule.length > 0 ? departureSchedule.length : 41;
+  }, [departureSchedule]);
+
+  const isAllFlightsCompleted = useMemo(() => {
+    if (activeDateRows.length === 0) return false;
+    return activeDateRows.length >= targetScheduleFlightsCount;
+  }, [activeDateRows.length, targetScheduleFlightsCount]);
+
+  // Auto-save tracker when all flights completed
+  const autoSavedCompletedRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    if (isAllFlightsCompleted && activeDateRows.length > 0) {
+      const lastSavedCount = autoSavedCompletedRef.current[activeIsoDate];
+      if (lastSavedCount !== activeDateRows.length) {
+        autoSavedCompletedRef.current[activeIsoDate] = activeDateRows.length;
+        // Auto-save to database and show confirmation modal
+        handleSaveToBackend(true);
+        showToast(
+          'Daily Flight Schedule Completed!',
+          `All ${activeDateRows.length}/${targetScheduleFlightsCount} flights completed & auto-saved in 30-Day Backend Storage`,
+          'success'
+        );
+      }
+    }
+  }, [isAllFlightsCompleted, activeDateRows.length, activeIsoDate, targetScheduleFlightsCount]);
+
   // DOWNLOAD EXCEL FOR DAILY REPORT (Attachment 2 with official Airline header)
-  const handleDownloadDailyExcel = () => {
+  const handleDownloadDailyExcel = async () => {
     if (activeDateRows.length === 0) {
       showToast('No Data', 'No flight records available for the selected date', 'info');
       return;
     }
+
+    // Auto-save day snapshot to backend storage with 30-day retention
+    await handleSaveToBackend(true);
 
     try {
       let xml = `
@@ -652,7 +780,7 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                 <th class="hdr">STD</th>
                 <th class="hdr">CRT</th>
                 <th class="hdr-yellow">LATE REPORT</th>
-                <th class="hdr">FIRST BUS</th>
+                <th class="hdr">FIRST BUS/PAX</th>
                 <th class="hdr">BOARDING PERMITTED</th>
                 <th class="hdr-yellow">PAX HOLD</th>
               </tr>
@@ -721,11 +849,14 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
   };
 
   // DOWNLOAD EXCEL FOR MONTHLY SUMMARY (Attachment 3)
-  const handleDownloadMonthlyExcel = () => {
+  const handleDownloadMonthlyExcel = async () => {
     if (monthlySummaryData.length === 0) {
       showToast('No Data', 'No monthly crew summary data available', 'info');
       return;
     }
+
+    // Auto-save day snapshot to backend storage with 30-day retention
+    await handleSaveToBackend(true);
 
     try {
       let xml = `
@@ -829,6 +960,9 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
     showToast('Generating JPG...', 'Rendering official US-Bangla Airlines photo card', 'info');
 
     try {
+      // Auto-save day snapshot to backend storage with 30-day retention
+      await handleSaveToBackend(true);
+
       await new Promise((resolve) => setTimeout(resolve, 250));
 
       const canvas = await captureHtml2CanvasSafe(printCardRef.current, {
@@ -863,6 +997,9 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
     showToast('Generating JPG...', 'Rendering official US-Bangla Airlines summary card', 'info');
 
     try {
+      // Auto-save day snapshot to backend storage with 30-day retention
+      await handleSaveToBackend(true);
+
       await new Promise((resolve) => setTimeout(resolve, 250));
 
       const canvas = await captureHtml2CanvasSafe(monthlyCardRef.current, {
@@ -916,6 +1053,26 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* BACKEND STORAGE 30-DAY ARCHIVE BADGE / SAVE BUTTON */}
+            {activeBackendSnapshot ? (
+              <span className="px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-bold text-xs flex items-center gap-1.5 font-mono">
+                <Check className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">BACKEND ARCHIVED</span>
+                <span className="sm:hidden">ARCHIVED</span>
+                <span>({activeDateRows.length} FLTS)</span>
+              </span>
+            ) : (
+              <button
+                onClick={() => handleSaveToBackend(true)}
+                className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5"
+                title="Archive full day crew analytical data to 30-day backend storage now"
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">SAVE TO BACKEND</span>
+                <span className="sm:hidden">SAVE</span>
+              </button>
+            )}
+
             {/* MONTHLY SUMMARY BUTTON */}
             <button
               onClick={() => setIsMonthlySummaryOpen(true)}
@@ -1051,7 +1208,7 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                     <th className="py-2.5 px-3 border-r border-slate-800 bg-yellow-400 text-slate-950 font-black tracking-wide">
                       LATE REPORT
                     </th>
-                    <th className="py-2.5 px-3 border-r border-slate-800">FIRST BUS</th>
+                    <th className="py-2.5 px-3 border-r border-slate-800 whitespace-nowrap">FIRST BUS/PAX</th>
                     <th className="py-2.5 px-3 border-r border-slate-800">BOARDING PERMITTED</th>
                     <th className="py-2.5 px-3 bg-yellow-400 text-slate-950 font-black tracking-wide">
                       PAX HOLD
@@ -1166,19 +1323,24 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                         ALL CREW REPORTED ON TIME TODAY (0 LATE REPORTS)
                       </span>
                     ) : (
-                      <div className="space-y-1.5 font-mono">
-                        {dailySummary.latePicList.slice(0, Math.max(3, dailySummary.latePicList.length)).map((lp) => (
+                      <div className={dailySummary.latePicList.length > 3 ? "grid grid-cols-1 sm:grid-cols-2 gap-1.5 font-mono" : "space-y-1.5 font-mono"}>
+                        {dailySummary.latePicList.map((lp) => (
                           <div
                             key={lp.rank}
-                            className="flex items-center justify-between text-xs py-1 px-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20"
+                            className="flex items-center justify-between gap-2 text-xs py-1.5 px-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20"
                           >
-                            <span className="font-black text-rose-300">
-                              <span className="text-slate-400 mr-1.5">#{String(lp.rank).padStart(2, '0')}</span>
-                              CAPT. {lp.pic}
+                            <span className="font-black text-rose-300 flex items-center gap-1.5 min-w-0 truncate">
+                              <span className="text-slate-400 shrink-0 text-[10px]">#{String(lp.rank).padStart(2, '0')}</span>
+                              <span className="truncate">CAPT. {lp.pic}</span>
                             </span>
-                            <span className="text-[11px] font-black text-white bg-rose-600/80 px-2 py-0.5 rounded">
-                              {lp.lateReport} LATE • {lp.flightNo}
-                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10px] font-black text-white bg-rose-600 px-2 py-0.5 rounded shadow-sm whitespace-nowrap">
+                                {lp.lateReport} LATE
+                              </span>
+                              <span className="text-[10px] font-black text-amber-300 bg-slate-900 border border-amber-400/40 px-2 py-0.5 rounded shadow-sm whitespace-nowrap">
+                                {lp.flightNo}
+                              </span>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1280,7 +1442,7 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                 <th style={{ border: '1px solid #94A3B8', padding: '8px 6px', width: '110px', backgroundColor: '#FFFF00', color: '#000000', fontWeight: 900 }}>
                   LATE REPORT
                 </th>
-                <th style={{ border: '1px solid #94A3B8', padding: '8px 6px', width: '85px' }}>FIRST BUS</th>
+                <th style={{ border: '1px solid #94A3B8', padding: '8px 6px', width: '95px' }}>FIRST BUS/PAX</th>
                 <th style={{ border: '1px solid #94A3B8', padding: '8px 6px', width: '120px' }}>BOARDING PERMITTED</th>
                 <th style={{ border: '1px solid #94A3B8', padding: '8px 6px', width: '100px', backgroundColor: '#FFFF00', color: '#000000', fontWeight: 900 }}>
                   PAX HOLD
@@ -1339,30 +1501,40 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                     ALL CREW REPORTED ON TIME TODAY (0 LATE REPORTS)
                   </span>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {dailySummary.latePicList.slice(0, Math.max(3, dailySummary.latePicList.length)).map((lp) => (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: dailySummary.latePicList.length > 3 ? 'repeat(2, 1fr)' : '1fr',
+                    gap: '6px 12px'
+                  }}>
+                    {dailySummary.latePicList.map((lp) => (
                       <div
                         key={lp.rank}
                         style={{
                           fontFamily: 'monospace',
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          color: '#B91C1C',
+                          fontSize: '11px',
+                          color: '#991B1B',
                           backgroundColor: '#FEE2E2',
-                          padding: '4px 10px',
+                          padding: '5px 10px',
                           borderRadius: '4px',
                           border: '1px solid #FCA5A5',
                           display: 'flex',
                           justifyContent: 'space-between',
-                          alignItems: 'center'
+                          alignItems: 'center',
+                          gap: '8px'
                         }}
                       >
-                        <span>
-                          <b>#{String(lp.rank).padStart(2, '0')}</b> CAPT. {lp.pic}
+                        <span style={{ fontWeight: 900, display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <b style={{ color: '#64748B' }}>#{String(lp.rank).padStart(2, '0')}</b>
+                          <span>CAPT. {lp.pic}</span>
                         </span>
-                        <span style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '2px 8px', borderRadius: '3px', fontSize: '11px' }}>
-                          {lp.lateReport} LATE • {lp.flightNo}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+                          <span style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '2px 7px', borderRadius: '3px', fontWeight: 900, fontSize: '10.5px', whiteSpace: 'nowrap' }}>
+                            {lp.lateReport} LATE
+                          </span>
+                          <span style={{ backgroundColor: '#0B1F3F', color: '#FCD34D', padding: '2px 7px', borderRadius: '3px', fontWeight: 900, fontSize: '10.5px', border: '1px solid #1E3A8A', whiteSpace: 'nowrap' }}>
+                            {lp.flightNo}
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1558,6 +1730,18 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Backend Storage 30-Day Confirmation Modal Popup */}
+      <BackendStorageConfirmationModal
+        isOpen={showSaveSuccessModal}
+        dateDisplay={savedSnapshotInfo?.dateDisplay || activeDateDisplay}
+        dateIso={savedSnapshotInfo?.dateIso || activeIsoDate}
+        station={station}
+        reportType="CREW_ANALYTICAL"
+        totalFlights={savedSnapshotInfo?.totalFlights || activeDateRows.length}
+        expiresDateStr={savedSnapshotInfo?.expiresDateStr || ''}
+        onClose={() => setShowSaveSuccessModal(false)}
+      />
     </div>
   );
 };

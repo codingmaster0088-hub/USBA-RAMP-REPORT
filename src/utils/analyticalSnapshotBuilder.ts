@@ -326,6 +326,81 @@ export function buildDailyAnalyticalSnapshot(
   const avgBoarding = calcAvg(boardingMinsList);
   const avgGround = calcAvg(groundMinsList);
 
+  // 3. Crew Analytical Metrics
+  let crewLateCount = 0;
+  let paxHoldCount = 0;
+  const latePicList: Array<{ rank: number; pic: string; lateMinutes: number; lateReport: string; flightNo: string; text: string }> = [];
+
+  dedupedReports.forEach((r) => {
+    const form = r.formData || ({} as any);
+    const pic = form.pic || (r as any).pic || 'CAPTAIN';
+    const std = (form.std || '').replace(/[^0-9]/g, '').slice(0, 4);
+    const crt = (form.crew || '').trim();
+    const ac = (form.ac || '').trim().toUpperCase();
+    const rawFlt = (r.flight || form.deptFlt || form.arvFlt || '').trim();
+    const cleanNum = cleanFlightNum(rawFlt);
+    const flightNo = cleanNum ? `BS-${cleanNum}` : rawFlt.toUpperCase();
+
+    if (std && crt) {
+      let stdMin = -1;
+      let crtMin = -1;
+      if (std.length === 4) {
+        stdMin = parseInt(std.slice(0, 2), 10) * 60 + parseInt(std.slice(2, 4), 10);
+      }
+      if (crt.length === 4) {
+        crtMin = parseInt(crt.slice(0, 2), 10) * 60 + parseInt(crt.slice(2, 4), 10);
+      } else if (crt.includes(':')) {
+        const parts = crt.split(':');
+        crtMin = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+      }
+      if (stdMin !== -1 && crtMin !== -1) {
+        let standardPrior = 40;
+        if (ac.startsWith('S2-AL')) standardPrior = 70;
+        else if (ac.startsWith('S2-AG') || ac.startsWith('PK-') || ac.startsWith('HS-')) standardPrior = 60;
+        else if (ac.startsWith('S2-AK')) standardPrior = 40;
+
+        let reqMin = stdMin - standardPrior;
+        if (reqMin < 0) reqMin += 1440;
+        let diff = crtMin - reqMin;
+        if (diff < -720) diff += 1440;
+        if (diff > 720) diff -= 1440;
+        if (diff > 0) {
+          crewLateCount++;
+          latePicList.push({
+            rank: 0,
+            pic,
+            lateMinutes: diff,
+            lateReport: `${String(diff).padStart(2, '0')} MINS`,
+            flightNo,
+            text: `CAPT. ${pic} — ${diff} MINS LATE (${flightNo})`
+          });
+        }
+      }
+    }
+
+    // Pax hold
+    const firstBus = (form.firstBusPax || '').trim();
+    const permit = (form.permit || '').trim();
+    if (firstBus && permit) {
+      const busM = parseTimeToMinutes(firstBus);
+      const perM = parseTimeToMinutes(permit);
+      if (busM !== null && perM !== null && busM !== -1 && perM !== -1) {
+        let hDiff = perM - busM;
+        if (hDiff < -720) hDiff += 1440;
+        if (hDiff > 720) hDiff -= 1440;
+        if (hDiff > 0) {
+          paxHoldCount++;
+        }
+      }
+    }
+  });
+
+  latePicList.sort((a, b) => b.lateMinutes - a.lateMinutes);
+  latePicList.forEach((item, idx) => {
+    item.rank = idx + 1;
+    item.text = `${String(idx + 1).padStart(2, '0')}. CAPT. ${item.pic} — ${item.lateReport} LATE (${item.flightNo})`;
+  });
+
   return {
     id: `SNAPSHOT_${targetDateIso}_${station || 'ALL'}`,
     dateIso: targetDateIso,
@@ -353,6 +428,12 @@ export function buildDailyAnalyticalSnapshot(
       avgCatering,
       avgBoarding,
       avgGround
+    },
+    crewAnalyticalData: {
+      totalFlights: totalReportsCount,
+      lateReportCount: crewLateCount,
+      paxHoldCount,
+      latePicList
     }
   };
 }
