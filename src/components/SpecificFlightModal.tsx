@@ -401,6 +401,14 @@ export const SpecificFlightModal: React.FC<SpecificFlightModalProps> = ({
       });
 
       xml += `
+        <table>
+          <tr>
+            <td style="font-size: 9pt; color: #64748b; text-align: center; padding: 10px; font-weight: bold;">Application build by USBA-20088</td>
+          </tr>
+        </table>
+      `;
+
+      xml += `
         </body>
         </html>
       `;

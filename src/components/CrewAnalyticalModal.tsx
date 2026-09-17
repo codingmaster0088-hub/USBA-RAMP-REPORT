@@ -659,6 +659,9 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
             <tr>
               <td colspan="11" class="summary-item"><b>2. RAMP PASSENGER HOLD TODAY:</b> ${dailySummary.paxHoldSummary}</td>
             </tr>
+            <tr>
+              <td colspan="11" style="font-size: 9pt; color: #64748b; text-align: center; padding: 10px; font-weight: bold;">Application build by USBA-20088</td>
+            </tr>
           </table>
         </body>
         </html>
@@ -755,6 +758,12 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
 
       xml += `
             </tbody>
+          </table>
+          <br/>
+          <table>
+            <tr>
+              <td colspan="4" style="font-size: 9pt; color: #64748b; text-align: center; padding: 10px; font-weight: bold;">Application build by USBA-20088</td>
+            </tr>
           </table>
         </body>
         </html>
@@ -1269,9 +1278,12 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
             </div>
           </div>
 
-          {/* Footer note */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #CBD5E1', paddingTop: '10px', fontSize: '11px', color: '#64748B' }}>
+          {/* Footer note with modern watermark */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #CBD5E1', paddingTop: '10px', fontSize: '11px', color: '#64748B' }}>
             <span>US-BANGLA AIRLINES &bull; RAMP OPERATIONS MANAGEMENT</span>
+            <span style={{ fontWeight: 800, color: '#0284c7', letterSpacing: '0.5px' }}>
+              Application build by USBA-20088
+            </span>
             <span>OFFICIAL SYSTEM RECORD &bull; RETENTION: 30 DAYS</span>
           </div>
         </div>
@@ -1423,9 +1435,10 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                   </table>
                 </div>
 
-                {/* Footer on Image */}
+                {/* Footer on Image with modern watermark */}
                 <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono pt-2 border-t border-slate-300">
                   <span>US-BANGLA AIRLINES &bull; RAMP OPERATIONS</span>
+                  <span className="font-extrabold text-sky-600 tracking-wide">Application build by USBA-20088</span>
                   <span>RECORDING ACTIVE FROM {isoToDotFormat(todayIso)}</span>
                 </div>
               </div>

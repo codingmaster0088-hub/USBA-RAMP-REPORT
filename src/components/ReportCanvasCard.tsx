@@ -629,6 +629,27 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Modern Watermark Bar at Bottom */}
+        <div
+          style={{
+            borderTop: '3px solid #003366',
+            backgroundColor: '#f8fafc',
+            padding: '10px 30px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            fontSize: '18px',
+            color: '#475569',
+            fontFamily: 'Arial, sans-serif'
+          }}
+        >
+          <span style={{ fontWeight: 'bold' }}>US-BANGLA AIRLINES &bull; RAMP OPERATIONS</span>
+          <span style={{ fontWeight: 900, color: '#003366', letterSpacing: '0.5px' }}>
+            Application build by USBA-20088
+          </span>
+          <span style={{ fontWeight: 'bold' }}>OFFICIAL SYSTEM REPORT</span>
+        </div>
       </div>
     </div>
   );
