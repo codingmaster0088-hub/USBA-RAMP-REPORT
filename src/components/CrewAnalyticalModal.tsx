@@ -1300,44 +1300,48 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+              <div className="space-y-3 text-xs">
                 {/* Most Late Reported PIC */}
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-2.5">
-                  <div className="w-6 h-6 rounded-md bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
-                    <Clock className="w-3.5 h-3.5" />
+                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <Clock className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                        MOST LATE REPORTED PIC TODAY (SERIALLY BY LATE TIME)
+                    <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-800/80">
+                      <span className="text-[11px] text-slate-300 font-bold uppercase tracking-wider block">
+                        1. MOST LATE REPORTED PIC TODAY (SERIALLY ON LATE TIME BASED)
                       </span>
                       {dailySummary.latePicList.length > 0 && (
-                        <span className="text-[9px] font-mono font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
-                          {dailySummary.latePicList.length} LATE
+                        <span className="text-[10px] font-mono font-bold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-md border border-rose-500/30">
+                          {dailySummary.latePicList.length} LATE REPORTS
                         </span>
                       )}
                     </div>
                     {dailySummary.latePicList.length === 0 ? (
-                      <span className="text-xs font-bold text-emerald-400 font-mono flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span className="text-xs font-bold text-emerald-400 font-mono flex items-center gap-1.5 py-1">
+                        <CheckCircle2 className="w-4 h-4" />
                         ALL CREW REPORTED ON TIME TODAY (0 LATE REPORTS)
                       </span>
                     ) : (
-                      <div className={dailySummary.latePicList.length > 3 ? "grid grid-cols-1 sm:grid-cols-2 gap-1.5 font-mono" : "space-y-1.5 font-mono"}>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                         {dailySummary.latePicList.map((lp) => (
                           <div
                             key={lp.rank}
-                            className="flex items-center justify-between gap-2 text-xs py-1.5 px-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20"
+                            className="flex items-center justify-between gap-2.5 py-2 px-3 rounded-lg bg-rose-500/10 border border-rose-500/25 shadow-sm"
                           >
-                            <span className="font-black text-rose-300 flex items-center gap-1.5 min-w-0 truncate">
-                              <span className="text-slate-400 shrink-0 text-[10px]">#{String(lp.rank).padStart(2, '0')}</span>
-                              <span className="truncate">CAPT. {lp.pic}</span>
-                            </span>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-slate-400 font-mono font-bold text-[11px] shrink-0">
+                                #{String(lp.rank).padStart(2, '0')}
+                              </span>
+                              <span className="font-black text-rose-200 text-xs tracking-wide whitespace-nowrap">
+                                CAPT. {lp.pic}
+                              </span>
+                            </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                               <span className="text-[10px] font-black text-white bg-rose-600 px-2 py-0.5 rounded shadow-sm whitespace-nowrap">
                                 {lp.lateReport} LATE
                               </span>
-                              <span className="text-[10px] font-black text-amber-300 bg-slate-900 border border-amber-400/40 px-2 py-0.5 rounded shadow-sm whitespace-nowrap">
+                              <span className="text-[10px] font-black text-amber-300 bg-slate-900 border border-amber-400/40 px-2 py-0.5 rounded shadow-sm whitespace-nowrap font-mono">
                                 {lp.flightNo}
                               </span>
                             </div>
@@ -1349,15 +1353,22 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                 </div>
 
                 {/* Pax Hold Status */}
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-2.5">
-                  <div className="w-6 h-6 rounded-md bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
-                    <AlertTriangle className="w-3.5 h-3.5" />
+                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <AlertTriangle className="w-4 h-4" />
                   </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
-                      RAMP PASSENGER HOLD TODAY
-                    </span>
-                    <span className="text-xs font-black text-white font-mono">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-800/80">
+                      <span className="text-[11px] text-slate-300 font-bold uppercase tracking-wider block">
+                        2. RAMP PASSENGER HOLD TODAY
+                      </span>
+                      {dailySummary.holdCount > 0 && (
+                        <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/30">
+                          {dailySummary.holdCount} FLIGHTS ON HOLD
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs font-bold text-amber-300 font-mono leading-relaxed block">
                       {dailySummary.paxHoldSummary}
                     </span>
                   </div>
@@ -1390,8 +1401,8 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
             width: '1200px',
             backgroundColor: '#ffffff',
             color: '#0f172a',
-            fontFamily: 'Calibri, Arial, sans-serif',
-            padding: '40px',
+            fontFamily: 'Arial, Calibri, sans-serif',
+            padding: '36px 36px 48px 36px',
             boxSizing: 'border-box'
           }}
         >
@@ -1487,51 +1498,94 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
           </table>
 
           {/* Daily Summary in JPG */}
-          <div style={{ border: '2px solid #0B1F3F', borderRadius: '8px', overflow: 'hidden', marginBottom: '20px' }}>
-            <div style={{ backgroundColor: '#0B1F3F', color: '#ffffff', padding: '8px 16px', fontWeight: 'bold', fontSize: '13px' }}>
+          <div style={{ border: '2px solid #0B1F3F', borderRadius: '8px', overflow: 'hidden', marginBottom: '24px' }}>
+            <div style={{ backgroundColor: '#0B1F3F', color: '#ffffff', padding: '10px 18px', fontWeight: 900, fontSize: '14px', letterSpacing: '0.5px' }}>
               DAILY SUMMARY ({activeDateDot})
             </div>
-            <div style={{ padding: '12px 16px', backgroundColor: '#F8FAFC', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ padding: '16px 20px', backgroundColor: '#F8FAFC', display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <b style={{ color: '#0B1F3F', display: 'block', marginBottom: '4px' }}>
+                <b style={{ color: '#0B1F3F', display: 'block', marginBottom: '10px', fontSize: '13px', letterSpacing: '0.3px' }}>
                   1. MOST LATE REPORTED PIC TODAY (SERIALLY ON LATE TIME BASED):
                 </b>
                 {dailySummary.latePicList.length === 0 ? (
-                  <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#16A34A' }}>
+                  <div style={{
+                    fontFamily: 'Arial, sans-serif',
+                    fontWeight: 'bold',
+                    fontSize: '12px',
+                    color: '#16A34A',
+                    backgroundColor: '#DCFCE7',
+                    padding: '10px 14px',
+                    borderRadius: '6px',
+                    border: '1px solid #86EFAC'
+                  }}>
                     ALL CREW REPORTED ON TIME TODAY (0 LATE REPORTS)
-                  </span>
+                  </div>
                 ) : (
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: dailySummary.latePicList.length > 3 ? 'repeat(2, 1fr)' : '1fr',
-                    gap: '6px 12px'
+                    gridTemplateColumns: dailySummary.latePicList.length > 1 ? 'repeat(2, 1fr)' : '1fr',
+                    gap: '8px 14px'
                   }}>
                     {dailySummary.latePicList.map((lp) => (
                       <div
                         key={lp.rank}
                         style={{
-                          fontFamily: 'monospace',
-                          fontSize: '11px',
-                          color: '#991B1B',
-                          backgroundColor: '#FEE2E2',
-                          padding: '5px 10px',
-                          borderRadius: '4px',
-                          border: '1px solid #FCA5A5',
+                          backgroundColor: '#FEF2F2',
+                          border: '1.5px solid #FCA5A5',
+                          borderRadius: '6px',
+                          padding: '7px 12px',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          gap: '8px'
+                          gap: '10px',
+                          boxSizing: 'border-box',
+                          minHeight: '38px',
+                          lineHeight: '1.4'
                         }}
                       >
-                        <span style={{ fontWeight: 900, display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          <b style={{ color: '#64748B' }}>#{String(lp.rank).padStart(2, '0')}</b>
-                          <span>CAPT. {lp.pic}</span>
-                        </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
-                          <span style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '2px 7px', borderRadius: '3px', fontWeight: 900, fontSize: '10.5px', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                          <span style={{ fontSize: '11px', fontWeight: 900, color: '#64748B', fontFamily: 'Arial, sans-serif' }}>
+                            #{String(lp.rank).padStart(2, '0')}
+                          </span>
+                          <span style={{
+                            fontSize: '12.5px',
+                            fontWeight: 900,
+                            color: '#991B1B',
+                            fontFamily: 'Arial, sans-serif',
+                            letterSpacing: '0.2px',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            CAPT. {lp.pic}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                          <span style={{
+                            backgroundColor: '#DC2626',
+                            color: '#FFFFFF',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            fontWeight: 900,
+                            fontSize: '11px',
+                            fontFamily: 'Arial, sans-serif',
+                            lineHeight: '1.2',
+                            display: 'inline-block',
+                            whiteSpace: 'nowrap'
+                          }}>
                             {lp.lateReport} LATE
                           </span>
-                          <span style={{ backgroundColor: '#0B1F3F', color: '#FCD34D', padding: '2px 7px', borderRadius: '3px', fontWeight: 900, fontSize: '10.5px', border: '1px solid #1E3A8A', whiteSpace: 'nowrap' }}>
+                          <span style={{
+                            backgroundColor: '#0B1F3F',
+                            color: '#FCD34D',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            fontWeight: 900,
+                            fontSize: '11px',
+                            border: '1px solid #1E3A8A',
+                            fontFamily: 'Arial, sans-serif',
+                            lineHeight: '1.2',
+                            display: 'inline-block',
+                            whiteSpace: 'nowrap'
+                          }}>
                             {lp.flightNo}
                           </span>
                         </div>
@@ -1540,9 +1594,24 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                   </div>
                 )}
               </div>
-              <div>
-                <b style={{ color: '#0B1F3F' }}>2. RAMP PASSENGER HOLD TODAY:</b>{' '}
-                <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#D97706' }}>
+
+              <div style={{
+                backgroundColor: '#FFFBEB',
+                border: '1.5px solid #FDE68A',
+                borderRadius: '6px',
+                padding: '12px 16px'
+              }}>
+                <b style={{ color: '#0B1F3F', fontSize: '13px', display: 'block', marginBottom: '6px' }}>
+                  2. RAMP PASSENGER HOLD TODAY:
+                </b>
+                <span style={{
+                  fontFamily: 'Arial, sans-serif',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  color: '#B45309',
+                  lineHeight: '1.6',
+                  display: 'block'
+                }}>
                   {dailySummary.paxHoldSummary}
                 </span>
               </div>
