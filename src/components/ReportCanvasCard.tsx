@@ -36,14 +36,11 @@ const formatBagCount = (val?: string) => {
   return `${padNum} ${unit}`;
 };
 
-const getPicFontSize = (rawName: string): string => {
-  const text = rawName.toUpperCase().startsWith('PIC') ? rawName : `PIC: ${rawName}`;
-  const len = text.length;
-  if (len > 30) return '18px';
-  if (len > 24) return '20px';
-  if (len > 18) return '23px';
-  if (len > 14) return '25px';
-  return '28px';
+const getPicNameFontSize = (name: string): string => {
+  const len = name.length;
+  if (len > 28) return '22px';
+  if (len > 20) return '24px';
+  return '26px';
 };
 
 export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
@@ -83,6 +80,8 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
   const isEarly = formData.status?.includes('EARLY');
 
   const statusBg = isDelay ? '#dc3545' : isEarly ? '#28a745' : '#eca400';
+  const rawPic = (formData.pic || '').trim();
+  const cleanPicName = rawPic.replace(/^PIC:?\s*/i, '').toUpperCase();
 
   return (
     <div
@@ -145,12 +144,13 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
           style={{
             background: '#003366',
             color: '#ffffff',
-            padding: '10px 30px',
+            padding: '12px 30px',
             borderTop: '3px solid #000000',
             borderBottom: '3px solid #000000',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            minHeight: '66px',
             boxSizing: 'border-box'
           }}
         >
@@ -158,30 +158,55 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
             style={{
               fontSize: '28px',
               fontWeight: 900,
-              textTransform: 'uppercase'
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              lineHeight: 1.2
             }}
           >
             GENERAL INFORMATION
           </span>
-          {formData.pic && formData.pic.trim() && (
-            <span
+          {cleanPicName && (
+            <div
               style={{
-                fontSize: getPicFontSize(formData.pic.trim()),
-                fontWeight: 900,
-                color: '#ffffff',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                textAlign: 'right',
-                maxWidth: '60%',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: '#ffffff',
+                border: '2.5px solid #eca400',
+                borderRadius: '8px',
+                padding: '6px 16px',
+                boxShadow: '0 2px 5px rgba(0, 0, 0, 0.25)',
+                boxSizing: 'border-box',
+                lineHeight: 1.25
               }}
             >
-              {formData.pic.trim().toUpperCase().startsWith('PIC')
-                ? formData.pic.trim().toUpperCase()
-                : `PIC: ${formData.pic.trim().toUpperCase()}`}
-            </span>
+              <span
+                style={{
+                  fontSize: '18px',
+                  fontWeight: 900,
+                  color: '#b45309',
+                  letterSpacing: '1px',
+                  fontFamily: 'Arial, sans-serif',
+                  lineHeight: 1.2
+                }}
+              >
+                PIC:
+              </span>
+              <span
+                style={{
+                  fontSize: getPicNameFontSize(cleanPicName),
+                  fontWeight: 900,
+                  color: '#002244',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  fontFamily: 'Arial, sans-serif',
+                  lineHeight: 1.2,
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {cleanPicName}
+              </span>
+            </div>
           )}
         </div>
 
