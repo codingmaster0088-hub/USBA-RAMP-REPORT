@@ -333,7 +333,8 @@ export function buildDailyAnalyticalSnapshot(
 
   dedupedReports.forEach((r) => {
     const form = r.formData || ({} as any);
-    const pic = form.pic || (r as any).pic || 'CAPTAIN';
+    const rawPic = (form.pic || (r as any).pic || '').trim();
+    const pic = rawPic ? rawPic.replace(/^(CAPT\.?|CAPTAIN)\s*/i, '').trim().toUpperCase() || 'CAPTAIN' : 'CAPTAIN';
     const std = (form.std || '').replace(/[^0-9]/g, '').slice(0, 4);
     const crt = (form.crew || '').trim();
     const ac = (form.ac || '').trim().toUpperCase();
@@ -354,10 +355,10 @@ export function buildDailyAnalyticalSnapshot(
         crtMin = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
       }
       if (stdMin !== -1 && crtMin !== -1) {
-        let standardPrior = 40;
+        let standardPrior = 45;
         if (ac.startsWith('S2-AL')) standardPrior = 70;
         else if (ac.startsWith('S2-AG') || ac.startsWith('PK-') || ac.startsWith('HS-')) standardPrior = 60;
-        else if (ac.startsWith('S2-AK')) standardPrior = 40;
+        else if (ac.startsWith('S2-AK')) standardPrior = 45;
 
         let reqMin = stdMin - standardPrior;
         if (reqMin < 0) reqMin += 1440;

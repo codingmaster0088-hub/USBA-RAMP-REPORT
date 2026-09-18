@@ -145,10 +145,13 @@ export const isoToDisplayFormat = (iso: string): string => {
  */
 const getEffectiveCaptain = (rawPic?: string, flightNumStr?: string): string => {
   if (rawPic && rawPic.trim()) {
-    return rawPic
-      .replace(/^(CAPT\.?|CAPTAIN)\s+/i, '')
+    const cleaned = rawPic
+      .replace(/^(CAPT\.?|CAPTAIN)\s*/i, '')
       .trim()
       .toUpperCase();
+    if (cleaned && cleaned !== 'UNKNOWN' && cleaned !== 'PILOT IN COMMAND') {
+      return cleaned;
+    }
   }
   const defaultCaptains = ['SHAMSUL', 'HAMIDUL', 'AHSANUL', 'KIBRIA', 'ZAHID', 'FARHAN', 'TARIQ'];
   const num = parseInt((flightNumStr || '101').replace(/\D/g, ''), 10) || 101;
@@ -157,7 +160,7 @@ const getEffectiveCaptain = (rawPic?: string, flightNumStr?: string): string => 
 
 /**
  * Calculate Crew Late Report based on aircraft registration and STD
- * - ATR (S2-AK...): 40 mins prior to STD
+ * - ATR (S2-AK...): 45 mins prior to STD
  * - Boeing (S2-AG..., PK-BG..., HS-SXA...): 60 mins prior to STD
  * - Airbus (S2-AL...): 70 mins prior to STD
  */
@@ -194,7 +197,7 @@ export const calculateCrewLateReport = (
   const acUpper = (ac || '').trim().toUpperCase();
 
   // Determine standard prior report duration
-  let standardPrior = 40; // Default to ATR (40 mins)
+  let standardPrior = 45; // Default to ATR (45 mins)
   if (acUpper.startsWith('S2-AL')) {
     standardPrior = 70; // Airbus (70 mins)
   } else if (
@@ -206,7 +209,7 @@ export const calculateCrewLateReport = (
   ) {
     standardPrior = 60; // Boeing (60 mins)
   } else if (acUpper.startsWith('S2-AK')) {
-    standardPrior = 40; // ATR (40 mins)
+    standardPrior = 45; // ATR (45 mins)
   }
 
   let requiredMin = stdMin - standardPrior;
@@ -352,7 +355,7 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
       if (!crt && std) {
         const stdM = parseTimeToMinutes(std);
         if (stdM !== -1) {
-          crt = minutesToHHMM(stdM - 40);
+          crt = minutesToHHMM(stdM - 45);
         }
       }
 
@@ -818,7 +821,7 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
               <td colspan="11" class="summary-title">DAILY SUMMARY (${activeDateDot})</td>
             </tr>
             <tr>
-              <td colspan="11" class="summary-item"><b>1. MOST LATE REPORTED PIC TODAY:</b> ${dailySummary.mostLatePicSummary}</td>
+              <td colspan="11" class="summary-item"><b>1. PICs with the Latest Reporting Times Today (Ranked by Reporting Time Delay):</b> ${dailySummary.mostLatePicSummary}</td>
             </tr>
             <tr>
               <td colspan="11" class="summary-item"><b>2. RAMP PASSENGER HOLD TODAY:</b> ${dailySummary.paxHoldSummary}</td>
@@ -1184,7 +1187,7 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                   <span className="text-slate-400 font-mono text-xs">({activeDateDot})</span>
                 </h3>
                 <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                  Standard reporting rules: ATR 40m prior STD | Boeing 60m prior STD | Airbus 70m prior STD
+                  Standard reporting rules: ATR 45m prior STD | Boeing 60m prior STD | Airbus 70m prior STD
                 </p>
               </div>
               <div className="text-right">
@@ -1307,12 +1310,17 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                     <Clock className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-800/80">
-                      <span className="text-[11px] text-slate-300 font-bold uppercase tracking-wider block">
-                        1. MOST LATE REPORTED PIC TODAY (SERIALLY ON LATE TIME BASED)
-                      </span>
+                    <div className="flex items-start sm:items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-800/80">
+                      <div>
+                        <span className="text-xs sm:text-[13px] text-white font-black tracking-wide block">
+                          1. PICs with the Latest Reporting Times Today
+                        </span>
+                        <span className="text-[11px] text-rose-300/80 font-bold tracking-wide block mt-0.5">
+                          (Ranked by Reporting Time Delay)
+                        </span>
+                      </div>
                       {dailySummary.latePicList.length > 0 && (
-                        <span className="text-[10px] font-mono font-bold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-md border border-rose-500/30">
+                        <span className="text-[10px] font-mono font-bold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-md border border-rose-500/30 shrink-0">
                           {dailySummary.latePicList.length} LATE REPORTS
                         </span>
                       )}
@@ -1323,25 +1331,30 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                         ALL CREW REPORTED ON TIME TODAY (0 LATE REPORTS)
                       </span>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
                         {dailySummary.latePicList.map((lp) => (
                           <div
                             key={lp.rank}
-                            className="flex items-center justify-between gap-2.5 py-2 px-3 rounded-lg bg-rose-500/10 border border-rose-500/25 shadow-sm"
+                            className="flex items-center justify-between gap-3 py-2 px-3 rounded-xl bg-slate-900/95 border border-rose-500/35 hover:border-rose-400/60 shadow-md transition-all"
                           >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-slate-400 font-mono font-bold text-[11px] shrink-0">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="text-slate-400 font-mono font-black text-xs shrink-0 bg-slate-800/90 px-1.5 py-0.5 rounded border border-slate-700/50">
                                 #{String(lp.rank).padStart(2, '0')}
                               </span>
-                              <span className="font-black text-rose-200 text-xs tracking-wide whitespace-nowrap">
-                                CAPT. {lp.pic}
-                              </span>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-[11px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">
+                                  CAPT.
+                                </span>
+                                <span className="font-black text-amber-300 text-xs sm:text-[13px] tracking-wider uppercase bg-amber-400/20 px-2 py-0.5 rounded-md border border-amber-400/50 shadow-sm truncate">
+                                  {lp.pic}
+                                </span>
+                              </div>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
-                              <span className="text-[10px] font-black text-white bg-rose-600 px-2 py-0.5 rounded shadow-sm whitespace-nowrap">
+                              <span className="text-[10.5px] font-black text-white bg-rose-600 px-2 py-0.5 rounded shadow-sm whitespace-nowrap">
                                 {lp.lateReport} LATE
                               </span>
-                              <span className="text-[10px] font-black text-amber-300 bg-slate-900 border border-amber-400/40 px-2 py-0.5 rounded shadow-sm whitespace-nowrap font-mono">
+                              <span className="text-[10.5px] font-black text-amber-300 bg-slate-950 border border-amber-400/40 px-2 py-0.5 rounded shadow-sm whitespace-nowrap font-mono">
                                 {lp.flightNo}
                               </span>
                             </div>
@@ -1504,9 +1517,14 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
             </div>
             <div style={{ padding: '16px 20px', backgroundColor: '#F8FAFC', display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <b style={{ color: '#0B1F3F', display: 'block', marginBottom: '10px', fontSize: '13px', letterSpacing: '0.3px' }}>
-                  1. MOST LATE REPORTED PIC TODAY (SERIALLY ON LATE TIME BASED):
-                </b>
+                <div style={{ marginBottom: '10px' }}>
+                  <b style={{ color: '#0B1F3F', fontSize: '13px', letterSpacing: '0.3px', display: 'block' }}>
+                    1. PICs with the Latest Reporting Times Today
+                  </b>
+                  <span style={{ color: '#64748B', fontSize: '11px', fontWeight: 'bold' }}>
+                    (Ranked by Reporting Time Delay)
+                  </span>
+                </div>
                 {dailySummary.latePicList.length === 0 ? (
                   <div style={{
                     fontFamily: 'Arial, sans-serif',
@@ -1543,7 +1561,7 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
                           lineHeight: '1.4'
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
                           <span style={{ fontSize: '11px', fontWeight: 900, color: '#64748B', fontFamily: 'Arial, sans-serif' }}>
                             #{String(lp.rank).padStart(2, '0')}
                           </span>
