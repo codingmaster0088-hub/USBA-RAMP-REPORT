@@ -339,6 +339,47 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   const [timingErrorsList, setTimingErrorsList] = useState<TimingErrorDetail[]>([]);
   const [delaySearch, setDelaySearch] = useState<string>('');
 
+  // Flight Direction Validation Warnings (detecting Arrival flight in Departure box or vice-versa)
+  const [deptDirectionWarning, setDeptDirectionWarning] = useState<{
+    fltNum: string;
+    route: string;
+    origin: string;
+    dest: string;
+  } | null>(null);
+
+  const [arrDirectionWarning, setArrDirectionWarning] = useState<{
+    fltNum: string;
+    route: string;
+    origin: string;
+    dest: string;
+  } | null>(null);
+
+  const handleMoveDeptToArr = () => {
+    if (!deptDirectionWarning) return;
+    const { fltNum, route } = deptDirectionWarning;
+    setFormData((prev) => ({
+      ...prev,
+      arvFlt: fltNum,
+      arvRoute: route,
+      deptFlt: '',
+      deptRoute: ''
+    }));
+    setDeptDirectionWarning(null);
+  };
+
+  const handleMoveArrToDept = () => {
+    if (!arrDirectionWarning) return;
+    const { fltNum, route } = arrDirectionWarning;
+    setFormData((prev) => ({
+      ...prev,
+      deptFlt: fltNum,
+      deptRoute: route,
+      arvFlt: '',
+      arvRoute: ''
+    }));
+    setArrDirectionWarning(null);
+  };
+
   // Parse currently selected delay codes array from formData.delayReason string
   const selectedDelayCodes = formData.delayReason
     ? formData.delayReason.split('; ').map((s) => s.trim()).filter(Boolean)
@@ -463,6 +504,17 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     // Departure Info
     if (!formData.deptFlt.trim()) skipped.push('DEPT FLIGHT (BS-)');
     if (!formData.deptRoute.trim()) skipped.push('DEPT ROUTE');
+    const currentStation = (formData.station || user.station || 'DAC').toUpperCase();
+    if (formData.deptRoute.trim()) {
+      const parts = formData.deptRoute.split('-');
+      if (parts.length === 2) {
+        const origin = parts[0].trim().toUpperCase();
+        const dest = parts[1].trim().toUpperCase();
+        if (dest === currentStation && origin !== currentStation) {
+          skipped.push(`INVALID DEPT ROUTE (${formData.deptRoute} is an Inbound/Arrival route to ${currentStation}, not Departure)`);
+        }
+      }
+    }
     if (!formData.pic?.trim()) skipped.push('PIC (PILOT IN COMMAND)');
     if (!formData.std.trim()) skipped.push('STD (LT)');
     if (!formData.dc.trim()) skipped.push('D/C (LT)');
@@ -581,8 +633,8 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     const transformedVal = field === 'delayRemarks' ? value : value.toUpperCase();
     const updated = { ...formData, [field]: transformedVal };
 
-    // Auto Route Lookup & Report Type Sync
-    if (field === 'arvFlt' || field === 'deptFlt') {
+    // Auto Route Lookup, Report Type Sync & Direction Validation
+    if (field === 'deptFlt') {
       const fltClean = value.replace(/BS/gi, '').replace(/[^0-9]/g, '');
       const fltNum = parseInt(fltClean, 10);
       if (fltNum) {
@@ -592,10 +644,54 @@ export const ReportForm: React.FC<ReportFormProps> = ({
           setReportType('INTERNATIONAL');
         }
       }
+      const currentStation = (formData.station || user.station || 'DAC').toUpperCase();
       const route = lookupRoute(value);
-      if (route) {
-        if (field === 'arvFlt') updated.arvRoute = route;
-        if (field === 'deptFlt') updated.deptRoute = route;
+      if (fltClean && route) {
+        const parts = route.split('-');
+        const origin = parts[0]?.trim().toUpperCase();
+        const dest = parts[1]?.trim().toUpperCase();
+        if (dest === currentStation && origin !== currentStation) {
+          // Inbound flight entered in Departure box!
+          setDeptDirectionWarning({ fltNum: fltClean, route, origin, dest });
+          // Do not overwrite deptRoute with an inbound route!
+          updated.deptRoute = '';
+        } else {
+          setDeptDirectionWarning(null);
+          updated.deptRoute = route;
+        }
+      } else {
+        setDeptDirectionWarning(null);
+        if (route) updated.deptRoute = route;
+      }
+    }
+
+    if (field === 'arvFlt') {
+      const fltClean = value.replace(/BS/gi, '').replace(/[^0-9]/g, '');
+      const fltNum = parseInt(fltClean, 10);
+      if (fltNum) {
+        if ((fltNum >= 100 && fltNum <= 199) || (fltNum >= 500 && fltNum <= 599)) {
+          setReportType('DOMESTIC');
+        } else if (fltNum >= 200 && fltNum <= 499) {
+          setReportType('INTERNATIONAL');
+        }
+      }
+      const currentStation = (formData.station || user.station || 'DAC').toUpperCase();
+      const route = lookupRoute(value);
+      if (fltClean && route) {
+        const parts = route.split('-');
+        const origin = parts[0]?.trim().toUpperCase();
+        const dest = parts[1]?.trim().toUpperCase();
+        if (origin === currentStation && dest !== currentStation) {
+          // Outbound flight entered in Arrival box!
+          setArrDirectionWarning({ fltNum: fltClean, route, origin, dest });
+          updated.arvRoute = '';
+        } else {
+          setArrDirectionWarning(null);
+          updated.arvRoute = route;
+        }
+      } else {
+        setArrDirectionWarning(null);
+        if (route) updated.arvRoute = route;
       }
     }
 
@@ -1032,7 +1128,9 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                   value={formData.arvFlt}
                   onChange={(e) => handleChange('arvFlt', e.target.value)}
                   placeholder="121"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-amber-300 font-mono font-bold focus:border-amber-400 outline-none"
+                  className={`w-full bg-slate-950 border rounded-xl pl-9 pr-3 py-2 text-xs text-amber-300 font-mono font-bold outline-none ${
+                    arrDirectionWarning ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800 focus:border-amber-400'
+                  }`}
                 />
               </div>
             </div>
@@ -1050,6 +1148,24 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               />
             </div>
           </div>
+
+          {arrDirectionWarning && (
+            <div className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/50 text-rose-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm animate-fadeIn">
+              <div className="flex items-start sm:items-center gap-2 min-w-0">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
+                <span className="leading-snug">
+                  <b>⚠️ Inbound/Arrival Error:</b> BS-{arrDirectionWarning.fltNum} is an <b>OUTBOUND / DEPARTURE</b> flight ({arrDirectionWarning.route}) from {arrDirectionWarning.origin}, not an arrival!
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleMoveArrToDept}
+                className="shrink-0 px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] uppercase tracking-wider shadow transition-colors"
+              >
+                Move to Dept Flight
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-2">
             <div>
@@ -1153,7 +1269,9 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                 value={formData.deptFlt}
                 onChange={(e) => handleChange('deptFlt', e.target.value)}
                 placeholder="191"
-                className="w-full bg-slate-950 border border-amber-500/40 rounded-xl pl-9 pr-3 py-2 text-xs text-amber-300 font-mono font-extrabold focus:border-amber-400 outline-none"
+                className={`w-full bg-slate-950 border rounded-xl pl-9 pr-3 py-2 text-xs text-amber-300 font-mono font-extrabold outline-none ${
+                  deptDirectionWarning ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-amber-500/40 focus:border-amber-400'
+                }`}
               />
             </div>
           </div>
@@ -1167,10 +1285,30 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               value={formData.deptRoute}
               onChange={(e) => handleChange('deptRoute', e.target.value)}
               placeholder="DAC-SPD"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold focus:border-amber-400 outline-none uppercase"
+              className={`w-full bg-slate-950 border rounded-xl px-3 py-2 text-xs text-white font-mono font-bold outline-none uppercase ${
+                deptDirectionWarning ? 'border-rose-500/80 bg-rose-950/20' : 'border-slate-800 focus:border-amber-400'
+              }`}
             />
           </div>
         </div>
+
+        {deptDirectionWarning && (
+          <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/50 text-rose-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg animate-fadeIn">
+            <div className="flex items-start sm:items-center gap-2 min-w-0">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
+              <span className="leading-snug">
+                <b>⚠️ Flight Direction Warning:</b> BS-{deptDirectionWarning.fltNum} is an <b>INBOUND / ARRIVAL</b> flight ({deptDirectionWarning.route}) to {deptDirectionWarning.dest}. It cannot be a departure flight from {deptDirectionWarning.dest}!
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleMoveDeptToArr}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-[10.5px] uppercase tracking-wider shadow transition-colors"
+            >
+              Move to Arr Flight
+            </button>
+          </div>
+        )}
 
         {/* PIC (Pilot In Command) - Mandatory */}
         <div>

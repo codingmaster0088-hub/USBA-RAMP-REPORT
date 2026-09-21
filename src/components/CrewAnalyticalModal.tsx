@@ -332,6 +332,10 @@ export const CrewAnalyticalModal: React.FC<CrewAnalyticalModalProps> = ({
 
       // Destination only
       const rawRoute = (report.route || form.deptRoute || form.arvRoute || '').trim();
+      const activeStn = (station || 'DAC').toUpperCase();
+      if (activeStn === 'DAC' && rawRoute.toUpperCase().endsWith('-DAC') && !rawRoute.toUpperCase().startsWith('DAC-')) {
+        return;
+      }
       const routeParts = rawRoute.split('-');
       const route = routeParts.length > 1 ? routeParts[routeParts.length - 1].trim().toUpperCase() : rawRoute.trim().toUpperCase();
 

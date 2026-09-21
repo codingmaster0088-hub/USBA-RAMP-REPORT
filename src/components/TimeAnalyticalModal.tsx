@@ -488,10 +488,18 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       return false;
     };
 
+    // Helper to check if a flight report is an inbound arrival flight rather than departure (e.g. ZYL-DAC into DAC)
+    const isInboundFlight = (rep: SavedReport): boolean => {
+      const activeStn = (station || 'DAC').toUpperCase();
+      const dRoute = (rep.formData?.deptRoute || rep.route || '').toUpperCase().trim();
+      return activeStn === 'DAC' && dRoute.endsWith('-DAC') && !dRoute.startsWith('DAC-');
+    };
+
     // 1. Process active savedReports first (they have the most accurate user-entered flight logs)
     savedReports.forEach((r) => {
       if (is03SepViewing && isBs307Flight(r)) return;
       if (isFlightDeleted(r)) return;
+      if (isInboundFlight(r)) return;
       if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
 
       const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
@@ -514,6 +522,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
     (activeBackendSnapshot?.reportsSnapshot || []).forEach((r) => {
       if (is03SepViewing && isBs307Flight(r)) return;
       if (isFlightDeleted(r)) return;
+      if (isInboundFlight(r)) return;
       if (!isReportMatchingSelectedDate(r, selectedIsoDate)) return;
 
       const deptFlt = cleanFlightNum(r.formData?.deptFlt || '');
