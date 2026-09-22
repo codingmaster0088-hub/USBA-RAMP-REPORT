@@ -118,7 +118,9 @@ export const CompleteFlightModal: React.FC<CompleteFlightModalProps> = ({
       const mainFlt = cleanFlightNum(r.flight || '');
       const arvFlt = cleanFlightNum(r.formData?.arvFlt || '');
 
-      const isSameCode = deptFlt === targetCode || mainFlt === targetCode || arvFlt === targetCode;
+      // For scheduled departure flights, match against deptFlt or main report flight.
+      // Only match arvFlt if the report has no departure flight specified.
+      const isSameCode = deptFlt ? deptFlt === targetCode : (mainFlt === targetCode || arvFlt === targetCode);
       if (!isSameCode) return false;
 
       // Ensure report belongs to target selected date
