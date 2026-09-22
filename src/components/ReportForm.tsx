@@ -28,7 +28,10 @@ import {
   lookupRoute,
   formatAircraftReg,
   calculateFlightStatus,
-  calculateGroundTime
+  calculateGroundTime,
+  validateFlightParity,
+  getPairedFlightNumber,
+  getStationRoute
 } from '../data/routesDB';
 import { DELAY_CODES } from '../constants/delayCodes';
 
@@ -229,6 +232,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   });
 
   const [flightMode, setFlightMode] = useState<FlightMode>(() => {
+    if (user.station && user.station.toUpperCase() !== 'DAC') return 'ROUND';
     if (reportToEdit) return reportToEdit.mode;
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
@@ -323,6 +327,8 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
           return {
             ...parsed.formData,
+            // Always bind the form to the active logged-in user's station:
+            station: (user?.station || parsed.formData.station || 'DAC') as any,
             // If the draft is from a previous day, ALWAYS force date to today's date!
             date: isDraftFromToday && parsed.formData.date ? parsed.formData.date : todayStr
           };
@@ -339,19 +345,27 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   const [timingErrorsList, setTimingErrorsList] = useState<TimingErrorDetail[]>([]);
   const [delaySearch, setDelaySearch] = useState<string>('');
 
-  // Flight Direction Validation Warnings (detecting Arrival flight in Departure box or vice-versa)
+  // Flight Direction & Parity Validation Warnings
   const [deptDirectionWarning, setDeptDirectionWarning] = useState<{
     fltNum: string;
-    route: string;
-    origin: string;
-    dest: string;
+    route?: string;
+    origin?: string;
+    dest?: string;
+    parityError?: boolean;
+    warningBangla?: string;
+    warningEnglish?: string;
+    suggestedFlt?: string;
   } | null>(null);
 
   const [arrDirectionWarning, setArrDirectionWarning] = useState<{
     fltNum: string;
-    route: string;
-    origin: string;
-    dest: string;
+    route?: string;
+    origin?: string;
+    dest?: string;
+    parityError?: boolean;
+    warningBangla?: string;
+    warningEnglish?: string;
+    suggestedFlt?: string;
   } | null>(null);
 
   const handleMoveDeptToArr = () => {
@@ -360,7 +374,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     setFormData((prev) => ({
       ...prev,
       arvFlt: fltNum,
-      arvRoute: route,
+      arvRoute: route || '',
       deptFlt: '',
       deptRoute: ''
     }));
@@ -373,12 +387,29 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     setFormData((prev) => ({
       ...prev,
       deptFlt: fltNum,
-      deptRoute: route,
+      deptRoute: route || '',
       arvFlt: '',
       arvRoute: ''
     }));
     setArrDirectionWarning(null);
   };
+
+  const currentStation = (user?.station || formData.station || 'DAC').toUpperCase();
+  const isOutstation = currentStation !== 'DAC';
+
+  // Always keep formData.station in sync with the active logged-in user station
+  useEffect(() => {
+    if (user?.station && formData.station !== user.station) {
+      setFormData((prev) => ({ ...prev, station: user.station as any }));
+    }
+  }, [user?.station]);
+
+  // For non-DAC stations (e.g. CXB, SPD, CGP), lock flightMode to ROUND turnaround
+  useEffect(() => {
+    if (isOutstation && flightMode !== 'ROUND') {
+      setFlightMode('ROUND');
+    }
+  }, [isOutstation, flightMode]);
 
   // Parse currently selected delay codes array from formData.delayReason string
   const selectedDelayCodes = formData.delayReason
@@ -493,8 +524,16 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     }
 
     // Arrival Info if ROUND
+    const currentStation = (user?.station || formData.station || 'DAC').toUpperCase();
     if (flightMode === 'ROUND') {
-      if (!formData.arvFlt.trim()) skipped.push('ARR FLIGHT (ARV FLT)');
+      if (!formData.arvFlt.trim()) {
+        skipped.push('ARR FLIGHT (ARV FLT)');
+      } else {
+        const arvParity = validateFlightParity(currentStation, formData.arvFlt, 'ARRIVAL');
+        if (arvParity && !arvParity.isValid) {
+          skipped.push(`INVALID ARR FLIGHT (BS-${formData.arvFlt}): ${arvParity.warningBangla}`);
+        }
+      }
       if (!formData.arvRoute.trim()) skipped.push('ARR ROUTE');
       if (!formData.con.trim()) skipped.push('C/ON (LT)');
       if (!formData.do.trim()) skipped.push('D/O (LT)');
@@ -502,9 +541,15 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     }
 
     // Departure Info
-    if (!formData.deptFlt.trim()) skipped.push('DEPT FLIGHT (BS-)');
+    if (!formData.deptFlt.trim()) {
+      skipped.push('DEPT FLIGHT (BS-)');
+    } else {
+      const deptParity = validateFlightParity(currentStation, formData.deptFlt, 'DEPARTURE');
+      if (deptParity && !deptParity.isValid) {
+        skipped.push(`INVALID DEPT FLIGHT (BS-${formData.deptFlt}): ${deptParity.warningBangla}`);
+      }
+    }
     if (!formData.deptRoute.trim()) skipped.push('DEPT ROUTE');
-    const currentStation = (formData.station || user.station || 'DAC').toUpperCase();
     if (formData.deptRoute.trim()) {
       const parts = formData.deptRoute.split('-');
       if (parts.length === 2) {
@@ -633,7 +678,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     const transformedVal = field === 'delayRemarks' ? value : value.toUpperCase();
     const updated = { ...formData, [field]: transformedVal };
 
-    // Auto Route Lookup, Report Type Sync & Direction Validation
+    // Auto Route Lookup, Report Type Sync & Parity/Direction Validation
     if (field === 'deptFlt') {
       const fltClean = value.replace(/BS/gi, '').replace(/[^0-9]/g, '');
       const fltNum = parseInt(fltClean, 10);
@@ -644,24 +689,69 @@ export const ReportForm: React.FC<ReportFormProps> = ({
           setReportType('INTERNATIONAL');
         }
       }
-      const currentStation = (formData.station || user.station || 'DAC').toUpperCase();
-      const route = lookupRoute(value);
-      if (fltClean && route) {
-        const parts = route.split('-');
-        const origin = parts[0]?.trim().toUpperCase();
-        const dest = parts[1]?.trim().toUpperCase();
-        if (dest === currentStation && origin !== currentStation) {
-          // Inbound flight entered in Departure box!
-          setDeptDirectionWarning({ fltNum: fltClean, route, origin, dest });
-          // Do not overwrite deptRoute with an inbound route!
-          updated.deptRoute = '';
+      const currentStation = (user?.station || formData.station || 'DAC').toUpperCase();
+      const isOutstation = currentStation !== 'DAC';
+
+      if (fltClean) {
+        // 1. Check Odd/Even Parity Rule
+        const parityCheck = validateFlightParity(currentStation, fltClean, 'DEPARTURE');
+        if (parityCheck && !parityCheck.isValid) {
+          setDeptDirectionWarning({
+            fltNum: fltClean,
+            parityError: true,
+            warningBangla: parityCheck.warningBangla,
+            warningEnglish: parityCheck.warningEnglish,
+            suggestedFlt: parityCheck.suggestedFlt
+          });
         } else {
           setDeptDirectionWarning(null);
-          updated.deptRoute = route;
+        }
+
+        // 2. Auto-Populate Route & Suggest Paired Flight
+        const route = lookupRoute(value);
+        if (isOutstation) {
+          // Outstation departure is always Outstation-DAC (e.g. CXB-DAC, SPD-DAC)
+          const defaultRoute = `${currentStation}-DAC`;
+          updated.deptRoute = route || defaultRoute;
+
+          // Auto-suggest arrival flight & route if arrival is empty
+          if (fltNum) {
+            const suggestedArrFlt = getPairedFlightNumber(fltClean, 'TO_ARRIVAL');
+            if (suggestedArrFlt && (!formData.arvFlt || formData.arvFlt === '')) {
+              updated.arvFlt = suggestedArrFlt;
+              updated.arvRoute = `DAC-${currentStation}`;
+            }
+          }
+        } else {
+          // DAC station: departure departs from DAC (e.g. DAC-CXB, DAC-SPD)
+          if (route) {
+            const parts = route.split('-');
+            const origin = parts[0]?.trim().toUpperCase();
+            const dest = parts[1]?.trim().toUpperCase();
+            if (dest === currentStation && origin !== currentStation) {
+              // Inbound flight entered in Departure box!
+              setDeptDirectionWarning({
+                fltNum: fltClean,
+                route,
+                origin,
+                dest,
+                parityError: false
+              });
+              updated.deptRoute = '';
+            } else {
+              if (!parityCheck || parityCheck.isValid) {
+                setDeptDirectionWarning(null);
+              }
+              updated.deptRoute = route;
+            }
+          } else {
+            if (!parityCheck || parityCheck.isValid) {
+              setDeptDirectionWarning(null);
+            }
+          }
         }
       } else {
         setDeptDirectionWarning(null);
-        if (route) updated.deptRoute = route;
       }
     }
 
@@ -675,23 +765,69 @@ export const ReportForm: React.FC<ReportFormProps> = ({
           setReportType('INTERNATIONAL');
         }
       }
-      const currentStation = (formData.station || user.station || 'DAC').toUpperCase();
-      const route = lookupRoute(value);
-      if (fltClean && route) {
-        const parts = route.split('-');
-        const origin = parts[0]?.trim().toUpperCase();
-        const dest = parts[1]?.trim().toUpperCase();
-        if (origin === currentStation && dest !== currentStation) {
-          // Outbound flight entered in Arrival box!
-          setArrDirectionWarning({ fltNum: fltClean, route, origin, dest });
-          updated.arvRoute = '';
+      const currentStation = (user?.station || formData.station || 'DAC').toUpperCase();
+      const isOutstation = currentStation !== 'DAC';
+
+      if (fltClean) {
+        // 1. Check Odd/Even Parity Rule
+        const parityCheck = validateFlightParity(currentStation, fltClean, 'ARRIVAL');
+        if (parityCheck && !parityCheck.isValid) {
+          setArrDirectionWarning({
+            fltNum: fltClean,
+            parityError: true,
+            warningBangla: parityCheck.warningBangla,
+            warningEnglish: parityCheck.warningEnglish,
+            suggestedFlt: parityCheck.suggestedFlt
+          });
         } else {
           setArrDirectionWarning(null);
-          updated.arvRoute = route;
+        }
+
+        // 2. Auto-Populate Route & Suggest Paired Flight
+        const route = lookupRoute(value);
+        if (isOutstation) {
+          // Outstation arrival is always DAC-Outstation (e.g. DAC-CXB, DAC-SPD)
+          const defaultRoute = `DAC-${currentStation}`;
+          updated.arvRoute = route || defaultRoute;
+
+          // Auto-suggest departure flight & route if departure is empty
+          if (fltNum) {
+            const suggestedDeptFlt = getPairedFlightNumber(fltClean, 'TO_DEPARTURE');
+            if (suggestedDeptFlt && (!formData.deptFlt || formData.deptFlt === '')) {
+              updated.deptFlt = suggestedDeptFlt;
+              updated.deptRoute = `${currentStation}-DAC`;
+            }
+          }
+        } else {
+          // DAC station: arrival lands at DAC (e.g. CXB-DAC, SPD-DAC)
+          if (route) {
+            const parts = route.split('-');
+            const origin = parts[0]?.trim().toUpperCase();
+            const dest = parts[1]?.trim().toUpperCase();
+            if (origin === currentStation && dest !== currentStation) {
+              // Outbound flight entered in Arrival box!
+              setArrDirectionWarning({
+                fltNum: fltClean,
+                route,
+                origin,
+                dest,
+                parityError: false
+              });
+              updated.arvRoute = '';
+            } else {
+              if (!parityCheck || parityCheck.isValid) {
+                setArrDirectionWarning(null);
+              }
+              updated.arvRoute = route;
+            }
+          } else {
+            if (!parityCheck || parityCheck.isValid) {
+              setArrDirectionWarning(null);
+            }
+          }
         }
       } else {
         setArrDirectionWarning(null);
-        if (route) updated.arvRoute = route;
       }
     }
 
@@ -884,41 +1020,68 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
         {/* Direct vs Round Flight Selector */}
         <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
-          <label className="text-[10px] font-bold text-slate-400 uppercase block">
-            2. SELECT ROUTE MODE
-          </label>
-          <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
-            <button
-              onClick={() => {
-                setFlightMode('ROUND');
-                const doorOpenTime = formData.do || formData.con;
-                if (doorOpenTime && formData.co) {
-                  const gt = calculateGroundTime(doorOpenTime, formData.co);
-                  setFormData((prev) => ({ ...prev, ground: gt }));
-                }
-              }}
-              className={`py-2.5 rounded-lg text-xs font-black transition-all ${
-                flightMode === 'ROUND'
-                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              🔄 ROUND (Arrival + Departure)
-            </button>
-            <button
-              onClick={() => {
-                setFlightMode('DIRECT');
-                setFormData((prev) => ({ ...prev, ground: 'ON GROUND' }));
-              }}
-              className={`py-2.5 rounded-lg text-xs font-black transition-all ${
-                flightMode === 'DIRECT'
-                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              ✈️ DIRECT (Departure Only)
-            </button>
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-bold text-slate-400 uppercase block">
+              2. SELECT ROUTE MODE
+            </label>
+            {isOutstation && (
+              <span className="text-[9.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                STATION {currentStation}: ROUND ONLY
+              </span>
+            )}
           </div>
+          {isOutstation ? (
+            <div className="bg-slate-950 p-2.5 rounded-xl border border-emerald-500/30 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">🔄</span>
+                <div>
+                  <div className="text-xs font-black text-emerald-300">
+                    ROUND FLIGHT (INBOUND ARRIVAL + OUTBOUND DEPARTURE)
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Same aircraft turnaround at {currentStation} station (Direct mode not required)
+                  </div>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-wider font-mono">
+                LOCKED
+              </span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <button
+                onClick={() => {
+                  setFlightMode('ROUND');
+                  const doorOpenTime = formData.do || formData.con;
+                  if (doorOpenTime && formData.co) {
+                    const gt = calculateGroundTime(doorOpenTime, formData.co);
+                    setFormData((prev) => ({ ...prev, ground: gt }));
+                  }
+                }}
+                className={`py-2.5 rounded-lg text-xs font-black transition-all ${
+                  flightMode === 'ROUND'
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                🔄 ROUND (Arrival + Departure)
+              </button>
+              <button
+                onClick={() => {
+                  setFlightMode('DIRECT');
+                  setFormData((prev) => ({ ...prev, ground: 'ON GROUND' }));
+                }}
+                className={`py-2.5 rounded-lg text-xs font-black transition-all ${
+                  flightMode === 'DIRECT'
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                ✈️ DIRECT (Departure Only)
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1150,20 +1313,39 @@ export const ReportForm: React.FC<ReportFormProps> = ({
           </div>
 
           {arrDirectionWarning && (
-            <div className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/50 text-rose-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm animate-fadeIn">
+            <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/70 text-rose-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg animate-fadeIn">
               <div className="flex items-start sm:items-center gap-2 min-w-0">
                 <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
-                <span className="leading-snug">
-                  <b>⚠️ Inbound/Arrival Error:</b> BS-{arrDirectionWarning.fltNum} is an <b>OUTBOUND / DEPARTURE</b> flight ({arrDirectionWarning.route}) from {arrDirectionWarning.origin}, not an arrival!
-                </span>
+                <div className="leading-snug">
+                  {arrDirectionWarning.parityError ? (
+                    <div>
+                      <div className="font-bold text-rose-200">{arrDirectionWarning.warningBangla}</div>
+                      <div className="text-[10.5px] text-rose-300 mt-0.5">{arrDirectionWarning.warningEnglish}</div>
+                    </div>
+                  ) : (
+                    <span>
+                      <b>⚠️ Inbound/Arrival Error:</b> BS-{arrDirectionWarning.fltNum} is an <b>OUTBOUND / DEPARTURE</b> flight ({arrDirectionWarning.route}) from {arrDirectionWarning.origin}, not an arrival!
+                    </span>
+                  )}
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={handleMoveArrToDept}
-                className="shrink-0 px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] uppercase tracking-wider shadow transition-colors"
-              >
-                Move to Dept Flight
-              </button>
+              {arrDirectionWarning.parityError && arrDirectionWarning.suggestedFlt ? (
+                <button
+                  type="button"
+                  onClick={() => handleChange('arvFlt', arrDirectionWarning.suggestedFlt!)}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[10.5px] uppercase tracking-wider shadow transition-colors"
+                >
+                  Fix to BS-{arrDirectionWarning.suggestedFlt}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleMoveArrToDept}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] uppercase tracking-wider shadow transition-colors"
+                >
+                  Move to Dept Flight
+                </button>
+              )}
             </div>
           )}
 
@@ -1293,20 +1475,39 @@ export const ReportForm: React.FC<ReportFormProps> = ({
         </div>
 
         {deptDirectionWarning && (
-          <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/50 text-rose-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg animate-fadeIn">
+          <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/70 text-rose-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg animate-fadeIn">
             <div className="flex items-start sm:items-center gap-2 min-w-0">
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
-              <span className="leading-snug">
-                <b>⚠️ Flight Direction Warning:</b> BS-{deptDirectionWarning.fltNum} is an <b>INBOUND / ARRIVAL</b> flight ({deptDirectionWarning.route}) to {deptDirectionWarning.dest}. It cannot be a departure flight from {deptDirectionWarning.dest}!
-              </span>
+              <div className="leading-snug">
+                {deptDirectionWarning.parityError ? (
+                  <div>
+                    <div className="font-bold text-rose-200">{deptDirectionWarning.warningBangla}</div>
+                    <div className="text-[10.5px] text-rose-300 mt-0.5">{deptDirectionWarning.warningEnglish}</div>
+                  </div>
+                ) : (
+                  <span>
+                    <b>⚠️ Flight Direction Warning:</b> BS-{deptDirectionWarning.fltNum} is an <b>INBOUND / ARRIVAL</b> flight ({deptDirectionWarning.route}) to {deptDirectionWarning.dest}. It cannot be a departure flight from {deptDirectionWarning.dest}!
+                  </span>
+                )}
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={handleMoveDeptToArr}
-              className="shrink-0 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-[10.5px] uppercase tracking-wider shadow transition-colors"
-            >
-              Move to Arr Flight
-            </button>
+            {deptDirectionWarning.parityError && deptDirectionWarning.suggestedFlt ? (
+              <button
+                type="button"
+                onClick={() => handleChange('deptFlt', deptDirectionWarning.suggestedFlt!)}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[10.5px] uppercase tracking-wider shadow transition-colors"
+              >
+                Fix to BS-{deptDirectionWarning.suggestedFlt}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleMoveDeptToArr}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-[10.5px] uppercase tracking-wider shadow transition-colors"
+              >
+                Move to Arr Flight
+              </button>
+            )}
           </div>
         )}
 

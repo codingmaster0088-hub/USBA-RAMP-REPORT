@@ -241,18 +241,17 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
 
     // 1. Regex patterns targeting PIC / DIC (OCR mistake for PIC) / CAPT / CAPTAIN
     const patterns = [
-      /(?:PIC|DIC|P\.I\.C\.?)[\s:=-]+(?:CAPT\.?|CAPTAIN)?\s*([A-Z\s.]{2,30})/i,
-      /(?:CAPT\.?|CAPTAIN)\s+([A-Z\s.]{2,30})/i
+      /\b(?:PIC|DIC|P\.?I\.?C\.?)\b[\s:=-]+(?:CAPT\.?|CAPTAIN)?\s*([A-Za-z\s.]{2,30})/i,
+      /\b(?:CAPT\.?|CAPTAIN)\s+([A-Za-z\s.]{2,30})/i
     ];
 
     for (const pat of patterns) {
       const m = upper.match(pat);
       if (m && m[1]) {
-        let name = m[1]
-          .replace(/[\r\n].*$/g, '')
-          .replace(/(?:DATE|A\/C|REG|BAY|GATE|FLIGHT|ROUTE|STD|BS-?\d+|GENERAL|INFORMATION|LT|TIME).*$/i, '')
-          .trim();
-        name = name.replace(/^(?:CAPT\.?|CAPTAIN)\s+/i, '').replace(/[^A-Z\s.]/g, '').trim();
+        let name = m[1].replace(/[\r\n].*$/g, '').trim();
+        // Notice word boundaries \b so words like 'BAY' inside 'ZUBAYER' are NEVER stripped!
+        name = name.replace(/\b(?:DATE|A\/C|REG|BAY|GATE|FLIGHT|ROUTE|STD|BS-?\d+|GENERAL|INFORMATION|LT|TIME)\b.*$/i, '').trim();
+        name = name.replace(/^(?:CAPT\.?|CAPTAIN)\s+/i, '').replace(/[^A-Za-z\s.]/g, '').trim();
         if (name.length >= 2 && !isLabelNoiseWord(name) && !name.includes('INFORMATION')) {
           return name;
         }
@@ -261,12 +260,12 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
 
     // 2. Line-by-line inspection of header lines
     const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean);
-    for (const line of lines.slice(0, 15)) {
+    for (const line of lines.slice(0, 25)) {
       const u = line.toUpperCase();
-      if ((u.startsWith('PIC') || u.startsWith('DIC') || u.startsWith('CAPT')) && (u.includes(':') || u.includes('-') || u.includes(' '))) {
+      if ((u.includes('PIC') || u.includes('DIC') || u.includes('CAPT')) && (u.includes(':') || u.includes('-') || u.includes(' '))) {
         let name = line
-          .replace(/^(?:PIC|DIC|CAPT\.?|CAPTAIN)[:\s-]+/i, '')
-          .replace(/(?:DATE|A\/C|REG|BAY|GATE|GENERAL|INFORMATION).*$/i, '')
+          .replace(/.*?\b(?:PIC|DIC|CAPT\.?|CAPTAIN)\b[:\s-]+/i, '')
+          .replace(/\b(?:DATE|A\/C|REG|BAY|GATE|GENERAL|INFORMATION)\b.*$/i, '')
           .trim();
         name = name.replace(/[^A-Za-z\s.]/g, '').trim().toUpperCase();
         if (name.length >= 2 && !isLabelNoiseWord(name) && !name.includes('INFORMATION')) {
@@ -303,7 +302,7 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
       if (fnRoute) {
         newForm.deptRoute = fnRoute[1].replace(/\s+/g, '').replace('–', '-');
       }
-      const fnDate = fnUpper.match(/(\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{2,4})/i);
+      const fnDate = fnUpper.match(/(\d{1,2}\s+(?:JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|AUG(?:UST)?|SEP(?:T|TEMBER)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?)\s+\d{2,4})/i);
       if (fnDate) newForm.date = fnDate[1];
       const fnAc = fnUpper.match(/(S2-[A-Z0-9]{3}|HS-[A-Z0-9]{3})/i);
       if (fnAc) newForm.ac = fnAc[1];
@@ -323,10 +322,22 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
       newForm.pic = detectedPic;
     }
 
-    // Date: e.g. 27 AUG 26
-    const dateMatch = upperFull.match(/(\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{2,4})/i);
+    // Date: Support SEPT, SEP, full month names, or DD/MM/YY
+    const dateMatch =
+      upperFull.match(/(\d{1,2}\s+(?:JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|AUG(?:UST)?|SEP(?:T|TEMBER)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?)\s+\d{2,4})/i) ||
+      upperFull.match(/(\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4})/);
     if (dateMatch) {
-      newForm.date = dateMatch[1].toUpperCase();
+      // Normalize 'SEPT' to 'SEP', 'SEPTEMBER' to 'SEP', etc.
+      let normalizedDate = dateMatch[1].toUpperCase()
+        .replace(/SEPTEMBER/g, 'SEP')
+        .replace(/SEPT/g, 'SEP')
+        .replace(/OCTOBER/g, 'OCT')
+        .replace(/NOVEMBER/g, 'NOV')
+        .replace(/DECEMBER/g, 'DEC')
+        .replace(/JANUARY/g, 'JAN')
+        .replace(/FEBRUARY/g, 'FEB')
+        .replace(/AUGUST/g, 'AUG');
+      newForm.date = normalizedDate;
     }
 
     // A/C Registration: e.g. S2-AKP, S2-AFP, S2-AJH
@@ -335,20 +346,29 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
       newForm.ac = acMatch[1].toUpperCase();
     }
 
-    // Bay No: e.g. "BAY NO: C-27" or "BAY: C-27" or "BAY NO C-27" (prevent capturing 'NO')
-    const bayMatch =
-      upperFull.match(/BAY\s*(?:NO\.?|NUMBER)?[:\s-]*([A-Z0-9-]+)/i) ||
-      upperFull.match(/GATE\s*(?:NO\.?|NUMBER)?[:\s-]*([A-Z0-9-]+)/i) ||
-      upperFull.match(/STAND\s*(?:NO\.?|NUMBER)?[:\s-]*([A-Z0-9-]+)/i);
-    if (bayMatch) {
-      let rawBay = bayMatch[1].trim().replace(/^NO\.?\s*/i, '').replace('–', '-');
-      if (rawBay && rawBay !== 'NO' && rawBay !== 'NUMBER') {
-        newForm.bay = rawBay;
+    // Bay No: Robust multi-pattern extraction (never capturing 'DEPARTURE', 'INFORMATION', or 'NO')
+    // Strategy A: Directly following aircraft registration on the data line (e.g., '22 SEPT 26 S2-AFP C-24')
+    const bayAfterReg = upperFull.match(/(?:S2-[A-Z0-9]{3}|HS-[A-Z0-9]{3}|PK-[A-Z0-9]{3})\s+([A-Z]-\d{1,2}|[A-Z]\d{1,2}[A-Z]?|\d{1,2})\b/);
+    if (bayAfterReg) {
+      newForm.bay = bayAfterReg[1];
+    }
+
+    // Strategy B: Explicit same-line BAY / GATE / STAND label
+    if (!newForm.bay) {
+      const baySameLine = upperFull.match(/[^\r\n]*?\b(?:BAY|GATE|STAND)\b(?:\s*NO\.?|\s*NUMBER)?[:\s-]+([A-Z0-9-]+)/i);
+      if (baySameLine) {
+        const candidate = baySameLine[1].trim().replace(/^NO\.?\s*/i, '').replace('–', '-');
+        const noise = ['DEPARTURE', 'ARRIVAL', 'INFORMATION', 'GENERAL', 'FLIGHT', 'ROUTE', 'DATE', 'TIME', 'NO', 'REG', 'BAYER'];
+        if (candidate && !noise.includes(candidate)) {
+          newForm.bay = candidate;
+        }
       }
     }
-    // Fallback for Bay pattern like "C-27" or "D-16" or "BAY-C-21"
+
+    // Strategy C: Typical bay formats like C-24, D-16, C-27, G-05
     if (!newForm.bay) {
-      const explicitBay = upperFull.match(/\b([A-Z]-\d{1,2})\b/);
+      const bayRegex = /\b([CDEFGH]-\d{1,2})\b/g;
+      const explicitBay = bayRegex.exec(upperFull);
       if (explicitBay) newForm.bay = explicitBay[1];
     }
 
@@ -374,65 +394,63 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
         newForm.arvRoute = arvRouteM[1].replace(/\s+/g, '').replace('–', '-');
       }
 
-      // Inbound C/ON (Chocks on): e.g. 1005 (LT)
-      const conM = arrivalText.match(/(?:C\/ON|C\/O|ON\s*BLOCK|CON)[-:\s]*([012]\d[0-5]\d)/i) ||
-                   arrivalText.match(/([012]\d[0-5]\d)(?:\s*\(?LT\)?)?/);
-      if (conM) {
-        newForm.con = conM[1];
-      }
+      // Inbound 3-Column Table Format: C/ON, DOOR OPEN, ALL DISEM
+      const arrTableMatch = arrivalText.match(/C\/ON[\s\S]*?DOOR\s*OPEN[\s\S]*?ALL\s*DISEM[\s\S]*?(\d{4})\s*(?:\(LT\)|LT)?\s*(\d{4})\s*(?:\(LT\)|LT)?\s*(\d{4})/i);
+      if (arrTableMatch) {
+        newForm.con = arrTableMatch[1];
+        newForm.do = arrTableMatch[2];
+        newForm.disem = arrTableMatch[3];
+      } else {
+        // Individual line matches
+        const conM = arrivalText.match(/(?:C\/ON|C\/O|ON\s*BLOCK|CON)[-:\s]*([012]\d[0-5]\d)/i);
+        if (conM) newForm.con = conM[1];
 
-      // Inbound Door Open: e.g. 1006 (LT)
-      const doM = arrivalText.match(/(?:DOOR\s*OPEN|DO)[-:\s]*([012]\d[0-5]\d)/i);
-      if (doM) {
-        newForm.do = doM[1];
-      }
+        const doM = arrivalText.match(/(?:DOOR\s*OPEN|DO)[-:\s]*([012]\d[0-5]\d)/i);
+        if (doM) newForm.do = doM[1];
 
-      // Inbound All Disembark: e.g. 1016 (LT)
-      const disemM = arrivalText.match(/(?:ALL\s*DISEM|DISEM|DISEMBARK)[-:\s]*([012]\d[0-5]\d)/i);
-      if (disemM) {
-        newForm.disem = disemM[1];
+        const disemM = arrivalText.match(/(?:ALL\s*DISEM|DISEM|DISEMBARK)[-:\s]*([012]\d[0-5]\d)/i);
+        if (disemM) newForm.disem = disemM[1];
       }
     }
 
-    // Parse DEPARTURE INFORMATION section (THIS IS THE MAIN REPORT DATA!)
+    // Parse DEPARTURE INFORMATION section (MAIN REPORT DATA)
     if (departureIdx !== -1) {
-      const departureText = upperFull.substring(departureIdx, departureIdx + 600);
+      const departureText = upperFull.substring(departureIdx, departureIdx + 700);
 
-      // Departure flight: e.g. BS-173
+      // Departure flight: e.g. BS-183
       const deptFltM = departureText.match(/BS-?\s*(\d{3,4})/i);
       if (deptFltM) {
         newForm.deptFlt = deptFltM[1];
       }
 
-      // Departure route: e.g. DAC-CXB
+      // Departure route: e.g. DAC-SPD
       const deptRouteM = departureText.match(/([A-Z]{3}\s*[-–]\s*[A-Z]{3})/i);
       if (deptRouteM) {
         newForm.deptRoute = deptRouteM[1].replace(/\s+/g, '').replace('–', '-');
       }
 
-      // Departure STD: e.g. 1100 (LT)
-      const stdM = departureText.match(/STD[-:\s]*([012]\d[0-5]\d)/i) ||
-                   departureText.match(/([012]\d[0-5]\d)(?:\s*\(?LT\)?)?/);
-      if (stdM) {
-        newForm.std = stdM[1];
+      // Check Table Row 1: FLIGHT ROUTE STD followed by values
+      const stdTableM = departureText.match(/STD[\s\S]*?(\d{4})\s*(?:\(LT\)|LT)?/i);
+      if (stdTableM) {
+        newForm.std = stdTableM[1];
       }
 
-      // Door Close (DC): e.g. 1053 (LT)
-      const dcM = departureText.match(/(?:DOOR\s*CLOSE|DC)[-:\s]*([012]\d[0-5]\d)/i);
-      if (dcM) {
-        newForm.dc = dcM[1];
-      }
+      // Check Table Row 2: DOOR CLOSE C/OFF A/B followed by 3 times (e.g., 0714 0715 0723)
+      const depRow2Table = departureText.match(/DOOR\s*CLOSE[\s\S]*?C\/OFF[\s\S]*?A\/?B[\s\S]*?(\d{4})\s*(?:\(LT\)|LT)?\s*(\d{4})\s*(?:\(LT\)|LT)?\s*(\d{4}|N\/Y|NY)/i);
+      if (depRow2Table) {
+        newForm.dc = depRow2Table[1];
+        newForm.co = depRow2Table[2];
+        newForm.ab = cleanTimeVal(depRow2Table[3]);
+      } else {
+        // Individual line matches
+        const dcM = departureText.match(/(?:DOOR\s*CLOSE|DC)[:\s-]*([012]\d[0-5]\d)/i);
+        if (dcM) newForm.dc = dcM[1];
 
-      // Chocks Off (C/OFF / CO): e.g. 1054 (LT)
-      const coM = departureText.match(/(?:C\/OFF|CO|CHOX|CHOCKS?\s*OFF)[-:\s]*([012]\d[0-5]\d)/i);
-      if (coM) {
-        newForm.co = coM[1];
-      }
+        const coM = departureText.match(/(?:C\/OFF|CO|CHOX|CHOCKS?\s*OFF)[:\s-]*([012]\d[0-5]\d)/i);
+        if (coM) newForm.co = coM[1];
 
-      // Airborne (A/B): e.g. N/Y (LT) or 1109 (LT)
-      const abM = departureText.match(/(?:A\/B|AIRBORNE)[-:\s]*([012]\d[0-5]\d|N\/Y|NY)/i);
-      if (abM) {
-        newForm.ab = cleanTimeVal(abM[1]);
+        const abM = departureText.match(/(?:A\/B|AIRBORNE)[:\s-]*([012]\d[0-5]\d|N\/Y|NY)/i);
+        if (abM) newForm.ab = cleanTimeVal(abM[1]);
       }
     }
 
@@ -460,108 +478,108 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
       newForm.status = statusMatch[0].trim().toUpperCase();
     }
 
-    // 7. GROUND TIME (e.g., "GROUND TIME 48 MINS")
-    const groundMatch = upperFull.match(/GROUND\s*TIME[:\s]*(\d{1,3}\s*MINS?)/i);
+    // 7. GROUND TIME (e.g., "GROUND TIME 48 MINS" or "GROUND TIME ON GROUND")
+    const groundMatch = upperFull.match(/GROUND\s*TIME[:\s]*(\d{1,3}\s*MINS?|ON\s*GROUND)/i);
     if (groundMatch) {
       newForm.ground = groundMatch[1].toUpperCase();
     }
 
-    // 8. 13-POINT TURNAROUND CHECKLIST (Robust Multi-Format Parsing)
+    // 8. 14-POINT TURNAROUND CHECKLIST (Robust Multi-Format Parsing)
     // 1. Security Check ST
     const secStVal = extractMilestone(
       upperFull,
-      /(?:1\.?\s*)?SECURITY(?:\s*CHECK)?\s*ST(?:ART)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OK|OB|N\/A)?/i
+      /(?:1\.?\s*)?SECURITY(?:\s*CHECK)?\s*ST(?:ART)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OK|OB|N\/A)/i
     );
     if (secStVal) newForm.securitySt = secStVal;
 
     // 2. Security Check END
     const secEndVal = extractMilestone(
       upperFull,
-      /(?:2\.?\s*)?SECURITY(?:\s*CHECK)?\s*END[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OK|OB|N\/A)?/i
+      /(?:2\.?\s*)?SECURITY(?:\s*CHECK)?\s*END[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OK|OB|N\/A)/i
     );
     if (secEndVal) newForm.securityEnd = secEndVal;
 
     // 3. Cleaning START
     const clnStVal = extractMilestone(
       upperFull,
-      /(?:3\.?\s*)?CLEANING\s*ST(?:ART)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OK|OB|N\/A)?/i
+      /(?:3\.?\s*)?CLEANING\s*ST(?:ART)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OK|OB|N\/A)/i
     );
     if (clnStVal) newForm.cleaningSt = clnStVal;
 
     // 4. Cleaning END
     const clnEndVal = extractMilestone(
       upperFull,
-      /(?:4\.?\s*)?CLEANING\s*END[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OK|OB|N\/A)?/i
+      /(?:4\.?\s*)?CLEANING\s*END[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OK|OB|N\/A)/i
     );
     if (clnEndVal) newForm.cleaningEnd = clnEndVal;
 
     // 5. Catering START
     const catStVal = extractMilestone(
       upperFull,
-      /(?:5\.?\s*)?CATERING\s*ST(?:ART)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OK|OB|N\/A)?/i
+      /(?:5\.?\s*)?CATERING\s*ST(?:ART)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OK|OB|N\/A)/i
     );
     if (catStVal) newForm.cateringSt = catStVal;
 
     // 6. Catering END
     const catEndVal = extractMilestone(
       upperFull,
-      /(?:6\.?\s*)?CATERING\s*END[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OK|OB|N\/A)?/i
+      /(?:6\.?\s*)?CATERING\s*END[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OK|OB|N\/A)/i
     );
     if (catEndVal) newForm.cateringEnd = catEndVal;
 
     // 7. Crew Report
     const crewVal = extractMilestone(
       upperFull,
-      /(?:7\.?\s*)?CREW\s*(?:REPORT)?[:\s\-\.]*(?:REPORT[:\s\-\.]*)?([012]\d[0-5]\d|[012]?\d:[0-5]\d|OB\s*\/?\s*[012]\d[0-5]\d|OB|ONBOARD|ON|PRE|EARLIER|OK|N\/A)?/i
+      /(?:7\.?\s*)?CREW\s*(?:REPORT)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|OB\s*\/?\s*[012]\d[0-5]\d|OB|ONBOARD|ON|PRE|EARLIER|EARLY|OK|N\/A)/i
     );
     if (crewVal) newForm.crew = crewVal;
 
     // 8. Refueling Done
     const refuelVal = extractMilestone(
       upperFull,
-      /(?:8\.?\s*)?REFUEL(?:ING)?\s*(?:DONE)?[:\s\-\.]*(?:DONE[:\s\-\.]*)?([012]\d[0-5]\d|[012]?\d:[0-5]\d|OB\s*\/?\s*[012]\d[0-5]\d|OB|ONBOARD|ON|PRE|EARLIER|OK|N\/A)?/i
+      /(?:8\.?\s*)?REFUEL(?:ING)?\s*(?:DONE)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|OB\s*\/?\s*[012]\d[0-5]\d|OB|ONBOARD|ON|PRE|EARLIER|EARLY|OK|N\/A)/i
     );
     if (refuelVal) newForm.refuel = refuelVal;
 
     // 9. Last Baggage Report
     const lbagVal = extractMilestone(
       upperFull,
-      /(?:9\.?\s*)?LAST\s*BAGGAGE\s*(?:REPORT)?[:\s\-\.]*(?:REPORT[:\s\-\.]*)?([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OB|OK|N\/A)?/i
+      /(?:9\.?\s*)?LAST\s*BAGGAGE\s*(?:REPORT)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OB|OK|N\/A)/i
     );
     if (lbagVal) newForm.lbag = lbagVal;
 
     // 10. Boarding Permitted
     const permitVal = extractMilestone(
       upperFull,
-      /(?:10\.?\s*)?BOARDING\s*PERMIT(?:TED)?[:\s\-\.]*(?:PERMIT(?:TED)?[:\s\-\.]*)?([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OB|OK|N\/A)?/i
+      /(?:10\.?\s*)?BOARDING\s*PERMIT(?:TED)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OB|OK|N\/A)/i
     );
     if (permitVal) newForm.permit = permitVal;
 
     // 11. First Bus/Pax Report
     const firstBusVal = extractMilestone(
       upperFull,
-      /(?:11\.?\s*)?FIRST\s*BUS(?:\s*[\/\-]\s*PAX)?\s*(?:REPORT)?[:\s\-\.]*(?:REPORT[:\s\-\.]*)?([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OB|OK|N\/A)?/i
+      /(?:11\.?\s*)?FIRST\s*BUS(?:\s*[\/\-]\s*PAX)?\s*(?:REPORT)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OB|OK|N\/A)/i
     );
     if (firstBusVal) newForm.firstBusPax = firstBusVal;
 
     // 12. Last Pax Onboard
     const paxVal = extractMilestone(
       upperFull,
-      /(?:12\.?\s*)?LAST\s*PAX(?:\s*ON\s*BOARD|\s*ONBOARD)?[:\s\-\.]*(?:ON\s*BOARD[:\s\-\.]*|ONBOARD[:\s\-\.]*)?([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OB|OK|N\/A)?/i
+      /(?:12\.?\s*)?LAST\s*PAX(?:\s*ON\s*BOARD|\s*ONBOARD)?[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OB|OK|N\/A)/i
     );
     if (paxVal) newForm.pax = paxVal;
 
     // 13. Trim Submitted
     const trimSubVal = extractMilestone(
       upperFull,
-      /(?:13\.?\s*)?TRIM\s*(?:SUBMITTED|SUB)[:\s\-\.]*(?:SUBMITTED[:\s\-\.]*)?([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OB|OK|N\/A)?/i
+      /(?:13\.?\s*)?TRIM\s*(?:SUBMITTED|SUB)[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OB|OK|N\/A)/i
     );
     if (trimSubVal) newForm.trimSubmitted = trimSubVal;
 
     // 14. Trim Signed
     const trimSignVal = extractMilestone(
       upperFull,
-      /(?:14\.?\s*)?TRIM\s*SIGNED[:\s\-\.]*(?:SIGNED[:\s\-\.]*)?([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|OB|OK|N\/A)?/i
+      /(?:14\.?\s*)?TRIM\s*SIGNED[:\s\-\.]*([012]\d[0-5]\d|[012]?\d:[0-5]\d|EARLIER|EARLY|OB|OK|N\/A)/i
     );
     if (trimSignVal) newForm.trimSigned = trimSignVal;
 

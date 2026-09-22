@@ -68,6 +68,117 @@ export function lookupRoute(flightNumberStr: string): string {
   return '';
 }
 
+export interface ParityValidationResult {
+  isValid: boolean;
+  station: string;
+  fltNum: number;
+  expectedParity: 'ODD' | 'EVEN';
+  actualParity: 'ODD' | 'EVEN';
+  suggestedFlt: string;
+  warningBangla: string;
+  warningEnglish: string;
+}
+
+/**
+ * Odd/Even flight number rule:
+ * - For DAC station:
+ *     Departure is ALWAYS ODD (e.g. 101, 141, 183)
+ *     Arrival is ALWAYS EVEN (e.g. 102, 142, 184)
+ * - For Outstations (CXB, SPD, CGP, ZYL, JSR, RJH, BZL, etc.):
+ *     Arrival is ALWAYS ODD (e.g. 101, 141, 183)
+ *     Departure is ALWAYS EVEN (e.g. 102, 142, 184)
+ */
+export function validateFlightParity(
+  station: string,
+  flightNumberStr: string,
+  type: 'DEPARTURE' | 'ARRIVAL'
+): ParityValidationResult | null {
+  const fltClean = flightNumberStr.replace(/BS/gi, '').replace(/[^0-9]/g, '');
+  const fltNum = parseInt(fltClean, 10);
+  if (!fltNum || isNaN(fltNum)) return null;
+
+  const currentStation = (station || 'DAC').toUpperCase();
+  const isDac = currentStation === 'DAC';
+  const isEven = fltNum % 2 === 0;
+  const actualParity: 'ODD' | 'EVEN' = isEven ? 'EVEN' : 'ODD';
+
+  let expectedParity: 'ODD' | 'EVEN';
+  if (isDac) {
+    expectedParity = type === 'DEPARTURE' ? 'ODD' : 'EVEN';
+  } else {
+    expectedParity = type === 'ARRIVAL' ? 'ODD' : 'EVEN';
+  }
+
+  const isValid = actualParity === expectedParity;
+  if (isValid) {
+    return {
+      isValid: true,
+      station: currentStation,
+      fltNum,
+      expectedParity,
+      actualParity,
+      suggestedFlt: String(fltNum),
+      warningBangla: '',
+      warningEnglish: ''
+    };
+  }
+
+  // Suggest the closest valid flight number
+  let suggestedNum: number;
+  if (expectedParity === 'EVEN') {
+    suggestedNum = fltNum % 2 !== 0 ? fltNum + 1 : fltNum;
+  } else {
+    suggestedNum = fltNum % 2 === 0 ? (fltNum - 1 > 0 ? fltNum - 1 : fltNum + 1) : fltNum;
+  }
+  const suggestedFlt = String(suggestedNum);
+
+  const banglaType = type === 'DEPARTURE' ? 'Departure (প্রস্থান)' : 'Arrival (আগমন)';
+  const banglaExpected = expectedParity === 'ODD' ? 'ODD (বিজোড়)' : 'EVEN (জোড়)';
+  const banglaActual = actualParity === 'ODD' ? 'ODD (বিজোড়)' : 'EVEN (জোড়)';
+
+  const warningBangla = `⚠️ BS-${fltClean} একটি ${banglaActual} নম্বর! ${currentStation} স্টেশনের জন্য ${banglaType} ফ্লাইট নম্বর সর্বদা ${banglaExpected} হতে হবে (যেমন: BS-${suggestedFlt})।`;
+  const warningEnglish = `⚠️ BS-${fltClean} is an ${actualParity} number! For ${currentStation} station, ${type} flight must always be an ${expectedParity} number (e.g. BS-${suggestedFlt}).`;
+
+  return {
+    isValid: false,
+    station: currentStation,
+    fltNum,
+    expectedParity,
+    actualParity,
+    suggestedFlt,
+    warningBangla,
+    warningEnglish
+  };
+}
+
+/**
+ * Returns the paired flight number for round-trip turnarounds:
+ * e.g. 141 (Arrival at CXB) -> 142 (Departure at CXB)
+ * e.g. 142 (Departure at CXB) -> 141 (Arrival at CXB)
+ */
+export function getPairedFlightNumber(flightNumberStr: string, toType: 'TO_DEPARTURE' | 'TO_ARRIVAL'): string {
+  const fltClean = flightNumberStr.replace(/BS/gi, '').replace(/[^0-9]/g, '');
+  const fltNum = parseInt(fltClean, 10);
+  if (!fltNum || isNaN(fltNum)) return '';
+
+  if (toType === 'TO_DEPARTURE') {
+    // If incoming was odd (e.g. 141), paired departure is fltNum + 1 (142)
+    return fltNum % 2 !== 0 ? String(fltNum + 1) : String(fltNum);
+  } else {
+    // If departure was even (e.g. 142), paired arrival is fltNum - 1 (141)
+    return fltNum % 2 === 0 ? String(Math.max(1, fltNum - 1)) : String(fltNum);
+  }
+}
+
+/**
+ * Returns default route for a given station and direction
+ */
+export function getStationRoute(station: string, direction: 'INBOUND' | 'OUTBOUND'): string {
+  const stn = (station || 'DAC').toUpperCase();
+  if (stn === 'DAC') return '';
+  return direction === 'INBOUND' ? `DAC-${stn}` : `${stn}-DAC`;
+}
+
 export function formatAircraftReg(input: string): string {
   const val = input.toUpperCase().trim();
   if (!val) return '';
