@@ -242,12 +242,19 @@ export default function App() {
   const activeSavedCount = useMemo(() => {
     const now = Date.now();
     const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000;
+    const isSuperAdmin = sessionStorage.getItem('usb_admin_unlocked_pin') === '11126377';
+    const userStation = (user?.station || 'DAC').toUpperCase();
+
     return savedReports.filter((r) => {
+      if (!isSuperAdmin) {
+        const reportStation = (r.formData?.station || 'DAC').toUpperCase();
+        if (reportStation !== userStation) return false;
+      }
       if (!r.timestamp) return true;
       const t = new Date(r.timestamp).getTime();
       return !isNaN(t) ? now - t <= TWENTY_HOURS_MS : true;
     }).length;
-  }, [savedReports]);
+  }, [savedReports, user?.station]);
 
   // Subscribe to Firebase Firestore real-time updates for Saved Reports, Schedules, Notices & User Logs
   useEffect(() => {
@@ -472,17 +479,49 @@ export default function App() {
       .toUpperCase()
       .replace(/ /g, ' ');
 
+    const userStation = (user?.station || 'DAC').toUpperCase();
+    const isOutstation = userStation !== 'DAC';
+    const fltNumInt = parseInt(flt.flightNum, 10);
+
+    let arvFlt = '';
+    let arvRoute = '';
+    let deptFlt = '';
+    let deptRoute = '';
+
+    if (isOutstation) {
+      if (flt.isDeparture) {
+        deptFlt = flt.flightNum;
+        deptRoute = `${userStation}-DAC`;
+        if (!isNaN(fltNumInt) && fltNumInt % 2 === 0) {
+          arvFlt = (fltNumInt - 1).toString();
+          arvRoute = `DAC-${userStation}`;
+        }
+      } else {
+        arvFlt = flt.flightNum;
+        arvRoute = `DAC-${userStation}`;
+        if (!isNaN(fltNumInt) && fltNumInt % 2 !== 0) {
+          deptFlt = (fltNumInt + 1).toString();
+          deptRoute = `${userStation}-DAC`;
+        }
+      }
+    } else {
+      arvFlt = flt.isDeparture ? '' : flt.flightNum;
+      arvRoute = flt.isDeparture ? '' : `${flt.sector || 'CGP'}-DAC`;
+      deptFlt = flt.isDeparture ? flt.flightNum : '';
+      deptRoute = flt.isDeparture ? `DAC-${flt.sector || 'CGP'}` : '';
+    }
+
     const newFormData: RampReportFormData = {
       date: flt.dateStr ? `${flt.dateStr} 26` : todayStr,
       ac: flt.aircraft || '',
       bay: '25',
-      arvFlt: flt.isDeparture ? '' : flt.flightNum,
-      arvRoute: flt.isDeparture ? '' : `${flt.sector}-DAC`,
+      arvFlt,
+      arvRoute,
       con: '',
       do: '',
       disem: '',
-      deptFlt: flt.isDeparture ? flt.flightNum : '',
-      deptRoute: flt.isDeparture ? `DAC-${flt.sector}` : '',
+      deptFlt,
+      deptRoute,
       std: flt.isDeparture ? flt.timeStr.replace(':', '') : '',
       dc: '',
       co: '',
@@ -519,7 +558,7 @@ export default function App() {
 
     setReportType('DOMESTIC');
     setActiveTab('form');
-    showToast(`Form Created for Flight ${flt.flightFull}`, `Sector: ${flt.sector}`, 'info');
+    showToast(`Form Created for Flight ${flt.flightFull}`, `Station: ${userStation}`, 'info');
   };
 
   // Navigation handlers
@@ -905,6 +944,7 @@ export default function App() {
         {/* TAB 3: SAVED REPORTS */}
         {activeTab === 'saved' && (
           <SavedReports
+            user={user}
             savedReports={savedReports}
             onEditReport={handleEditReport}
             onDeleteReport={handleDeleteReport}
@@ -913,6 +953,7 @@ export default function App() {
             onSaveUploadedReport={handleSaveReport}
             isDarkMode={isDarkMode}
             isAdmin={user?.id === '1425' || user?.id === '0088' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126377'}
+            isSuperAdmin={sessionStorage.getItem('usb_admin_unlocked_pin') === '11126377'}
           />
         )}
 

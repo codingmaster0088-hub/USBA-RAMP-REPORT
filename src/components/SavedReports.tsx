@@ -12,10 +12,25 @@ import {
   Upload,
   PlusCircle
 } from 'lucide-react';
-import { SavedReport, RampReportFormData, ReportType, FlightMode } from '../types';
+import { SavedReport, RampReportFormData, ReportType, FlightMode, UserProfile, StationCode } from '../types';
 import { AdminReportUploadModal } from './AdminReportUploadModal';
 
+export function getReportStation(report: SavedReport): string {
+  if (report.formData?.station) return report.formData.station.toUpperCase();
+  const route = (report.formData?.deptRoute || report.formData?.arvRoute || report.route || '').toUpperCase();
+  const stations: StationCode[] = ['CGP', 'SPD', 'CXB', 'ZYL', 'JSR', 'RJH', 'BZL'];
+  for (const stn of stations) {
+    if (route.includes(stn)) {
+      return stn;
+    }
+  }
+  return 'DAC';
+}
+
+const ALL_STATIONS = ['ALL', 'DAC', 'CGP', 'SPD', 'CXB', 'ZYL', 'JSR', 'RJH', 'BZL'] as const;
+
 interface SavedReportsProps {
+  user?: UserProfile | null;
   savedReports: SavedReport[];
   onEditReport: (id: string) => void;
   onDeleteReport: (id: string) => void;
@@ -30,11 +45,13 @@ interface SavedReportsProps {
   ) => void;
   isDarkMode?: boolean;
   isAdmin?: boolean;
+  isSuperAdmin?: boolean;
 }
 
 const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000;
 
 export const SavedReports: React.FC<SavedReportsProps> = ({
+  user,
   savedReports,
   onEditReport,
   onDeleteReport,
@@ -42,12 +59,23 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
   onDownloadJPG,
   onSaveUploadedReport,
   isDarkMode = true,
-  isAdmin = false
+  isAdmin = false,
+  isSuperAdmin = false
 }) => {
   const [filterType, setFilterType] = useState<'ALL' | 'DOMESTIC' | 'INTERNATIONAL'>('ALL');
   const [showOnlyActive20H, setShowOnlyActive20H] = useState<boolean>(true);
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
+
+  const userStation = (user?.station || 'DAC').toUpperCase();
+  const [stationFilter, setStationFilter] = useState<string>(isSuperAdmin ? 'ALL' : userStation);
+
+  // Sync station filter with user.station when officer changes station
+  useEffect(() => {
+    if (!isSuperAdmin && user?.station) {
+      setStationFilter(user.station.toUpperCase());
+    }
+  }, [user?.station, isSuperAdmin]);
 
   // Update live clock every 10 seconds for precise countdown display
   useEffect(() => {
@@ -71,11 +99,21 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
     return `${hours}h ${minutes.toString().padStart(2, '0')}m left`;
   };
 
-  // Filter logic: Deduplicate by Flight Number + Domestic/Intl + 20 Hours Expiry
+  // Filter logic: Station filter (Only officer station, or super admin filter) + Deduplicate + 20 Hours Expiry
   const { filteredReports, recent20Count, totalCount } = useMemo(() => {
+    // 1. Station-based filtering
+    const stationMatched = savedReports.filter((rep) => {
+      const repStation = getReportStation(rep);
+      if (isSuperAdmin) {
+        if (stationFilter === 'ALL') return true;
+        return repStation === stationFilter;
+      }
+      return repStation === userStation;
+    });
+
     // Deduplicate reports by normalized flight number, keeping the most recent one
     const uniqueMap = new Map<string, SavedReport>();
-    const sorted = [...savedReports].sort((a, b) => {
+    const sorted = [...stationMatched].sort((a, b) => {
       const tA = new Date(a.timestamp).getTime() || 0;
       const tB = new Date(b.timestamp).getTime() || 0;
       return tB - tA;
@@ -113,7 +151,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
       recent20Count: active20H.length,
       totalCount: deduplicatedReports.length
     };
-  }, [savedReports, filterType, showOnlyActive20H, nowMs]);
+  }, [savedReports, filterType, showOnlyActive20H, nowMs, isSuperAdmin, stationFilter, userStation]);
 
   return (
     <div className={`space-y-3 pb-20 fade-in ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
@@ -214,6 +252,53 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Station Filter / Indicator */}
+        {isSuperAdmin ? (
+          <div
+            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-xl border text-xs ${
+              isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+            }`}
+          >
+            <div className={`flex items-center gap-1.5 text-[11px] ${isDarkMode ? 'text-amber-400' : 'text-amber-800 font-black'}`}>
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>SUPER ADMIN STATION FILTER:</span>
+            </div>
+            <div className="flex items-center flex-wrap gap-1">
+              {ALL_STATIONS.map((stn) => (
+                <button
+                  key={stn}
+                  onClick={() => setStationFilter(stn)}
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all cursor-pointer ${
+                    stationFilter === stn
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                      : isDarkMode
+                      ? 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                      : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-300'
+                  }`}
+                >
+                  {stn}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div
+            className={`flex items-center justify-between px-3 py-1.5 rounded-xl border text-[11px] ${
+              isDarkMode
+                ? 'bg-slate-950/60 border-slate-800 text-slate-300'
+                : 'bg-slate-50 border-slate-200 text-slate-800'
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>STATION: <strong className="text-amber-400 font-mono font-black">{userStation}</strong></span>
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium">
+              Only reports created for {userStation} station
+            </span>
+          </div>
+        )}
 
         {/* Admin Action Bar: Upload Report Card & Purge All */}
         {isAdmin && (
@@ -337,6 +422,17 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
                       }`}
                     >
                       {report.route || 'N/A'}
+                    </span>
+
+                    {/* Station Badge */}
+                    <span
+                      className={`text-[9px] sm:text-[10px] font-mono font-black px-2 py-0.5 rounded-lg border ${
+                        isDarkMode
+                          ? 'bg-slate-950 text-amber-300 border-amber-500/30'
+                          : 'bg-amber-100 text-amber-950 border-amber-300 font-black'
+                      }`}
+                    >
+                      STN: {getReportStation(report)}
                     </span>
 
                     <span

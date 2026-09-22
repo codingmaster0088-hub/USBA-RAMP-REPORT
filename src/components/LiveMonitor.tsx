@@ -64,6 +64,35 @@ function parseTimeToMinutes(timeStr: string): number | null {
   return null;
 }
 
+// Duration in minutes added to Dhaka departure time for flight arrival at outstation
+function getOutstationArrivalOffsetMinutes(station: string): number {
+  const upper = station.toUpperCase();
+  if (upper === 'CGP') return 30;
+  if (upper === 'SPD') return 40;
+  if (upper === 'CXB') return 40;
+  // Rest outstations (ZYL, JSR, RJH, BZL, etc.)
+  return 30;
+}
+
+// Convert total minutes from midnight to a 12-hour or 24-hour time string
+function formatMinutesToTimeString(totalMinutes: number, hasAmPm: boolean = true): string {
+  const modMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+  const hrs24 = Math.floor(modMinutes / 60);
+  const mins = modMinutes % 60;
+  const minsStr = mins < 10 ? `0${mins}` : `${mins}`;
+
+  if (hasAmPm) {
+    const period = hrs24 >= 12 ? 'PM' : 'AM';
+    let hrs12 = hrs24 % 12;
+    if (hrs12 === 0) hrs12 = 12;
+    const hrsStr = hrs12 < 10 ? `0${hrs12}` : `${hrs12}`;
+    return `${hrsStr}:${minsStr} ${period}`;
+  }
+
+  const hrsStr = hrs24 < 10 ? `0${hrs24}` : `${hrs24}`;
+  return `${hrsStr}:${minsStr}`;
+}
+
 // Get duration addition offset in minutes for DAC arrivals
 function getArrivalOffsetMinutes(flt: ScheduleFlight, station: string): number {
   if (station !== 'DAC' || flt.isDeparture) return 0;
@@ -96,7 +125,7 @@ function getArrivalOffsetMinutes(flt: ScheduleFlight, station: string): number {
   return 35;
 }
 
-// Calculate adjusted arrival time string & next day flag
+// Calculate adjusted arrival time string & next day flag for DAC
 function calculateFlightTimeDisplay(flt: ScheduleFlight, station: string): { timeStr: string; totalMinutes: number | null; isNextDay: boolean } {
   const baseMinutes = parseTimeToMinutes(flt.timeStr);
   if (baseMinutes === null) {
@@ -145,6 +174,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   scheduleFlights,
   scheduleDate,
   notices = [],
+  onStartReport,
+  onStartReportWithFlight,
   isDarkMode = false,
   isAdmin = false,
   onDeleteNotice
@@ -157,17 +188,135 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
+  const userStation = (user?.station || 'DAC').toUpperCase();
+  const isOutstation = userStation !== 'DAC';
+
   // Filter remaining vs past flights with station-wise time adjustments
-  const { departures, arrivals, remainingDepCount, remainingArrCount } = useMemo(() => {
-    const processedFlights = scheduleFlights.map((flt) => {
-      const calc = calculateFlightTimeDisplay(flt, user.station);
-      return {
-        ...flt,
-        calculatedTimeStr: calc.timeStr,
-        calculatedMinutes: calc.totalMinutes,
-        isNextDay: calc.isNextDay
+  const { departures, arrivals, remainingDepCount, remainingArrCount, totalDepCount, totalArrCount } = useMemo(() => {
+    if (isOutstation) {
+      // 1. Filter schedule flights relevant to userStation
+      const stationFlights = scheduleFlights.filter((flt) => {
+        const sectorUpper = (flt.sector || '').toUpperCase();
+        const rawUpper = ((flt.rawLine || '') + ' ' + (flt.formattedDisplay || '')).toUpperCase();
+        return sectorUpper === userStation || rawUpper.includes(userStation);
+      });
+
+      // 2. Separate into Arrivals (Odd numbers from DAC) and explicit Departures (Even numbers to DAC)
+      type ProcessedScheduleFlight = ScheduleFlight & {
+        calculatedTimeStr: string;
+        calculatedMinutes: number | null;
+        isNextDay: boolean;
       };
-    }).filter((f) => !f.isNextDay); // Exclude next-day (> 11:59 PM) flights
+
+      const outstationArrivals: ProcessedScheduleFlight[] = [];
+      const explicitDepartures: ProcessedScheduleFlight[] = [];
+
+      stationFlights.forEach((flt) => {
+        const fltNum = parseInt(flt.flightNum, 10);
+        const isOdd = !isNaN(fltNum) && fltNum % 2 !== 0;
+
+        if (isOdd) {
+          // Odd flight = Inbound arrival from DAC to this outstation
+          const baseMinutes = parseTimeToMinutes(flt.timeStr);
+          const offset = getOutstationArrivalOffsetMinutes(userStation);
+          const totalMinutes = baseMinutes !== null ? baseMinutes + offset : null;
+          const hasAmPm =
+            flt.timeStr.toUpperCase().includes('AM') || flt.timeStr.toUpperCase().includes('PM');
+          const calculatedTimeStr =
+            totalMinutes !== null ? formatMinutesToTimeString(totalMinutes, hasAmPm) : flt.timeStr;
+
+          outstationArrivals.push({
+            ...flt,
+            isDeparture: false,
+            formattedDisplay: `BS-${flt.flightNum}-${userStation}-${flt.aircraft}-${flt.paxLoad}-${calculatedTimeStr}`,
+            calculatedTimeStr,
+            calculatedMinutes: totalMinutes,
+            isNextDay: totalMinutes !== null && totalMinutes >= 1440
+          });
+        } else {
+          // Even flight = Outbound departure from this outstation to DAC
+          const baseMinutes = parseTimeToMinutes(flt.timeStr);
+          explicitDepartures.push({
+            ...flt,
+            isDeparture: true,
+            calculatedTimeStr: flt.timeStr,
+            calculatedMinutes: baseMinutes,
+            isNextDay: false
+          });
+        }
+      });
+
+      // 3. Auto-pair Departures for any Odd Arrival that doesn't have an explicit Even Departure in FLST
+      const outstationDepartures: ProcessedScheduleFlight[] = [...explicitDepartures];
+      const existingDepFlightNums = new Set(
+        explicitDepartures.map((d) => d.flightNum.replace(/^BS-?/i, ''))
+      );
+
+      outstationArrivals.forEach((arrFlt) => {
+        const arrInt = parseInt(arrFlt.flightNum, 10);
+        if (!isNaN(arrInt)) {
+          const pairedDepNum = (arrInt + 1).toString();
+          if (!existingDepFlightNums.has(pairedDepNum)) {
+            // Calculate turnaround departure time (Arrival time + 30 mins ground turnaround)
+            const arrMins = arrFlt.calculatedMinutes;
+            const depMins = arrMins !== null ? arrMins + 30 : null;
+            const hasAmPm =
+              arrFlt.calculatedTimeStr.toUpperCase().includes('AM') ||
+              arrFlt.calculatedTimeStr.toUpperCase().includes('PM');
+            const depTimeStr =
+              depMins !== null ? formatMinutesToTimeString(depMins, hasAmPm) : arrFlt.timeStr;
+
+            outstationDepartures.push({
+              id: `auto-dep-${arrFlt.id || pairedDepNum}`,
+              flightNum: pairedDepNum,
+              flightFull: `BS-${pairedDepNum}`,
+              sector: `${userStation}-DAC`,
+              dateStr: arrFlt.dateStr,
+              timeStr: depTimeStr,
+              aircraft: arrFlt.aircraft,
+              paxLoad: arrFlt.paxLoad,
+              isDeparture: true,
+              formattedDisplay: `BS-${pairedDepNum}-${userStation}-${arrFlt.aircraft}-${arrFlt.paxLoad}-${depTimeStr}`,
+              calculatedTimeStr: depTimeStr,
+              calculatedMinutes: depMins,
+              isNextDay: depMins !== null && depMins >= 1440
+            });
+            existingDepFlightNums.add(pairedDepNum);
+          }
+        }
+      });
+
+      // Filter remaining vs all
+      const isFlightRemaining = (flt: { calculatedMinutes: number | null }) => {
+        if (flt.calculatedMinutes === null) return true;
+        return flt.calculatedMinutes + 15 >= currentMinutes;
+      };
+
+      const remDeps = outstationDepartures.filter(isFlightRemaining);
+      const remArrs = outstationArrivals.filter(isFlightRemaining);
+
+      return {
+        departures: showRemainingOnly ? remDeps : outstationDepartures,
+        arrivals: showRemainingOnly ? remArrs : outstationArrivals,
+        remainingDepCount: remDeps.length,
+        remainingArrCount: remArrs.length,
+        totalDepCount: outstationDepartures.length,
+        totalArrCount: outstationArrivals.length
+      };
+    }
+
+    // DAC Central Hub Logic: All flights visible, Odd = Departure, Even = Arrival
+    const processedFlights = scheduleFlights
+      .map((flt) => {
+        const calc = calculateFlightTimeDisplay(flt, 'DAC');
+        return {
+          ...flt,
+          calculatedTimeStr: calc.timeStr,
+          calculatedMinutes: calc.totalMinutes,
+          isNextDay: calc.isNextDay
+        };
+      })
+      .filter((f) => !f.isNextDay); // Exclude next-day (> 11:59 PM) flights
 
     const deps = processedFlights.filter((f) => f.isDeparture);
     const arrs = processedFlights.filter((f) => !f.isDeparture);
@@ -188,7 +337,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
       totalDepCount: deps.length,
       totalArrCount: arrs.length
     };
-  }, [scheduleFlights, currentMinutes, showRemainingOnly, user.station]);
+  }, [scheduleFlights, currentMinutes, showRemainingOnly, userStation, isOutstation]);
 
   const displayDate = formatHeaderDate(scheduleDate);
 
@@ -307,7 +456,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               }`}
             >
               <Filter className="w-3 h-3" />
-              <span>SHOW ALL ({scheduleFlights.filter(f => f.isDeparture === (activeSection === 'DEPARTURE')).length})</span>
+              <span>SHOW ALL ({activeSection === 'DEPARTURE' ? totalDepCount : totalArrCount})</span>
             </button>
           </div>
         </div>
@@ -417,7 +566,9 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                 return (
                   <div
                     key={flt.id || index}
-                    className={`p-3 transition-colors flex items-center justify-between gap-2 ${
+                    onClick={() => onStartReportWithFlight && onStartReportWithFlight(flt)}
+                    title="Click flight to create Turnaround Report"
+                    className={`p-3 transition-colors flex items-center justify-between gap-2 cursor-pointer active:scale-[0.99] ${
                       isPast
                         ? isDarkMode
                           ? 'bg-slate-950/60 opacity-60'
