@@ -448,91 +448,162 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
               .rpt-cell-val { padding: 12px 16px; font-size: 28px; font-weight: 900; color: #000000; border-bottom: 2px solid #ddd; text-align: center; font-family: Arial, Helvetica, sans-serif; letter-spacing: 0.5px; }
             `}</style>
             
-            <tr>
-              <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>1. SECURITY CHECK ST</td>
-              <td className="rpt-cell-val" style={{ width: '18%', borderRight: '3px solid #000' }}>{formatTimeLT(formData.securitySt)}</td>
-              <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>2. SECURITY CHECK END</td>
-              <td className="rpt-cell-val" style={{ width: '18%' }}>{formatTimeLT(formData.securityEnd)}</td>
-            </tr>
+            {(formData.station || '').toUpperCase() !== 'DAC' ? (
+              /* OUT STATION MILESTONES (NO CATERING, FOLLOWED BY VIP/PRIORITY/FIREARMS/RUSH BAG) */
+              <>
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>1. SECURITY CHECK ST</td>
+                  <td className="rpt-cell-val" style={{ width: '18%', borderRight: '3px solid #000' }}>{formatTimeLT(formData.securitySt)}</td>
+                  <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>2. SECURITY CHECK END</td>
+                  <td className="rpt-cell-val" style={{ width: '18%' }}>{formatTimeLT(formData.securityEnd)}</td>
+                </tr>
 
-            <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>3. CLEANING START</td>
-              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.cleaningSt)}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>4. CLEANING END</td>
-              <td className="rpt-cell-val">{formatTimeLT(formData.cleaningEnd)}</td>
-            </tr>
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>3. CLEANING START</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.cleaningSt)}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>4. CLEANING END</td>
+                  <td className="rpt-cell-val">{formatTimeLT(formData.cleaningEnd)}</td>
+                </tr>
 
-            <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>5. CATERING START</td>
-              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.cateringSt)}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>6. CATERING END</td>
-              <td className="rpt-cell-val">{formatTimeLT(formData.cateringEnd)}</td>
-            </tr>
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>5. REFUELING DONE</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.refuel)}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>6. LAST BAGGAGE REPORT</td>
+                  <td className="rpt-cell-val">{formatTimeLT(formData.lbag)}</td>
+                </tr>
 
-            <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>7. CREW REPORT</td>
-              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.crew)}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>8. REFUELING DONE</td>
-              <td className="rpt-cell-val">{formatTimeLT(formData.refuel)}</td>
-            </tr>
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>7. BOARDING PERMITTED</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.permit)}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>8. FIRST BUS/PAX REPORT</td>
+                  <td className="rpt-cell-val">{formatTimeLT(formData.firstBusPax)}</td>
+                </tr>
 
-            <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>9. LAST BAGGAGE REPORT</td>
-              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.lbag)}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>10. BOARDING PERMITTED</td>
-              <td className="rpt-cell-val">{formatTimeLT(formData.permit)}</td>
-            </tr>
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>9. LAST PAX ONBOARD</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.pax)}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>10. TRIM SUBMITTED</td>
+                  <td className="rpt-cell-val">{formatTimeLT(formData.trimSubmitted)}</td>
+                </tr>
 
-            <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>11. FIRST BUS/PAX REPORT</td>
-              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.firstBusPax)}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>12. LAST PAX ONBOARD</td>
-              <td className="rpt-cell-val">{formatTimeLT(formData.pax)}</td>
-            </tr>
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>11. TRIM SIGNED</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.trimSigned)}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>VIP PAX</td>
+                  <td className="rpt-cell-val">{formData.vipPax || '0'}</td>
+                </tr>
 
-            <tr>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>13. TRIM SUBMITTED</td>
-              <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.trimSubmitted)}</td>
-              <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>14. TRIM SIGNED</td>
-              <td className="rpt-cell-val">{formatTimeLT(formData.trimSigned)}</td>
-            </tr>
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>VIP BAG</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.vipBag || '0'}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>MAAS/PRIORITY PAX</td>
+                  <td className="rpt-cell-val">{formData.maasPax || '0'}</td>
+                </tr>
 
-            {/* Optional Baggage Fields: 15. PRIORITY BAG, 16. VIP BAG, 17. OFFLOAD BAG */}
-            {(() => {
-              const pBag = formatBagCount(formData.priorityBag);
-              const vBag = formatBagCount(formData.vipBag);
-              const oBag = formatBagCount(formData.offloadBag);
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>PRIORITY BAG</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.priorityBag || '0'}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>FIRE ARMS</td>
+                  <td className="rpt-cell-val">{formData.fireArms || '0'}</td>
+                </tr>
 
-              const items: { label: string; val: string }[] = [];
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>RUSH BAG</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.rushBag || '0'}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>{formData.offloadBag ? 'OFFLOAD BAG' : ''}</td>
+                  <td className="rpt-cell-val">{formData.offloadBag || ''}</td>
+                </tr>
+              </>
+            ) : (
+              /* HUB DAC MILESTONES (WITH CATERING) */
+              <>
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>1. SECURITY CHECK ST</td>
+                  <td className="rpt-cell-val" style={{ width: '18%', borderRight: '3px solid #000' }}>{formatTimeLT(formData.securitySt)}</td>
+                  <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>2. SECURITY CHECK END</td>
+                  <td className="rpt-cell-val" style={{ width: '18%' }}>{formatTimeLT(formData.securityEnd)}</td>
+                </tr>
 
-              if (pBag) items.push({ label: '15. PRIORITY BAG', val: pBag });
-              if (vBag) items.push({ label: '16. VIP BAG', val: vBag });
-              if (oBag) items.push({ label: '17. OFFLOAD BAG', val: oBag });
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>3. CLEANING START</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.cleaningSt)}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>4. CLEANING END</td>
+                  <td className="rpt-cell-val">{formatTimeLT(formData.cleaningEnd)}</td>
+                </tr>
 
-              const rows = [];
-              for (let i = 0; i < items.length; i += 2) {
-                const item1 = items[i];
-                const item2 = items[i + 1];
-                rows.push(
-                  <tr key={`milestone-row-${i}`}>
-                    <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>{item1.label}</td>
-                    <td className="rpt-cell-val" style={{ width: '18%', borderRight: item2 ? '3px solid #000' : 'none' }}>{item1.val}</td>
-                    {item2 ? (
-                      <>
-                        <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>{item2.label}</td>
-                        <td className="rpt-cell-val" style={{ width: '18%' }}>{item2.val}</td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}></td>
-                        <td className="rpt-cell-val" style={{ width: '18%' }}></td>
-                      </>
-                    )}
-                  </tr>
-                );
-              }
-              return rows;
-            })()}
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>5. CATERING START</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.cateringSt)}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>6. CATERING END</td>
+                  <td className="rpt-cell-val">{formatTimeLT(formData.cateringEnd)}</td>
+                </tr>
+
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>7. CREW REPORT</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.crew)}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>8. REFUELING DONE</td>
+                  <td className="rpt-cell-val">{formatTimeLT(formData.refuel)}</td>
+                </tr>
+
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>9. LAST BAGGAGE REPORT</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.lbag)}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>10. BOARDING PERMITTED</td>
+                  <td className="rpt-cell-val">{formatTimeLT(formData.permit)}</td>
+                </tr>
+
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>11. FIRST BUS/PAX REPORT</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.firstBusPax)}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>12. LAST PAX ONBOARD</td>
+                  <td className="rpt-cell-val">{formatTimeLT(formData.pax)}</td>
+                </tr>
+
+                <tr>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>13. TRIM SUBMITTED</td>
+                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.trimSubmitted)}</td>
+                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>14. TRIM SIGNED</td>
+                  <td className="rpt-cell-val">{formatTimeLT(formData.trimSigned)}</td>
+                </tr>
+
+                {/* Optional Baggage Fields: 15. PRIORITY BAG, 16. VIP BAG, 17. OFFLOAD BAG */}
+                {(() => {
+                  const pBag = formatBagCount(formData.priorityBag);
+                  const vBag = formatBagCount(formData.vipBag);
+                  const oBag = formatBagCount(formData.offloadBag);
+
+                  const items: { label: string; val: string }[] = [];
+
+                  if (pBag) items.push({ label: '15. PRIORITY BAG', val: pBag });
+                  if (vBag) items.push({ label: '16. VIP BAG', val: vBag });
+                  if (oBag) items.push({ label: '17. OFFLOAD BAG', val: oBag });
+
+                  const rows = [];
+                  for (let i = 0; i < items.length; i += 2) {
+                    const item1 = items[i];
+                    const item2 = items[i + 1];
+                    rows.push(
+                      <tr key={`milestone-row-${i}`}>
+                        <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>{item1.label}</td>
+                        <td className="rpt-cell-val" style={{ width: '18%', borderRight: item2 ? '3px solid #000' : 'none' }}>{item1.val}</td>
+                        {item2 ? (
+                          <>
+                            <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>{item2.label}</td>
+                            <td className="rpt-cell-val" style={{ width: '18%' }}>{item2.val}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}></td>
+                            <td className="rpt-cell-val" style={{ width: '18%' }}></td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  }
+                  return rows;
+                })()}
+              </>
+            )}
           </tbody>
         </table>
 

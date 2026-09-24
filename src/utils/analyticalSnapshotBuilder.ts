@@ -438,3 +438,98 @@ export function buildDailyAnalyticalSnapshot(
     }
   };
 }
+
+/**
+ * Builds a dedicated outstation analytical snapshot for non-DAC stations with 30-day retention
+ */
+export function buildOutstationAnalyticalSnapshot(
+  reports: SavedReport[],
+  targetDateIso: string,
+  savedBy: { name: string; id: string } = { name: 'Automated Daily System (23:55)', id: 'SYSTEM_2355' }
+): DailyAnalyticalSnapshot {
+  const dateDisplay = formatIsoToDisplay(targetDateIso);
+  const now = Date.now();
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const expiresAt = now + THIRTY_DAYS_MS;
+
+  // Filter outstation reports matching date
+  const outstationReports = reports.filter((r) => {
+    const stn = (r.formData?.station || (r as any).station || '').toUpperCase();
+    const dRoute = (r.formData?.deptRoute || r.route || '').toUpperCase();
+    const origin = dRoute.split('-')[0]?.trim();
+    const isOut = (stn && stn !== 'DAC') || (origin && origin !== 'DAC');
+
+    const fDate = r.formData?.date || r.date || '';
+    const rIso = parseDateToIso(fDate);
+    const isDateMatch = rIso === targetDateIso;
+
+    return isOut && isDateMatch;
+  });
+
+  // Deduplicate by flight key
+  const uniqueReportsMap = new Map<string, SavedReport>();
+  outstationReports.forEach((r) => {
+    const key = r.id || `${r.flight}_${r.formData?.deptFlt}_${r.formData?.station}`;
+    if (!uniqueReportsMap.has(key)) {
+      uniqueReportsMap.set(key, r);
+    }
+  });
+  const dedupedReports = Array.from(uniqueReportsMap.values());
+
+  let totalFlights = dedupedReports.length;
+  let onTime = 0;
+  let groundMinsSum = 0;
+  let groundCount = 0;
+  let totalVipPax = 0;
+  let totalVipBags = 0;
+  let totalMaasPax = 0;
+  let totalPriorityBags = 0;
+  let totalFireArms = 0;
+  let totalRushBags = 0;
+
+  dedupedReports.forEach((r) => {
+    const f = r.formData || ({} as any);
+    const status = (f.status || (r as any).status || '').toUpperCase();
+    if (!status.includes('DELAY')) onTime++;
+
+    const gnd = parseInt(f.ground, 10);
+    if (!isNaN(gnd) && gnd > 0) {
+      groundMinsSum += gnd;
+      groundCount++;
+    }
+
+    totalVipPax += parseInt(f.vipPax, 10) || 0;
+    totalVipBags += parseInt(f.vipBag, 10) || 0;
+    totalMaasPax += parseInt(f.maasPax, 10) || 0;
+    totalPriorityBags += parseInt(f.priorityBag, 10) || 0;
+    totalFireArms += parseInt(f.fireArms, 10) || 0;
+    totalRushBags += parseInt(f.rushBag, 10) || 0;
+  });
+
+  const otpRate = totalFlights > 0 ? `${Math.round((onTime / totalFlights) * 100)}%` : '100%';
+  const avgGround = groundCount > 0 ? `${Math.round(groundMinsSum / groundCount)} MIN` : 'ON GROUND';
+
+  return {
+    id: `SNAPSHOT_${targetDateIso}_OUTSTATION`,
+    dateIso: targetDateIso,
+    dateDisplay,
+    station: 'OUTSTATION',
+    savedAt: now,
+    savedBy,
+    expiresAt,
+    totalReportsCount: totalFlights,
+    reportsSnapshot: dedupedReports,
+    outstationAnalyticalData: {
+      totalFlights,
+      otpRate,
+      avgGround,
+      totalVipPax,
+      totalVipBags,
+      totalMaasPax,
+      totalPriorityBags,
+      totalFireArms,
+      totalRushBags
+    }
+  };
+}
+

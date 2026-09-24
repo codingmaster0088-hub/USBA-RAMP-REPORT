@@ -27,7 +27,7 @@ import {
   logUserActivityToFirestore,
   saveDailyAnalyticalSnapshotToFirestore
 } from './lib/firebase';
-import { parseDateToIso, buildDailyAnalyticalSnapshot, cleanFlightNum } from './utils/analyticalSnapshotBuilder';
+import { parseDateToIso, buildDailyAnalyticalSnapshot, buildOutstationAnalyticalSnapshot, cleanFlightNum } from './utils/analyticalSnapshotBuilder';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { LiveMonitor } from './components/LiveMonitor';
@@ -317,6 +317,59 @@ export default function App() {
       unsubLogs();
     };
   }, []);
+
+  // Automated 23:55 Daily Outstation Analytical Snapshot Auto-Save to Firestore (30-day retention)
+  // Saves all outstation departure reports created till 23:55 every day, starting from today
+  useEffect(() => {
+    const checkAndAutoSaveOutstations = async () => {
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+
+      // Check if 23:55 or later today
+      const is2355OrLater = hours === 23 && minutes >= 55;
+      const autoSaveKey = `usb_auto_saved_outstation_2355_${todayIso}`;
+      const initSaveKey = `usb_auto_saved_outstation_init_${todayIso}`;
+
+      // 1. Initial snapshot sync for TODAY so data save starts from today immediately
+      if (!sessionStorage.getItem(initSaveKey)) {
+        try {
+          const snap = buildOutstationAnalyticalSnapshot(savedReports, todayIso, {
+            name: 'Outstation System Init',
+            id: 'INIT_TODAY'
+          });
+          if (snap.totalReportsCount >= 0) {
+            await saveDailyAnalyticalSnapshotToFirestore(snap);
+            sessionStorage.setItem(initSaveKey, 'true');
+            console.log(`[Auto Database] Outstation snapshot initialized in database for ${todayIso}`);
+          }
+        } catch (e) {
+          console.warn('[Auto Database] Init save error:', e);
+        }
+      }
+
+      // 2. Strict 23:55 automated daily snapshot archive for 30-day retention
+      if (is2355OrLater && !localStorage.getItem(autoSaveKey)) {
+        try {
+          const snapshot = buildOutstationAnalyticalSnapshot(savedReports, todayIso, {
+            name: 'Automated Daily System (23:55)',
+            id: 'SYSTEM_2355'
+          });
+          await saveDailyAnalyticalSnapshotToFirestore(snapshot);
+          localStorage.setItem(autoSaveKey, 'true');
+          console.log(`[Auto 23:55] Outstation reports saved automatically to database for 30 days retention: ${todayIso}`);
+        } catch (e) {
+          console.error('[Auto 23:55] Failed to save outstation daily snapshot:', e);
+        }
+      }
+    };
+
+    // Run immediately and then every 30 seconds
+    checkAndAutoSaveOutstations();
+    const interval = setInterval(checkAndAutoSaveOutstations, 30000);
+    return () => clearInterval(interval);
+  }, [savedReports]);
 
   // Show Toast after login auto-reload
   useEffect(() => {

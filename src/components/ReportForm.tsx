@@ -170,14 +170,11 @@ export const checkPairTiming = (
   };
 };
 
-export const getAllTimingErrors = (form: RampReportFormData): TimingErrorDetail[] => {
+export const getAllTimingErrors = (form: RampReportFormData, isOutstation?: boolean): TimingErrorDetail[] => {
   const errors: TimingErrorDetail[] = [];
-  const pairs: Array<'security' | 'cleaning' | 'catering' | 'boarding'> = [
-    'security',
-    'cleaning',
-    'catering',
-    'boarding'
-  ];
+  const pairs: Array<'security' | 'cleaning' | 'catering' | 'boarding'> = isOutstation
+    ? ['security', 'cleaning', 'boarding']
+    : ['security', 'cleaning', 'catering', 'boarding'];
   for (const p of pairs) {
     const err = checkPairTiming(p, form);
     if (err) errors.push(err);
@@ -302,8 +299,12 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       pax: '',
       trimSubmitted: '',
       trimSigned: '',
-      priorityBag: '',
+      vipPax: '',
       vipBag: '',
+      maasPax: '',
+      priorityBag: '',
+      fireArms: '',
+      rushBag: '',
       offloadBag: '',
       ground: '',
       station: userStation as any
@@ -566,21 +567,23 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     if (!formData.co.trim()) skipped.push('C/OFF (LT)');
     if (!formData.ab.trim()) skipped.push('A/B (LT)');
 
-    // Turnaround Milestones (14 fields)
+    // Turnaround Milestones
     if (!formData.securitySt?.trim()) skipped.push('1. SECURITY CHECK ST');
     if (!formData.securityEnd?.trim()) skipped.push('2. SECURITY CHECK END');
     if (!formData.cleaningSt?.trim()) skipped.push('3. CLEANING START');
     if (!formData.cleaningEnd?.trim()) skipped.push('4. CLEANING END');
-    if (!formData.cateringSt?.trim()) skipped.push('5. CATERING START');
-    if (!formData.cateringEnd?.trim()) skipped.push('6. CATERING END');
-    if (!formData.crew.trim()) skipped.push('7. CREW REPORT');
-    if (!formData.refuel.trim()) skipped.push('8. REFUELING DONE');
-    if (!formData.lbag.trim()) skipped.push('9. LAST BAGGAGE REPORT');
-    if (!formData.permit.trim()) skipped.push('10. BOARDING PERMITTED');
-    if (!formData.firstBusPax?.trim()) skipped.push('11. FIRST BUS/PAX REPORT');
-    if (!formData.pax.trim()) skipped.push('12. LAST PAX ONBOARD');
-    if (!formData.trimSubmitted?.trim()) skipped.push('13. TRIM SUBMITTED');
-    if (!formData.trimSigned?.trim()) skipped.push('14. TRIM SIGNED');
+    if (!isOutstation) {
+      if (!formData.cateringSt?.trim()) skipped.push('5. CATERING START');
+      if (!formData.cateringEnd?.trim()) skipped.push('6. CATERING END');
+      if (!formData.crew.trim()) skipped.push('7. CREW REPORT');
+    }
+    if (!formData.refuel.trim()) skipped.push(isOutstation ? '5. REFUELING DONE' : '8. REFUELING DONE');
+    if (!formData.lbag.trim()) skipped.push(isOutstation ? '6. LAST BAGGAGE REPORT' : '9. LAST BAGGAGE REPORT');
+    if (!formData.permit.trim()) skipped.push(isOutstation ? '7. BOARDING PERMITTED' : '10. BOARDING PERMITTED');
+    if (!formData.firstBusPax?.trim()) skipped.push(isOutstation ? '8. FIRST BUS/PAX REPORT' : '11. FIRST BUS/PAX REPORT');
+    if (!formData.pax.trim()) skipped.push(isOutstation ? '9. LAST PAX ONBOARD' : '12. LAST PAX ONBOARD');
+    if (!formData.trimSubmitted?.trim()) skipped.push(isOutstation ? '10. TRIM SUBMITTED' : '13. TRIM SUBMITTED');
+    if (!formData.trimSigned?.trim()) skipped.push(isOutstation ? '11. TRIM SIGNED' : '14. TRIM SIGNED');
 
     // Delay Remarks if Flight Status is strictly DELAY
     const statusUpper = (formData.status || '').toUpperCase();
@@ -607,7 +610,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       return;
     }
 
-    const timingErrors = getAllTimingErrors(formData);
+    const timingErrors = getAllTimingErrors(formData, isOutstation);
     if (timingErrors.length > 0) {
       setTimingErrorsList(timingErrors);
       setTimingErrorModalOpen(true);
@@ -636,7 +639,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       return;
     }
 
-    const timingErrors = getAllTimingErrors(formData);
+    const timingErrors = getAllTimingErrors(formData, isOutstation);
     if (timingErrors.length > 0) {
       setTimingErrorsList(timingErrors);
       setTimingErrorModalOpen(true);
@@ -909,7 +912,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   // Check if any error is active for pairs
   const hasSecurityTimingError = timingErrorsList.some((e) => e.pairKey === 'security');
   const hasCleaningTimingError = timingErrorsList.some((e) => e.pairKey === 'cleaning');
-  const hasCateringTimingError = timingErrorsList.some((e) => e.pairKey === 'catering');
+  const hasCateringTimingError = !isOutstation && timingErrorsList.some((e) => e.pairKey === 'catering');
   const hasBoardingTimingError = timingErrorsList.some((e) => e.pairKey === 'boarding');
 
   // Aircraft Registration Formatter on Blur
@@ -1660,11 +1663,18 @@ export const ReportForm: React.FC<ReportFormProps> = ({
           </div>
         )}
 
-        {/* TURNAROUND MILESTONES (17 FIELDS) */}
+        {/* TURNAROUND MILESTONES */}
         <div className="space-y-2.5 pt-2 border-t border-slate-800">
-          <label className="text-[10px] font-extrabold text-amber-300 uppercase tracking-wider block">
-            TURNAROUND MILESTONES (17 FIELDS)
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-extrabold text-amber-300 uppercase tracking-wider block">
+              {isOutstation ? `TURNAROUND MILESTONES (${currentStation} OUT STATION)` : 'TURNAROUND MILESTONES (17 FIELDS)'}
+            </label>
+            {isOutstation && (
+              <span className="text-[9.5px] font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
+                NO CATERING AT {currentStation} (HUB LOADED)
+              </span>
+            )}
+          </div>
 
           <div className="grid grid-cols-2 gap-2">
             {/* 1. SECURITY CHECK ST */}
@@ -1827,122 +1837,127 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 5. CATERING START */}
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                5. CATERING START
-              </label>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setEPreset('cateringSt')}
-                  className={`px-2 py-1 font-extrabold text-[10px] rounded-lg border transition-all cursor-pointer ${
-                    formData.cateringSt === 'EARLIER'
-                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md'
-                      : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
-                  }`}
-                  title="Set status to EARLIER"
-                >
-                  E
-                </button>
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={formData.cateringSt || ''}
-                    onChange={(e) => handleChange('cateringSt', e.target.value)}
-                    onBlur={() => handleMilestoneBlur('catering')}
-                    placeholder="1325"
-                    className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
-                      hasCateringTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
-                    }`}
-                  />
+            {/* 5 & 6. CATERING START & END (ONLY FOR HUB STATION DAC) */}
+            {!isOutstation && (
+              <>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
+                    5. CATERING START
+                  </label>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setEPreset('cateringSt')}
+                      className={`px-2 py-1 font-extrabold text-[10px] rounded-lg border transition-all cursor-pointer ${
+                        formData.cateringSt === 'EARLIER'
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md'
+                          : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
+                      }`}
+                      title="Set status to EARLIER"
+                    >
+                      E
+                    </button>
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={formData.cateringSt || ''}
+                        onChange={(e) => handleChange('cateringSt', e.target.value)}
+                        onBlur={() => handleMilestoneBlur('catering')}
+                        placeholder="1325"
+                        className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
+                          hasCateringTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setNowTime('cateringSt')}
+                        className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                      >
+                        🕒
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
+                    6. CATERING END
+                  </label>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setEPreset('cateringEnd')}
+                      className={`px-2 py-1 font-extrabold text-[10px] rounded-lg border transition-all cursor-pointer ${
+                        formData.cateringEnd === 'EARLIER'
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md'
+                          : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
+                      }`}
+                      title="Set status to EARLIER"
+                    >
+                      E
+                    </button>
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={formData.cateringEnd || ''}
+                        onChange={(e) => handleChange('cateringEnd', e.target.value)}
+                        onBlur={() => handleMilestoneBlur('catering')}
+                        placeholder="1335"
+                        className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
+                          hasCateringTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setNowTime('cateringEnd')}
+                        className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                      >
+                        🕒
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* CREW REPORT (ONLY FOR HUB STATION DAC - CREW STAYS ONBOARD IN OUTSTATION) */}
+            {!isOutstation && (
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
+                  7. CREW REPORT
+                </label>
+                <div className="flex gap-1">
                   <button
                     type="button"
-                    onClick={() => setNowTime('cateringSt')}
-                    className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                    onClick={() => setOBPreset('crew')}
+                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-[10px] rounded-lg border border-slate-700"
                   >
-                    🕒
+                    OB
                   </button>
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={formData.crew}
+                      onChange={(e) => handleChange('crew', e.target.value)}
+                      placeholder="1320"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setNowTime('crew')}
+                      className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
+                    >
+                      🕒
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* 6. CATERING END */}
+            {/* REFUELING DONE */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                6. CATERING END
-              </label>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setEPreset('cateringEnd')}
-                  className={`px-2 py-1 font-extrabold text-[10px] rounded-lg border transition-all cursor-pointer ${
-                    formData.cateringEnd === 'EARLIER'
-                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md'
-                      : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
-                  }`}
-                  title="Set status to EARLIER"
-                >
-                  E
-                </button>
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={formData.cateringEnd || ''}
-                    onChange={(e) => handleChange('cateringEnd', e.target.value)}
-                    onBlur={() => handleMilestoneBlur('catering')}
-                    placeholder="1335"
-                    className={`w-full bg-slate-950 border rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none ${
-                      hasCateringTimingError ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-800'
-                    }`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setNowTime('cateringEnd')}
-                    className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
-                  >
-                    🕒
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* 7. CREW REPORT */}
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                7. CREW REPORT
-              </label>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setOBPreset('crew')}
-                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-[10px] rounded-lg border border-slate-700"
-                >
-                  OB
-                </button>
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={formData.crew}
-                    onChange={(e) => handleChange('crew', e.target.value)}
-                    placeholder="1320"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-2 pr-7 py-2 text-xs text-white font-mono focus:border-amber-400 outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setNowTime('crew')}
-                    className="absolute right-1 top-1 bottom-1 text-amber-400 text-xs"
-                  >
-                    🕒
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* 8. REFUELING DONE */}
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                8. REFUELING DONE
+                {isOutstation ? '5. REFUELING DONE' : '8. REFUELING DONE'}
               </label>
               <div className="flex gap-1">
                 <button
@@ -1971,10 +1986,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 9. LAST BAGGAGE REPORT */}
+            {/* LAST BAGGAGE REPORT */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                9. LAST BAGGAGE REPORT
+                {isOutstation ? '6. LAST BAGGAGE REPORT' : '9. LAST BAGGAGE REPORT'}
               </label>
               <div className="relative">
                 <input
@@ -1994,10 +2009,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 10. BOARDING PERMITTED */}
+            {/* BOARDING PERMITTED */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                10. BOARDING PERMITTED
+                {isOutstation ? '7. BOARDING PERMITTED' : '10. BOARDING PERMITTED'}
               </label>
               <div className="relative">
                 <input
@@ -2020,10 +2035,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 11. FIRST BUS/PAX REPORT */}
+            {/* FIRST BUS/PAX REPORT */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                11. FIRST BUS/PAX REPORT
+                {isOutstation ? '8. FIRST BUS/PAX REPORT' : '11. FIRST BUS/PAX REPORT'}
               </label>
               <div className="relative">
                 <input
@@ -2043,10 +2058,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 12. LAST PAX ONBOARD */}
+            {/* LAST PAX ONBOARD */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                12. LAST PAX ONBOARD
+                {isOutstation ? '9. LAST PAX ONBOARD' : '12. LAST PAX ONBOARD'}
               </label>
               <div className="relative">
                 <input
@@ -2069,10 +2084,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 13. TRIM SUBMITTED */}
+            {/* TRIM SUBMITTED */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                13. TRIM SUBMITTED
+                {isOutstation ? '10. TRIM SUBMITTED' : '13. TRIM SUBMITTED'}
               </label>
               <div className="relative">
                 <input
@@ -2092,10 +2107,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 14. TRIM SIGNED */}
+            {/* TRIM SIGNED */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                14. TRIM SIGNED
+                {isOutstation ? '11. TRIM SIGNED' : '14. TRIM SIGNED'}
               </label>
               <div className="relative">
                 <input
@@ -2115,50 +2130,162 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               </div>
             </div>
 
-            {/* 15. PRIORITY BAG (OPTIONAL) */}
-            <div>
-              <label className="text-[10px] font-bold text-cyan-300 uppercase mb-1 block">
-                15. PRIORITY BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={formData.priorityBag || ''}
-                onChange={(e) => handleChange('priorityBag', e.target.value)}
-                placeholder="OPTIONAL"
-                className="w-full bg-slate-950 border border-cyan-800/60 rounded-xl px-3 py-2 text-xs text-cyan-300 font-mono font-bold focus:border-cyan-400 outline-none placeholder:text-slate-600 placeholder:font-mono"
-              />
-            </div>
+            {/* OUTSTATION FIELDS IMMEDIATELY AFTER TRIM SIGNED */}
+            {isOutstation ? (
+              <>
+                {/* 1. VIP PAX (VIP PASSENGER NUMBERS) */}
+                <div>
+                  <label className="text-[10px] font-bold text-amber-300 uppercase mb-1 block">
+                    VIP PAX <span className="text-[9px] text-slate-400 font-normal">(PAX NUMBER)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.vipPax || ''}
+                    onChange={(e) => handleChange('vipPax', e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-amber-800/60 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono font-bold focus:border-amber-400 outline-none placeholder:text-slate-600"
+                  />
+                </div>
 
-            {/* 16. VIP BAG (OPTIONAL) */}
-            <div>
-              <label className="text-[10px] font-bold text-amber-300 uppercase mb-1 block">
-                16. VIP BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={formData.vipBag || ''}
-                onChange={(e) => handleChange('vipBag', e.target.value)}
-                placeholder="OPTIONAL"
-                className="w-full bg-slate-950 border border-amber-800/60 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono font-bold focus:border-amber-400 outline-none placeholder:text-slate-600 placeholder:font-mono"
-              />
-            </div>
+                {/* 2. VIP BAG (ONLY NUMBER CAN INPUT) */}
+                <div>
+                  <label className="text-[10px] font-bold text-amber-300 uppercase mb-1 block">
+                    VIP BAG <span className="text-[9px] text-slate-400 font-normal">(ONLY NUMBER)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.vipBag || ''}
+                    onChange={(e) => handleChange('vipBag', e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-amber-800/60 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono font-bold focus:border-amber-400 outline-none placeholder:text-slate-600"
+                  />
+                </div>
 
-            {/* 17. OFFLOAD BAG (OPTIONAL) */}
-            <div className="col-span-2 sm:col-span-1">
-              <label className="text-[10px] font-bold text-rose-300 uppercase mb-1 block">
-                17. OFFLOAD BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={formData.offloadBag || ''}
-                onChange={(e) => handleChange('offloadBag', e.target.value)}
-                placeholder="OPTIONAL"
-                className="w-full bg-slate-950 border border-rose-800/60 rounded-xl px-3 py-2 text-xs text-rose-300 font-mono font-bold focus:border-rose-400 outline-none placeholder:text-slate-600 placeholder:font-mono"
-              />
-            </div>
+                {/* 3. MAAS/PRIORITY PAX (PASSENGER NUMBERS) */}
+                <div>
+                  <label className="text-[10px] font-bold text-cyan-300 uppercase mb-1 block">
+                    MAAS/PRIORITY PAX <span className="text-[9px] text-slate-400 font-normal">(PAX NUMBER)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.maasPax || ''}
+                    onChange={(e) => handleChange('maasPax', e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-cyan-800/60 rounded-xl px-3 py-2 text-xs text-cyan-300 font-mono font-bold focus:border-cyan-400 outline-none placeholder:text-slate-600"
+                  />
+                </div>
+
+                {/* 4. PRIORITY BAG (ONLY NUMBER CAN INPUT) */}
+                <div>
+                  <label className="text-[10px] font-bold text-cyan-300 uppercase mb-1 block">
+                    PRIORITY BAG <span className="text-[9px] text-slate-400 font-normal">(ONLY NUMBER)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.priorityBag || ''}
+                    onChange={(e) => handleChange('priorityBag', e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-cyan-800/60 rounded-xl px-3 py-2 text-xs text-cyan-300 font-mono font-bold focus:border-cyan-400 outline-none placeholder:text-slate-600"
+                  />
+                </div>
+
+                {/* 5. FIRE ARMS (NUMBER OF FIRE ARMS IF PASSENGER HAVE) */}
+                <div>
+                  <label className="text-[10px] font-bold text-rose-300 uppercase mb-1 block">
+                    FIRE ARMS <span className="text-[9px] text-slate-400 font-normal">(IF PASSENGER HAVE)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.fireArms || ''}
+                    onChange={(e) => handleChange('fireArms', e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-rose-800/60 rounded-xl px-3 py-2 text-xs text-rose-300 font-mono font-bold focus:border-rose-400 outline-none placeholder:text-slate-600"
+                  />
+                </div>
+
+                {/* 6. RUSH BAG (ONLY NUMBER) */}
+                <div>
+                  <label className="text-[10px] font-bold text-purple-300 uppercase mb-1 block">
+                    RUSH BAG <span className="text-[9px] text-slate-400 font-normal">(ONLY NUMBER)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.rushBag || ''}
+                    onChange={(e) => handleChange('rushBag', e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-purple-800/60 rounded-xl px-3 py-2 text-xs text-purple-300 font-mono font-bold focus:border-purple-400 outline-none placeholder:text-slate-600"
+                  />
+                </div>
+
+                {/* OFFLOAD BAG (OPTIONAL) */}
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
+                    OFFLOAD BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.offloadBag || ''}
+                    onChange={(e) => handleChange('offloadBag', e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono font-bold focus:border-slate-500 outline-none placeholder:text-slate-600"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                {/* 15. PRIORITY BAG (OPTIONAL) FOR DAC */}
+                <div>
+                  <label className="text-[10px] font-bold text-cyan-300 uppercase mb-1 block">
+                    15. PRIORITY BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.priorityBag || ''}
+                    onChange={(e) => handleChange('priorityBag', e.target.value)}
+                    placeholder="OPTIONAL"
+                    className="w-full bg-slate-950 border border-cyan-800/60 rounded-xl px-3 py-2 text-xs text-cyan-300 font-mono font-bold focus:border-cyan-400 outline-none placeholder:text-slate-600 placeholder:font-mono"
+                  />
+                </div>
+
+                {/* 16. VIP BAG (OPTIONAL) FOR DAC */}
+                <div>
+                  <label className="text-[10px] font-bold text-amber-300 uppercase mb-1 block">
+                    16. VIP BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.vipBag || ''}
+                    onChange={(e) => handleChange('vipBag', e.target.value)}
+                    placeholder="OPTIONAL"
+                    className="w-full bg-slate-950 border border-amber-800/60 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono font-bold focus:border-amber-400 outline-none placeholder:text-slate-600 placeholder:font-mono"
+                  />
+                </div>
+
+                {/* 17. OFFLOAD BAG (OPTIONAL) FOR DAC */}
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-[10px] font-bold text-rose-300 uppercase mb-1 block">
+                    17. OFFLOAD BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.offloadBag || ''}
+                    onChange={(e) => handleChange('offloadBag', e.target.value)}
+                    placeholder="OPTIONAL"
+                    className="w-full bg-slate-950 border border-rose-800/60 rounded-xl px-3 py-2 text-xs text-rose-300 font-mono font-bold focus:border-rose-400 outline-none placeholder:text-slate-600 placeholder:font-mono"
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
 

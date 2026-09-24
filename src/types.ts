@@ -68,10 +68,14 @@ export interface RampReportFormData {
   trimSubmitted?: string; // TRIM SUBMITTED
   trimSigned?: string; // TRIM SIGNED
 
-  // Additional Optional Baggage Fields
-  priorityBag?: string; // 14. PRIORITY BAG
-  vipBag?: string; // 15. VIP BAG
-  offloadBag?: string; // 16. OFFLOAD BAG
+  // Additional Passenger & Baggage Fields (Outstation & Hub)
+  vipPax?: string; // VIP PAX (VIP Passenger Numbers)
+  vipBag?: string; // VIP BAG (Only number)
+  maasPax?: string; // MAAS/PRIORITY PAX (Passenger Numbers)
+  priorityBag?: string; // PRIORITY BAG (Only number)
+  fireArms?: string; // FIRE ARMS (Number of fire arms)
+  rushBag?: string; // RUSH BAG (Number of rush bags)
+  offloadBag?: string; // OFFLOAD BAG (Optional)
 
   // Ground Time (Auto calculated if ROUND, "ON GROUND" if DIRECT)
   ground: string;
@@ -181,5 +185,16 @@ export interface DailyAnalyticalSnapshot {
       reportedLate: number;
       flightDataStr: string;
     }>;
+  };
+  outstationAnalyticalData?: {
+    totalFlights: number;
+    otpRate: string;
+    avgGround: string;
+    totalVipPax: number;
+    totalVipBags: number;
+    totalMaasPax: number;
+    totalPriorityBags: number;
+    totalFireArms: number;
+    totalRushBags: number;
   };
 }
