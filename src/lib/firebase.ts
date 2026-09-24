@@ -250,7 +250,7 @@ export async function deleteNoticeFromFirestore(id: string) {
   }
 }
 
-// Real-time listener for User Activity Logs (Auto-vanish after 48 hours)
+// Real-time listener for User Activity Logs (Auto-vanish after 48 hours in UI)
 export function subscribeToUserLogs(
   onUpdate: (logs: UserLog[]) => void,
   onError?: (err: any) => void
@@ -261,30 +261,22 @@ export function subscribeToUserLogs(
       q,
       (snapshot) => {
         const logs: UserLog[] = [];
-        const seenSignatures = new Set<string>();
+        const seenIds = new Set<string>();
         const now = Date.now();
 
         snapshot.forEach((docSnap) => {
           const item = docSnap.data() as UserLog;
+          if (!item) return;
+          const logId = item.id || docSnap.id;
           const createdTs = item.createdAt || getCreatedTimestamp(item);
           const ageMs = now - createdTs;
 
-          if (ageMs <= FORTY_EIGHT_HOURS_MS) {
-            // Deduplicate logs created within 2 minutes for same user, action and details
-            const timeWindow = Math.floor(createdTs / 120000); // 2 minute bucket
-            const sig = `${item.userId || ''}_${item.action || ''}_${(item.details || '').trim()}_${timeWindow}`;
-
-            if (!seenSignatures.has(sig) && !seenSignatures.has(item.id)) {
-              seenSignatures.add(sig);
-              seenSignatures.add(item.id);
-              logs.push({ ...item, createdAt: createdTs });
-            } else {
-              // Auto-purge duplicate log doc from Firestore
-              deleteDoc(doc(db, 'userLogs', item.id)).catch(() => {});
+          // Keep logs from the last 72 hours for thorough administrative audit
+          if (ageMs <= 72 * 60 * 60 * 1000) {
+            if (!seenIds.has(logId)) {
+              seenIds.add(logId);
+              logs.push({ ...item, id: logId, createdAt: createdTs });
             }
-          } else {
-            // Auto-purge log from Firestore if older than 48 hours
-            deleteDoc(doc(db, 'userLogs', item.id)).catch(() => {});
           }
         });
 

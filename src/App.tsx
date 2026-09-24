@@ -371,16 +371,26 @@ export default function App() {
     };
   }, [user]);
 
-  // Handle Login (Saves credentials, logs activity, and auto-reloads page for latest web bundle)
-  const handleLogin = (newUser: UserProfile) => {
+  // Automatic Activity Logging when User Opens/Enters App with Existing Session
+  useEffect(() => {
+    if (!user) return;
+    const sessionKey = `usb_session_entry_${user.id}_${new Date().toISOString().slice(0, 13)}`; // Once per hour per user
+    if (!sessionStorage.getItem(sessionKey)) {
+      sessionStorage.setItem(sessionKey, 'true');
+      logUserAction('LOGIN', `App opened with active session at station ${user.station}`, user);
+    }
+  }, [user?.id, user?.station]);
+
+  // Handle Login (Saves credentials and securely logs activity to Firestore)
+  const handleLogin = async (newUser: UserProfile) => {
     setUser(newUser);
     localStorage.setItem('usb_user', JSON.stringify(newUser));
     localStorage.setItem('usb_last_activity', Date.now().toString());
     sessionStorage.setItem('usb_show_login_toast', JSON.stringify({ name: newUser.name, station: newUser.station }));
-    logUserAction('LOGIN', `Logged in to system at station ${newUser.station}`, newUser);
+    showToast(`Welcome ${newUser.name}`, `Station: ${newUser.station}`, 'success');
     
-    // Auto-refresh page to ensure user gets latest code update without manual refresh
-    window.location.reload();
+    // Await logging so the Firestore write request completes cleanly before any state transitions
+    await logUserAction('LOGIN', `Logged in to system at station ${newUser.station}`, newUser);
   };
 
   // Handle Logout
