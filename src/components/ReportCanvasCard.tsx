@@ -27,10 +27,46 @@ const formatTimeLT = (val?: string) => {
   return `${trimmed} LT`;
 };
 
+export const isFieldEmptyOrNil = (val?: string | number): boolean => {
+  if (val === undefined || val === null) return true;
+  const str = String(val).trim();
+  if (str === '') return true;
+  const upper = str.toUpperCase();
+  if (
+    upper === '0' ||
+    upper === '00' ||
+    upper === '000' ||
+    upper === 'NIL' ||
+    upper === 'NIL.' ||
+    upper === 'N/A' ||
+    upper === 'NA' ||
+    upper === 'NONE' ||
+    upper === '-' ||
+    upper === '--' ||
+    upper === '0 / NIL' ||
+    upper === '0/NIL' ||
+    upper === 'NIL / 0' ||
+    upper === 'NIL/0' ||
+    upper === '0 / NIL / BLANK' ||
+    upper === 'N I L' ||
+    upper === 'NULL'
+  ) {
+    return true;
+  }
+  if (/^0+$/.test(str)) {
+    return true;
+  }
+  const num = Number(str);
+  if (!isNaN(num) && num === 0) {
+    return true;
+  }
+  return false;
+};
+
 const formatBagCount = (val?: string) => {
-  if (!val || !val.trim()) return null;
-  const num = parseInt(val.trim(), 10);
-  if (isNaN(num)) return null;
+  if (isFieldEmptyOrNil(val)) return null;
+  const num = parseInt(val!.trim(), 10);
+  if (isNaN(num) || num <= 0) return null;
   const padNum = num < 10 ? `0${num}` : `${num}`;
   const unit = num === 1 ? 'PC' : 'PCS';
   return `${padNum} ${unit}`;
@@ -486,33 +522,70 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
                   <td className="rpt-cell-val">{formatTimeLT(formData.trimSubmitted)}</td>
                 </tr>
 
-                <tr>
-                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>11. TRIM SIGNED</td>
-                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formatTimeLT(formData.trimSigned)}</td>
-                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>VIP PAX</td>
-                  <td className="rpt-cell-val">{formData.vipPax || '0'}</td>
-                </tr>
+                {(() => {
+                  const extraOutstationBoxes = [
+                    { label: '12. VIP PAX', val: formData.vipPax },
+                    { label: '13. VIP BAG', val: formData.vipBag },
+                    { label: '14. MAAS/PRIORITY PAX', val: formData.maasPax },
+                    { label: '15. PRIORITY BAG', val: formData.priorityBag },
+                    { label: '16. FIRE ARMS', val: formData.fireArms },
+                    { label: '17. RUSH BAG', val: formData.rushBag },
+                    { label: '18. OFFLOAD BAG', val: formData.offloadBag },
+                  ];
 
-                <tr>
-                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>VIP BAG</td>
-                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.vipBag || '0'}</td>
-                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>MAAS/PRIORITY PAX</td>
-                  <td className="rpt-cell-val">{formData.maasPax || '0'}</td>
-                </tr>
+                  const activeBoxes = extraOutstationBoxes
+                    .filter((item) => !isFieldEmptyOrNil(item.val))
+                    .map((item) => ({ label: item.label, val: item.val!.trim() }));
 
-                <tr>
-                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>PRIORITY BAG</td>
-                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.priorityBag || '0'}</td>
-                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>FIRE ARMS</td>
-                  <td className="rpt-cell-val">{formData.fireArms || '0'}</td>
-                </tr>
+                  const firstActive = activeBoxes[0];
+                  const remainingActive = activeBoxes.slice(1);
 
-                <tr>
-                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>RUSH BAG</td>
-                  <td className="rpt-cell-val" style={{ borderRight: '3px solid #000' }}>{formData.rushBag || '0'}</td>
-                  <td className="rpt-cell-lbl" style={{ borderRight: '1px solid #ccc' }}>{formData.offloadBag ? 'OFFLOAD BAG' : ''}</td>
-                  <td className="rpt-cell-val">{formData.offloadBag || ''}</td>
-                </tr>
+                  const extraRows = [];
+                  for (let i = 0; i < remainingActive.length; i += 2) {
+                    const item1 = remainingActive[i];
+                    const item2 = remainingActive[i + 1];
+                    extraRows.push(
+                      <tr key={`outstation-extra-row-${i}`}>
+                        <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>{item1.label}</td>
+                        <td className="rpt-cell-val" style={{ width: '18%', borderRight: item2 ? '3px solid #000' : 'none' }}>{item1.val}</td>
+                        {item2 ? (
+                          <>
+                            <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>{item2.label}</td>
+                            <td className="rpt-cell-val" style={{ width: '18%' }}>{item2.val}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}></td>
+                            <td className="rpt-cell-val" style={{ width: '18%' }}></td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  }
+
+                  return (
+                    <>
+                      <tr>
+                        <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>11. TRIM SIGNED</td>
+                        <td className="rpt-cell-val" style={{ width: '18%', borderRight: firstActive ? '3px solid #000' : 'none' }}>
+                          {formatTimeLT(formData.trimSigned)}
+                        </td>
+                        {firstActive ? (
+                          <>
+                            <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}>{firstActive.label}</td>
+                            <td className="rpt-cell-val" style={{ width: '18%' }}>{firstActive.val}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="rpt-cell-lbl" style={{ width: '32%', borderRight: '1px solid #ccc' }}></td>
+                            <td className="rpt-cell-val" style={{ width: '18%' }}></td>
+                          </>
+                        )}
+                      </tr>
+                      {extraRows}
+                    </>
+                  );
+                })()}
               </>
             ) : (
               /* HUB DAC MILESTONES (WITH CATERING) */

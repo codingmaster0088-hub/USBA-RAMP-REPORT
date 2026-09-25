@@ -2307,107 +2307,100 @@ export const ReportForm: React.FC<ReportFormProps> = ({
             {/* OUTSTATION FIELDS IMMEDIATELY AFTER TRIM SIGNED */}
             {isOutstation ? (
               <>
-                {/* 1. VIP PAX (VIP PASSENGER NUMBERS) */}
+                {/* 12. VIP PAX (VIP PASSENGER NUMBERS) */}
                 <div>
                   <label className="text-[10px] font-bold text-amber-300 uppercase mb-1 block">
-                    VIP PAX <span className="text-[9px] text-slate-400 font-normal">(PAX NUMBER)</span>
+                    12. VIP PAX <span className="text-[9px] text-slate-400 font-normal">(PAX NUMBER)</span>
                   </label>
                   <input
-                    type="number"
-                    min="0"
+                    type="text"
                     value={formData.vipPax || ''}
-                    onChange={(e) => handleChange('vipPax', e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="0"
+                    onChange={(e) => handleChange('vipPax', e.target.value)}
+                    placeholder="0 / NIL"
                     className="w-full bg-slate-950 border border-amber-800/60 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono font-bold focus:border-amber-400 outline-none placeholder:text-slate-600"
                   />
                 </div>
 
-                {/* 2. VIP BAG (ONLY NUMBER CAN INPUT) */}
+                {/* 13. VIP BAG (ONLY NUMBER CAN INPUT) */}
                 <div>
                   <label className="text-[10px] font-bold text-amber-300 uppercase mb-1 block">
-                    VIP BAG <span className="text-[9px] text-slate-400 font-normal">(ONLY NUMBER)</span>
+                    13. VIP BAG <span className="text-[9px] text-slate-400 font-normal">(ONLY NUMBER)</span>
                   </label>
                   <input
-                    type="number"
-                    min="0"
+                    type="text"
                     value={formData.vipBag || ''}
-                    onChange={(e) => handleChange('vipBag', e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="0"
+                    onChange={(e) => handleChange('vipBag', e.target.value)}
+                    placeholder="0 / NIL"
                     className="w-full bg-slate-950 border border-amber-800/60 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono font-bold focus:border-amber-400 outline-none placeholder:text-slate-600"
                   />
                 </div>
 
-                {/* 3. MAAS/PRIORITY PAX (PASSENGER NUMBERS) */}
+                {/* 14. MAAS/PRIORITY PAX (PASSENGER NUMBERS) */}
                 <div>
                   <label className="text-[10px] font-bold text-cyan-300 uppercase mb-1 block">
-                    MAAS/PRIORITY PAX <span className="text-[9px] text-slate-400 font-normal">(PAX NUMBER)</span>
+                    14. MAAS/PRIORITY PAX <span className="text-[9px] text-slate-400 font-normal">(PAX NUMBER)</span>
                   </label>
                   <input
-                    type="number"
-                    min="0"
+                    type="text"
                     value={formData.maasPax || ''}
-                    onChange={(e) => handleChange('maasPax', e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="0"
+                    onChange={(e) => handleChange('maasPax', e.target.value)}
+                    placeholder="0 / NIL"
                     className="w-full bg-slate-950 border border-cyan-800/60 rounded-xl px-3 py-2 text-xs text-cyan-300 font-mono font-bold focus:border-cyan-400 outline-none placeholder:text-slate-600"
                   />
                 </div>
 
-                {/* 4. PRIORITY BAG (ONLY NUMBER CAN INPUT) */}
+                {/* 15. PRIORITY BAG (ONLY NUMBER CAN INPUT) */}
                 <div>
                   <label className="text-[10px] font-bold text-cyan-300 uppercase mb-1 block">
-                    PRIORITY BAG <span className="text-[9px] text-slate-400 font-normal">(ONLY NUMBER)</span>
+                    15. PRIORITY BAG <span className="text-[9px] text-slate-400 font-normal">(ONLY NUMBER)</span>
                   </label>
                   <input
-                    type="number"
-                    min="0"
+                    type="text"
                     value={formData.priorityBag || ''}
-                    onChange={(e) => handleChange('priorityBag', e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="0"
+                    onChange={(e) => handleChange('priorityBag', e.target.value)}
+                    placeholder="0 / NIL"
                     className="w-full bg-slate-950 border border-cyan-800/60 rounded-xl px-3 py-2 text-xs text-cyan-300 font-mono font-bold focus:border-cyan-400 outline-none placeholder:text-slate-600"
                   />
                 </div>
 
-                {/* 5. FIRE ARMS (NUMBER OF FIRE ARMS IF PASSENGER HAVE) */}
+                {/* 16. FIRE ARMS (NUMBER OF FIRE ARMS IF PASSENGER HAVE) */}
                 <div>
                   <label className="text-[10px] font-bold text-rose-300 uppercase mb-1 block">
-                    FIRE ARMS <span className="text-[9px] text-slate-400 font-normal">(IF PASSENGER HAVE)</span>
+                    16. FIRE ARMS <span className="text-[9px] text-slate-400 font-normal">(IF PASSENGER HAVE)</span>
                   </label>
                   <input
-                    type="number"
-                    min="0"
+                    type="text"
                     value={formData.fireArms || ''}
-                    onChange={(e) => handleChange('fireArms', e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="0"
+                    onChange={(e) => handleChange('fireArms', e.target.value)}
+                    placeholder="0 / NIL"
                     className="w-full bg-slate-950 border border-rose-800/60 rounded-xl px-3 py-2 text-xs text-rose-300 font-mono font-bold focus:border-rose-400 outline-none placeholder:text-slate-600"
                   />
                 </div>
 
-                {/* 6. RUSH BAG (ONLY NUMBER) */}
+                {/* 17. RUSH BAG (ONLY NUMBER) */}
                 <div>
                   <label className="text-[10px] font-bold text-purple-300 uppercase mb-1 block">
-                    RUSH BAG <span className="text-[9px] text-slate-400 font-normal">(ONLY NUMBER)</span>
+                    17. RUSH BAG <span className="text-[9px] text-slate-400 font-normal">(ONLY NUMBER)</span>
                   </label>
                   <input
-                    type="number"
-                    min="0"
+                    type="text"
                     value={formData.rushBag || ''}
-                    onChange={(e) => handleChange('rushBag', e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="0"
+                    onChange={(e) => handleChange('rushBag', e.target.value)}
+                    placeholder="0 / NIL"
                     className="w-full bg-slate-950 border border-purple-800/60 rounded-xl px-3 py-2 text-xs text-purple-300 font-mono font-bold focus:border-purple-400 outline-none placeholder:text-slate-600"
                   />
                 </div>
 
-                {/* OFFLOAD BAG (OPTIONAL) */}
+                {/* 18. OFFLOAD BAG (OPTIONAL) */}
                 <div className="col-span-2 sm:col-span-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
-                    OFFLOAD BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
+                    18. OFFLOAD BAG <span className="text-[9px] text-slate-500 font-normal">(OPTIONAL)</span>
                   </label>
                   <input
-                    type="number"
-                    min="0"
+                    type="text"
                     value={formData.offloadBag || ''}
-                    onChange={(e) => handleChange('offloadBag', e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="0"
+                    onChange={(e) => handleChange('offloadBag', e.target.value)}
+                    placeholder="0 / NIL"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono font-bold focus:border-slate-500 outline-none placeholder:text-slate-600"
                   />
                 </div>
