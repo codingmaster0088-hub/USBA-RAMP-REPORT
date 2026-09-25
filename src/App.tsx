@@ -640,6 +640,62 @@ export default function App() {
     }
   };
 
+  const handleBuildNextFlightFromReport = (rep: SavedReport) => {
+    // Preserve aircraft, bay, station, date, and officer, but clear flight numbers and turnaround times
+    // so previous flight data is 100% safe and the new flight is created as a clean separate flight!
+    const freshFormData: RampReportFormData = {
+      ...rep.formData,
+      deptFlt: '',
+      arvFlt: '',
+      deptRoute: '',
+      arvRoute: '',
+      std: '',
+      con: '',
+      do: '',
+      disem: '',
+      securitySt: '',
+      securityEnd: '',
+      cleaningSt: '',
+      cleaningEnd: '',
+      cateringSt: '',
+      cateringEnd: '',
+      crew: '',
+      refuel: '',
+      lbag: '',
+      permit: '',
+      pax: '',
+      firstBusPax: '',
+      trimSubmitted: '',
+      trimSigned: '',
+      dc: '',
+      co: '',
+      ab: '',
+      delayRemarks: '',
+      delayReason: '',
+      status: 'FLIGHT IS ONTIME'
+    };
+
+    setReportToEdit({
+      id: `report-new-${Date.now()}`,
+      type: rep.type,
+      mode: rep.mode,
+      flight: '',
+      date: rep.date || rep.formData?.date || '',
+      route: '',
+      timestamp: new Date().toISOString(),
+      formData: freshFormData,
+      officerName: user?.name || rep.officerName,
+      officerId: user?.id || rep.officerId
+    });
+    setReportType(rep.type);
+    setActiveTab('form');
+    showToast(
+      'Building New Separate Flight',
+      `Using aircraft ${rep.formData?.ac || ''}. Previous flight ${rep.flight} remains 100% safe & untouched!`,
+      'info'
+    );
+  };
+
   const handleDeleteReport = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this report?')) {
       const targetReport = savedReports.find((r) => r.id === id);
@@ -745,17 +801,41 @@ export default function App() {
     const finalReportDate = (data.date && data.date.trim()) ? data.date : getTodayFormattedDate();
     const reportDateIso = parseDateToIso(finalReportDate || 'TODAY');
 
-    // Find existing report by existingId OR by BOTH (flight number + same date)
-    const existingReport = existingId
-      ? savedReports.find((r) => r.id === existingId)
-      : savedReports.find((r) => {
-          const rFltClean = cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '');
-          if (rFltClean !== targetFlightClean) return false;
-          const rDateIso = parseDateToIso(r.formData?.date || r.date || '');
-          return rDateIso === reportDateIso;
-        });
+    // Strict Verification for Editing vs Building a Separate Flight:
+    // A save is ONLY an update of an existing report if:
+    // 1. existingId was provided AND
+    // 2. The report with existingId has the SAME flight number AND the SAME date as the form being saved.
+    // If either flight number or date differs, this is explicitly a NEW SEPARATED FLIGHT!
+    const origReportWithId = existingId ? savedReports.find((r) => r.id === existingId) : undefined;
+    const isSameFlightNumber = origReportWithId
+      ? cleanFlightNum(origReportWithId.flight || origReportWithId.formData?.deptFlt || origReportWithId.formData?.arvFlt || '') === targetFlightClean
+      : false;
+    const isSameDate = origReportWithId
+      ? parseDateToIso(origReportWithId.formData?.date || origReportWithId.date || '') === reportDateIso
+      : false;
 
-    const id = existingReport ? existingReport.id : (existingId || `report-bs${targetFlightClean.toLowerCase()}-${reportDateIso.replace(/-/g, '')}`);
+    const isGenuineEditOfSameFlight = Boolean(origReportWithId && isSameFlightNumber && isSameDate);
+    const isCreatingSeparatedFlight = Boolean(origReportWithId && !isGenuineEditOfSameFlight);
+
+    // Look for existing report ONLY if genuinely updating the exact same flight, OR if there's already a report
+    // with this exact target flight number and date in savedReports:
+    let existingReport: SavedReport | undefined = undefined;
+    if (isGenuineEditOfSameFlight) {
+      existingReport = origReportWithId;
+    } else {
+      existingReport = savedReports.find((r) => {
+        const rFltClean = cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '');
+        if (rFltClean !== targetFlightClean) return false;
+        const rDateIso = parseDateToIso(r.formData?.date || r.date || '');
+        return rDateIso === reportDateIso;
+      });
+    }
+
+    // Determine target ID:
+    // If updating an existing flight with same number & date, reuse its id.
+    // If creating a separated flight (or brand new flight), generate its own distinct ID so previous flight is NEVER harmed!
+    const canonicalFlightId = `report-bs${targetFlightClean.toLowerCase()}-${reportDateIso.replace(/-/g, '')}`;
+    const id = existingReport ? existingReport.id : canonicalFlightId;
 
     // Ensure this ID is removed from deleted ids cache so it is never hidden
     try {
@@ -764,8 +844,9 @@ export default function App() {
       localStorage.setItem('usb_deleted_report_ids', JSON.stringify(updatedDeleted));
     } catch (e) {}
 
-    // Merge existing formData with new updates only when updating same report
-    const mergedFormData: RampReportFormData = existingReport
+    // Merge existing formData with new updates only when updating the exact same flight.
+    // When building/editing another flight from a previous saved flight, DO NOT inherit turnaround timestamps!
+    const mergedFormData: RampReportFormData = (existingReport && !isCreatingSeparatedFlight)
       ? {
           ...existingReport.formData,
           ...data,
@@ -775,7 +856,7 @@ export default function App() {
       : { ...data, date: finalReportDate, station: activeUser.station };
 
     // Clean undefined or empty overrides if existing had value, BUT do NOT keep old delay reasons if new report is early/on-time
-    if (existingReport) {
+    if (existingReport && !isCreatingSeparatedFlight) {
       const isNewStatusEarlyOrOnTime = (data.status || '').toUpperCase().includes('EARLY') || (data.status || '').toUpperCase().includes('ON TIME');
       Object.keys(existingReport.formData).forEach((key) => {
         const k = key as keyof RampReportFormData;
@@ -783,8 +864,8 @@ export default function App() {
           if (!data[k]) {
             mergedFormData[k] = '';
           }
-        } else if ((!data[k] || data[k] === '') && existingReport.formData[k]) {
-          mergedFormData[k] = existingReport.formData[k];
+        } else if ((!data[k] || data[k] === '') && existingReport!.formData[k]) {
+          (mergedFormData as any)[k] = existingReport!.formData[k];
         }
       });
     }
@@ -808,19 +889,22 @@ export default function App() {
       route: data.deptRoute || data.arvRoute || existingReport?.route || 'N/A',
       timestamp: new Date().toISOString(),
       createdAt: Date.now(),
-      officerName: activeUser.name || existingReport?.officerName || 'RAMP OFFICER',
-      officerId: activeUser.id || existingReport?.officerId || '0000',
+      officerName: activeUser.name || (existingReport && !isCreatingSeparatedFlight ? existingReport.officerName : activeUser.name) || 'RAMP OFFICER',
+      officerId: activeUser.id || (existingReport && !isCreatingSeparatedFlight ? existingReport.officerId : activeUser.id) || '0000',
       formData: mergedFormData
     };
 
     setSavedReports((prev) => {
       const filtered = prev.filter((r) => {
+        // If this report has the specific ID being updated, replace it
         if (r.id === id) return false;
+        // If this report has the EXACT SAME flight number AND exact same date, replace it
         const rFltClean = cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '');
         const rDateIso = parseDateToIso(r.formData?.date || r.date || '');
         if (rFltClean === targetFlightClean && rDateIso === reportDateIso) {
           return false;
         }
+        // ALL other reports, including the original flight that was edited/cloned, are 100% PRESERVED!
         return true;
       });
       const updated = [newEntry, ...filtered];
@@ -830,14 +914,22 @@ export default function App() {
 
     try {
       await syncReportToFirestore(newEntry);
-      showToast(
-        existingId ? 'Report Updated & Synced Live!' : 'Report Saved & Synced Live!',
-        `${newEntry.flight} (${newEntry.route})`,
-        'success'
-      );
+      if (isCreatingSeparatedFlight) {
+        showToast(
+          `Created as Separate Flight: ${newEntry.flight}`,
+          `Previous flight ${origReportWithId?.flight || ''} remains 100% safe & untouched!`,
+          'success'
+        );
+      } else {
+        showToast(
+          existingReport ? 'Report Updated & Synced Live!' : 'Report Saved & Synced Live!',
+          `${newEntry.flight} (${newEntry.route})`,
+          'success'
+        );
+      }
       logUserAction(
         'SAVE_REPORT',
-        `${existingId ? 'Updated' : 'Saved'} turnaround report for ${newEntry.flight} (${newEntry.route})`
+        `${isCreatingSeparatedFlight ? 'Created separate flight' : existingId ? 'Updated' : 'Saved'} report for ${newEntry.flight} (${newEntry.route})`
       );
 
       // Auto-update 30-Day Daily Analytical Snapshot in Firestore Backend Storage
@@ -1010,6 +1102,7 @@ export default function App() {
             user={user}
             savedReports={savedReports}
             onEditReport={handleEditReport}
+            onBuildNextFlight={handleBuildNextFlightFromReport}
             onDeleteReport={handleDeleteReport}
             onDeleteAllReports={handleDeleteAllReports}
             onDownloadJPG={handleDownloadFromSaved}

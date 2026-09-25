@@ -15,7 +15,8 @@ import {
   Check,
   CheckSquare,
   Square,
-  Calendar
+  Calendar,
+  ShieldCheck
 } from 'lucide-react';
 import {
   RampReportFormData,
@@ -495,6 +496,95 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     } catch (e) {}
   };
 
+  // Separate flight detection:
+  // If reportToEdit was provided, but the user changed the flight number or date,
+  // we treat this as building a separate flight, ensuring the original flight is protected!
+  const originalFlightClean = reportToEdit
+    ? (reportToEdit.flight || reportToEdit.formData?.deptFlt || reportToEdit.formData?.arvFlt || '').replace(/[^0-9]/g, '')
+    : '';
+  const currentFlightClean = (formData.deptFlt || formData.arvFlt || '').replace(/[^0-9]/g, '');
+  const originalDate = reportToEdit ? (reportToEdit.formData?.date || reportToEdit.date || '').trim().toUpperCase() : '';
+  const currentDate = (formData.date || '').trim().toUpperCase();
+
+  const isBuildingSeparateFlight = Boolean(
+    reportToEdit &&
+    originalFlightClean &&
+    currentFlightClean &&
+    (originalFlightClean !== currentFlightClean || (originalDate && currentDate && originalDate !== currentDate))
+  );
+
+  const isEditingExactSameFlight = Boolean(
+    reportToEdit &&
+    originalFlightClean &&
+    currentFlightClean &&
+    originalFlightClean === currentFlightClean &&
+    (!originalDate || !currentDate || originalDate === currentDate)
+  );
+
+  // Helper to start building another flight from current report (keeps common aircraft, stn, date, clears flight & timings)
+  const handleBuildAnotherFlight = () => {
+    setFormData((prev) => ({
+      ...prev,
+      deptFlt: '',
+      arvFlt: '',
+      deptRoute: '',
+      arvRoute: '',
+      std: '',
+      con: '',
+      do: '',
+      disem: '',
+      securitySt: '',
+      securityEnd: '',
+      cleaningSt: '',
+      cleaningEnd: '',
+      cateringSt: '',
+      cateringEnd: '',
+      crew: '',
+      refuel: '',
+      lbag: '',
+      permit: '',
+      pax: '',
+      firstBusPax: '',
+      trimSubmitted: '',
+      trimSigned: '',
+      dc: '',
+      co: '',
+      ab: '',
+      delayRemarks: '',
+      delayReason: '',
+      status: 'FLIGHT IS ONTIME'
+    }));
+  };
+
+  const handleClearTurnaroundTimestamps = () => {
+    setFormData((prev) => ({
+      ...prev,
+      con: '',
+      do: '',
+      disem: '',
+      securitySt: '',
+      securityEnd: '',
+      cleaningSt: '',
+      cleaningEnd: '',
+      cateringSt: '',
+      cateringEnd: '',
+      crew: '',
+      refuel: '',
+      lbag: '',
+      permit: '',
+      pax: '',
+      firstBusPax: '',
+      trimSubmitted: '',
+      trimSigned: '',
+      dc: '',
+      co: '',
+      ab: '',
+      delayRemarks: '',
+      delayReason: '',
+      status: 'FLIGHT IS ONTIME'
+    }));
+  };
+
   const handleResetForm = () => {
     if (window.confirm('Clear all filled form fields and start a new blank report?')) {
       clearDraft();
@@ -628,7 +718,11 @@ export const ReportForm: React.FC<ReportFormProps> = ({
         resolvedType = 'INTERNATIONAL';
       }
     }
-    onSaveReport(formData, resolvedType, flightMode, reportToEdit?.id);
+
+    // CRITICAL: If flight number or date has changed while building/editing from an existing report,
+    // NEVER pass reportToEdit.id so the previous flight is NEVER overwritten or harmed!
+    const effectiveExistingId = isBuildingSeparateFlight ? undefined : reportToEdit?.id;
+    onSaveReport(formData, resolvedType, flightMode, effectiveExistingId);
   };
 
   const handleDownloadAttempt = () => {
@@ -658,7 +752,8 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       }
     }
     // Automatically save report with modified data when download is clicked
-    onSaveReport(formData, resolvedType, flightMode, reportToEdit?.id);
+    const effectiveExistingId = isBuildingSeparateFlight ? undefined : reportToEdit?.id;
+    onSaveReport(formData, resolvedType, flightMode, effectiveExistingId);
     onDownloadJPG(formData, resolvedType, flightMode);
   };
 
@@ -958,6 +1053,85 @@ export const ReportForm: React.FC<ReportFormProps> = ({
             className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider active:scale-95 transition-all cursor-pointer shrink-0 border border-red-500 shadow-sm"
           >
             CLEAR DRAFT
+          </button>
+        </div>
+      )}
+
+      {/* SEPARATE FLIGHT BANNER: Triggered when user modifies flight number or date of an existing report */}
+      {isBuildingSeparateFlight && (
+        <div
+          className={`rounded-2xl p-4 border-2 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+            isDarkMode
+              ? 'bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border-blue-500/60 text-blue-200 shadow-blue-950/40'
+              : 'bg-gradient-to-r from-blue-50 via-sky-50 to-indigo-50 border-blue-500 text-blue-950 shadow-blue-100'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <span className="p-2.5 rounded-xl bg-blue-500/20 text-blue-500 dark:text-blue-400 shrink-0 border border-blue-500/30">
+              <Plane className="w-5 h-5" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-black text-xs uppercase tracking-wider text-blue-600 dark:text-blue-300 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  BUILDING SEPARATE FLIGHT
+                </span>
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-800 dark:text-blue-200 font-mono font-black border border-blue-500/40">
+                  BS-{currentFlightClean}
+                </span>
+              </div>
+              <p className="text-xs font-semibold mt-1">
+                Previous flight <strong>BS-{originalFlightClean}</strong> ({reportToEdit?.date}) is protected and will <strong>NOT</strong> be harmed or overwritten.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleClearTurnaroundTimestamps}
+              className="w-full sm:w-auto px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-800 dark:text-amber-300 text-[11px] font-black border border-amber-500/40 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Clear Old Timestamps</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* EDITING EXISTING REPORT BANNER (when editing exact same flight) */}
+      {isEditingExactSameFlight && (
+        <div
+          className={`rounded-2xl p-3.5 border shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+            isDarkMode
+              ? 'bg-slate-900 border-amber-500/40 text-amber-200'
+              : 'bg-amber-50 border-2 border-amber-400 text-amber-950 shadow-amber-100'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="p-2 rounded-xl bg-amber-500/20 text-amber-500 shrink-0">
+              <Clock className="w-4 h-4" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-black text-xs uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  EDITING SAVED FLIGHT: BS-{originalFlightClean}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 font-mono font-bold">
+                  {reportToEdit?.date}
+                </span>
+              </div>
+              <p className="text-[11px] opacity-90 leading-tight mt-0.5">
+                Modifying fields here will update this saved flight. Change flight number to build a separate flight safely.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleBuildAnotherFlight}
+            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-black uppercase tracking-wider active:scale-95 transition-all cursor-pointer shrink-0 border border-blue-500 shadow-sm flex items-center gap-1.5"
+          >
+            <Plane className="w-3.5 h-3.5" />
+            <span>BUILD NEXT FLIGHT</span>
           </button>
         </div>
       )}
@@ -2314,19 +2488,43 @@ export const ReportForm: React.FC<ReportFormProps> = ({
         <button
           type="button"
           onClick={handleSaveAttempt}
-          className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-600 hover:to-indigo-700 active:scale-98 text-white font-black text-xs shadow-lg shadow-blue-950/80 transition-all border border-blue-400/30 cursor-pointer"
+          className={`flex flex-col items-center justify-center py-3 px-3 rounded-xl text-white font-black text-xs shadow-lg active:scale-98 transition-all border cursor-pointer ${
+            isBuildingSeparateFlight
+              ? 'bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 border-emerald-400/40 shadow-emerald-950/80'
+              : 'bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-600 hover:to-indigo-700 border-blue-400/30 shadow-blue-950/80'
+          }`}
         >
-          <Save className="w-4 h-4 text-amber-300" />
-          <span>SAVE REPORT</span>
+          <div className="flex items-center gap-1.5">
+            <Save className="w-4 h-4 text-amber-300" />
+            <span className="truncate">
+              {isBuildingSeparateFlight
+                ? `SAVE SEPARATE (BS-${currentFlightClean})`
+                : isEditingExactSameFlight
+                ? `UPDATE BS-${currentFlightClean}`
+                : 'SAVE REPORT'}
+            </span>
+          </div>
+          {isBuildingSeparateFlight && (
+            <span className="text-[10px] text-emerald-200/90 font-mono font-normal">
+              BS-{originalFlightClean} stays untouched
+            </span>
+          )}
         </button>
 
         <button
           type="button"
           onClick={handleDownloadAttempt}
-          className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 active:scale-98 text-slate-950 font-black text-xs shadow-lg shadow-amber-950/50 transition-all border border-amber-300/50 cursor-pointer"
+          className="flex flex-col items-center justify-center py-3 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 active:scale-98 text-slate-950 font-black text-xs shadow-lg shadow-amber-950/50 transition-all border border-amber-300/50 cursor-pointer"
         >
-          <Download className="w-4 h-4" />
-          <span>DOWNLOAD JPG</span>
+          <div className="flex items-center gap-1.5">
+            <Download className="w-4 h-4" />
+            <span>DOWNLOAD JPG</span>
+          </div>
+          {isBuildingSeparateFlight && (
+            <span className="text-[10px] text-slate-900/80 font-mono font-normal">
+              Creates separate report
+            </span>
+          )}
         </button>
       </div>
 

@@ -36,6 +36,7 @@ interface SavedReportsProps {
   onDeleteReport: (id: string) => void;
   onDeleteAllReports?: () => void;
   onDownloadJPG: (report: SavedReport) => void;
+  onBuildNextFlight?: (report: SavedReport) => void;
   onSaveUploadedReport?: (
     data: RampReportFormData,
     type: ReportType,
@@ -54,6 +55,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
   user,
   savedReports,
   onEditReport,
+  onBuildNextFlight,
   onDeleteReport,
   onDeleteAllReports,
   onDownloadJPG,
@@ -529,6 +531,22 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
                       <Edit className="w-3.5 h-3.5 text-sky-600 dark:text-blue-400" />
                       <span>EDIT</span>
                     </button>
+
+                    {/* Build Next Flight as Separate Flight */}
+                    {onBuildNextFlight && (
+                      <button
+                        onClick={() => onBuildNextFlight(report)}
+                        className={`px-2.5 py-1 rounded-lg border text-[10px] sm:text-xs font-black flex items-center gap-1 active:scale-95 transition-all cursor-pointer ${
+                          isDarkMode
+                            ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-800'
+                            : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-950 border-emerald-400 shadow-sm'
+                        }`}
+                        title="Build another flight from this aircraft without harming this report"
+                      >
+                        <Plane className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>BUILD NEXT</span>
+                      </button>
+                    )}
 
                     <button
                       onClick={() => onDeleteReport(report.id)}

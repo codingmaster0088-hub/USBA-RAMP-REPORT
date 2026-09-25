@@ -511,11 +511,20 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       const bay = (r.formData?.bay || '').toUpperCase().trim();
       const std = (r.formData?.std || '').trim();
 
-      // Use unique report id if present, otherwise distinct flight + sector/bay key
-      const key = r.id || `${fltClean}_${route}_${bay}_${std}`;
-      if (!key || key === '____') return;
+      // Deduplicate by distinct flight number key so latest report for each flight takes precedence
+      const fltKey = fltClean ? `BS-${fltClean}` : (r.id || `${route}_${bay}_${std}`);
+      if (!fltKey || fltKey === 'BS-') return;
 
-      map.set(key, r);
+      const existing = map.get(fltKey);
+      if (!existing) {
+        map.set(fltKey, r);
+      } else {
+        const timeCurr = r.createdAt || (r.timestamp ? new Date(r.timestamp).getTime() : 0);
+        const timePrev = existing.createdAt || (existing.timestamp ? new Date(existing.timestamp).getTime() : 0);
+        if (timeCurr >= timePrev) {
+          map.set(fltKey, r);
+        }
+      }
     });
 
     // 2. Add reports from backend snapshot if not already present
@@ -534,15 +543,15 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       const bay = (r.formData?.bay || '').toUpperCase().trim();
       const std = (r.formData?.std || '').trim();
 
-      const key = r.id || `${fltClean}_${route}_${bay}_${std}`;
-      if (!key || key === '____') return;
+      const fltKey = fltClean ? `BS-${fltClean}` : (r.id || `${route}_${bay}_${std}`);
+      if (!fltKey || fltKey === 'BS-') return;
 
-      if (!map.has(key)) {
-        map.set(key, r);
+      if (!map.has(fltKey)) {
+        map.set(fltKey, r);
       }
     });
 
-    // 3. Add verified historical reports (including 24 AUG BS-309 and BS-349) if not already present
+    // 3. Add verified historical reports (including 24 AUG BS-309 and BS-349, 24 SEP BS-187 and BS-121) if not already present
     verifiedFlightReports.forEach((r) => {
       if (is03SepViewing && isBs307Flight(r)) return;
       if (isFlightDeleted(r)) return;
@@ -557,19 +566,11 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       const bay = (r.formData?.bay || '').toUpperCase().trim();
       const std = (r.formData?.std || '').trim();
 
-      const key = r.id || `${fltClean}_${route}_${bay}_${std}`;
-      if (!key || key === '____') return;
+      const fltKey = fltClean ? `BS-${fltClean}` : (r.id || `${route}_${bay}_${std}`);
+      if (!fltKey || fltKey === 'BS-') return;
 
-      // Also check by flight number key so existing user edits take precedence
-      const hasFlt = Array.from(map.values()).some((ex) => {
-        const exDept = cleanFlightNum(ex.formData?.deptFlt || '');
-        const exMain = cleanFlightNum(ex.flight || '');
-        const exArv = cleanFlightNum(ex.formData?.arvFlt || '');
-        return (exDept || exMain || exArv) === fltClean;
-      });
-
-      if (!map.has(key) && !hasFlt) {
-        map.set(key, r);
+      if (!map.has(fltKey)) {
+        map.set(fltKey, r);
       }
     });
 
@@ -704,10 +705,34 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       };
     });
 
-    // 3. Search query filter
-    if (!searchQuery.trim()) return rows;
+    // Helper to parse STD time (e.g. "0700", "09:30", "1740", "1545 PM") into minutes from 00:00 for chronological sort
+    const parseStdToMinutes = (stdStr?: string): number => {
+      if (!stdStr) return 9999;
+      const clean = stdStr.trim();
+      const match = clean.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+      if (match) {
+        let hh = parseInt(match[1], 10);
+        let mm = match[2] ? parseInt(match[2], 10) : 0;
+        const ampm = match[3] ? match[3].toUpperCase() : null;
+        if (ampm === 'PM' && hh < 12) hh += 12;
+        if (ampm === 'AM' && hh === 12) hh = 0;
+        return hh * 60 + mm;
+      }
+      return 9999;
+    };
+
+    // 3. Chronological sorting by STD departure time
+    const sortedRows = [...rows].sort((a, b) => {
+      const minA = parseStdToMinutes(a.std);
+      const minB = parseStdToMinutes(b.std);
+      if (minA !== minB) return minA - minB;
+      return a.flight.localeCompare(b.flight);
+    });
+
+    // 4. Search query filter
+    if (!searchQuery.trim()) return sortedRows;
     const q = searchQuery.trim().toUpperCase();
-    return rows.filter(
+    return sortedRows.filter(
       (r) =>
         r.flight.toUpperCase().includes(q) ||
         r.route.toUpperCase().includes(q) ||
