@@ -696,7 +696,9 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
             letterSpacing: '1px'
           }}
         >
-          GROUND TIME {mode === 'DIRECT' || formData.ground === 'ON GROUND' ? 'ON GROUND' : `${formData.ground || '0'} MINS`}
+          {mode === 'DIRECT' || (formData.ground || '').toUpperCase().includes('GROUND')
+            ? 'AIRCRAFT WAS ON GROUND'
+            : `GROUND TIME ${formData.ground ? (formData.ground.toUpperCase().includes('MIN') ? formData.ground : `${formData.ground} MINS`) : '0 MINS'}`}
         </div>
 
         {/* Footer */}

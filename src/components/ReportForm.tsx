@@ -1247,7 +1247,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               <button
                 onClick={() => {
                   setFlightMode('DIRECT');
-                  setFormData((prev) => ({ ...prev, ground: 'ON GROUND' }));
+                  setFormData((prev) => ({ ...prev, ground: 'AIRCRAFT WAS ON GROUND' }));
                 }}
                 className={`py-2.5 rounded-lg text-xs font-black transition-all ${
                   flightMode === 'DIRECT'
@@ -2466,7 +2466,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
             readOnly
             value={
               flightMode === 'DIRECT'
-                ? 'ON GROUND'
+                ? 'AIRCRAFT WAS ON GROUND'
                 : formData.ground
                 ? `${formData.ground} MINS`
                 : 'PENDING'

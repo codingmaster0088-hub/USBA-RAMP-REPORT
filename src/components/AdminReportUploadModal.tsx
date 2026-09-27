@@ -478,10 +478,14 @@ export const AdminReportUploadModal: React.FC<AdminReportUploadModalProps> = ({
       newForm.status = statusMatch[0].trim().toUpperCase();
     }
 
-    // 7. GROUND TIME (e.g., "GROUND TIME 48 MINS" or "GROUND TIME ON GROUND")
-    const groundMatch = upperFull.match(/GROUND\s*TIME[:\s]*(\d{1,3}\s*MINS?|ON\s*GROUND)/i);
+    // 7. GROUND TIME (e.g., "GROUND TIME 48 MINS", "GROUND TIME ON GROUND", or "AIRCRAFT WAS ON GROUND")
+    const groundMatch = upperFull.match(/GROUND\s*TIME[:\s]*(\d{1,3}\s*MINS?|ON\s*GROUND)|AIRCRAFT\s*WAS\s*ON\s*GROUND/i);
     if (groundMatch) {
-      newForm.ground = groundMatch[1].toUpperCase();
+      if (groundMatch[0].toUpperCase().includes('AIRCRAFT')) {
+        newForm.ground = 'AIRCRAFT WAS ON GROUND';
+      } else {
+        newForm.ground = groundMatch[1].toUpperCase();
+      }
     }
 
     // 8. 14-POINT TURNAROUND CHECKLIST (Robust Multi-Format Parsing)
