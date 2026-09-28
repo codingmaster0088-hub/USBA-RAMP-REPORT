@@ -2,16 +2,19 @@ import React, { useState } from 'react';
 import { Plane, User, Key, Building2, ChevronRight } from 'lucide-react';
 import { UserProfile, StationCode } from '../types';
 import { stationList } from '../data/routesDB';
+import { OutstationRestrictedModal } from './OutstationRestrictedModal';
 
 interface LoginModalProps {
   onLogin: (user: UserProfile) => void;
+  isOutstationRestricted?: boolean;
 }
 
-export const LoginModal: React.FC<LoginModalProps> = ({ onLogin }) => {
+export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, isOutstationRestricted = true }) => {
   const [name, setName] = useState('');
   const [id, setId] = useState('');
   const [station, setStation] = useState<StationCode>('DAC');
   const [error, setError] = useState('');
+  const [blockedStation, setBlockedStation] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,6 +24,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin }) => {
     }
     if (!id.trim()) {
       setError('Please enter USBA ID');
+      return;
+    }
+
+    // Outstation barrier check: If station is not DAC and outstations are restricted
+    if (station !== 'DAC' && isOutstationRestricted) {
+      setBlockedStation(station);
       return;
     }
 
@@ -125,6 +134,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin }) => {
           </button>
         </form>
       </div>
+
+      {/* Outstation Restricted Popup Modal */}
+      <OutstationRestrictedModal
+        isOpen={!!blockedStation}
+        station={blockedStation || undefined}
+        onClose={() => setBlockedStation(null)}
+      />
     </div>
   );
 };

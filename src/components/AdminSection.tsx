@@ -29,7 +29,8 @@ import {
   ChevronRight,
   FileCheck2,
   Timer,
-  MapPin
+  MapPin,
+  ShieldAlert
 } from 'lucide-react';
 
 interface AdminSectionProps {
@@ -44,6 +45,8 @@ interface AdminSectionProps {
   onDeleteNotice?: (noticeId: string) => void;
   showToast: (title: string, subtitle?: string, type?: 'success' | 'info' | 'error') => void;
   onDeleteReport?: (id: string) => void;
+  isOutstationRestricted?: boolean;
+  onToggleOutstationRestricted?: (restricted: boolean) => void;
 }
 
 export const AdminSection: React.FC<AdminSectionProps> = ({
@@ -57,7 +60,9 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   onBroadcastNotice,
   onDeleteNotice,
   showToast,
-  onDeleteReport
+  onDeleteReport,
+  isOutstationRestricted = true,
+  onToggleOutstationRestricted
 }) => {
   // Role-based Admin Authentication State
   // 11126: Office Management (Only 1. NOTICE and 2. TIME ANALYTICAL)
@@ -368,6 +373,62 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
           </div>
         </div>
       </div>
+
+      {/* OUTSTATION ACCESS BARRIER CONTROL (SUPER ADMIN ONLY) */}
+      {isSuperAdmin && (
+        <div className={`border rounded-2xl p-4 shadow-xl transition-all ${
+          isOutstationRestricted
+            ? 'bg-gradient-to-r from-rose-950/70 via-slate-900 to-rose-950/70 border-rose-500/50'
+            : 'bg-gradient-to-r from-emerald-950/70 via-slate-900 to-emerald-950/70 border-emerald-500/50'
+        }`}>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shrink-0 ${
+                isOutstationRestricted
+                  ? 'bg-rose-500/20 border border-rose-500/50 text-rose-400'
+                  : 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400'
+              }`}>
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-white">
+                    OUTSTATION ACCESS BARRIER
+                  </h3>
+                  <span className="text-[9px] font-black px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    SUPER ADMIN EXCLUSIVE
+                  </span>
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                    isOutstationRestricted
+                      ? 'bg-rose-950 text-rose-300 border-rose-500/40'
+                      : 'bg-emerald-950 text-emerald-300 border-emerald-500/40'
+                  }`}>
+                    {isOutstationRestricted ? 'TEMPORARY STOPPED (BLOCKED)' : 'ACCESS OPEN (ACTIVE)'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 mt-0.5">
+                  {isOutstationRestricted
+                    ? 'All outstations (CGP, SPD, CXB, ZYL, JSR, RJH, BZL) are restricted. Outstation logins see "THIS APP IS TEMPORARY STOPPED FOR OUT STATION BY ADMIN" and return to login.'
+                    : 'Outstations are currently open to log in and create ramp reports.'}
+                </p>
+              </div>
+            </div>
+
+            {onToggleOutstationRestricted && (
+              <button
+                onClick={() => onToggleOutstationRestricted(!isOutstationRestricted)}
+                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-lg flex items-center gap-1.5 ${
+                  isOutstationRestricted
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25'
+                    : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/25'
+                }`}
+              >
+                {isOutstationRestricted ? 'UNLOCK OUTSTATIONS NOW' : 'LOCK OUTSTATIONS NOW'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* MODULE CARDS: MANAGEMENT SEES ONLY 03 OPTIONS, SUPER ADMIN SEES ALL */}
       {isManagement ? (

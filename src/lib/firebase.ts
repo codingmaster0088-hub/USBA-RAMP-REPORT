@@ -375,3 +375,44 @@ export function subscribeToDailyAnalyticalSnapshots(
     return () => {};
   }
 }
+
+// System Setting: Outstation Access Control (Defaults to true: restricted)
+export function subscribeToOutstationAccess(
+  onUpdate: (isRestricted: boolean) => void
+) {
+  try {
+    const docRef = doc(db, 'systemSettings', 'outstationAccess');
+    return onSnapshot(
+      docRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const restricted = data?.isRestricted !== false; // defaults to true unless explicitly false
+          onUpdate(restricted);
+        } else {
+          onUpdate(true);
+        }
+      },
+      (err) => {
+        console.warn('Could not listen to outstationAccess in Firestore:', err);
+      }
+    );
+  } catch (err) {
+    console.warn('Error setting up outstation access subscription:', err);
+    return () => {};
+  }
+}
+
+export async function setOutstationAccessInFirestore(isRestricted: boolean): Promise<void> {
+  try {
+    const docRef = doc(db, 'systemSettings', 'outstationAccess');
+    await setDoc(docRef, {
+      isRestricted,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err) {
+    console.error('Failed to update outstation access in Firestore:', err);
+    throw err;
+  }
+}
+

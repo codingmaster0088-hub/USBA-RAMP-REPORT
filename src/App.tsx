@@ -25,7 +25,9 @@ import {
   deleteNoticeFromFirestore,
   subscribeToUserLogs,
   logUserActivityToFirestore,
-  saveDailyAnalyticalSnapshotToFirestore
+  saveDailyAnalyticalSnapshotToFirestore,
+  subscribeToOutstationAccess,
+  setOutstationAccessInFirestore
 } from './lib/firebase';
 import { parseDateToIso, buildDailyAnalyticalSnapshot, buildOutstationAnalyticalSnapshot, cleanFlightNum } from './utils/analyticalSnapshotBuilder';
 import { Header } from './components/Header';
@@ -36,6 +38,7 @@ import { SavedReports } from './components/SavedReports';
 import { AdminSection } from './components/AdminSection';
 import { LoginModal } from './components/LoginModal';
 import { NoticeModal } from './components/NoticeModal';
+import { OutstationRestrictedModal } from './components/OutstationRestrictedModal';
 import { ReportCanvasCard } from './components/ReportCanvasCard';
 import { DownloadModal } from './components/DownloadModal';
 import { CheckCircle2, AlertCircle, RefreshCw, X, Wifi } from 'lucide-react';
@@ -434,8 +437,57 @@ export default function App() {
     }
   }, [user?.id, user?.station]);
 
+  // Outstation Barrier Access Control State (Defaults to true: restricted)
+  const [isOutstationRestricted, setIsOutstationRestricted] = useState<boolean>(() => {
+    const local = localStorage.getItem('usb_outstation_restricted');
+    if (local !== null) return local === 'true';
+    return true; // restricted by default as requested
+  });
+  const [blockedStationAttempt, setBlockedStationAttempt] = useState<string | null>(null);
+
+  // Subscribe to real-time outstation access setting in Firestore
+  useEffect(() => {
+    const unsubscribe = subscribeToOutstationAccess((restricted) => {
+      setIsOutstationRestricted(restricted);
+      localStorage.setItem('usb_outstation_restricted', String(restricted));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Enforce barrier on active user session if from outstation
+  useEffect(() => {
+    if (user && user.station !== 'DAC' && isOutstationRestricted) {
+      const st = user.station;
+      setUser(null);
+      localStorage.removeItem('usb_user');
+      localStorage.removeItem('usb_last_activity');
+      setBlockedStationAttempt(st);
+    }
+  }, [user, isOutstationRestricted]);
+
+  const handleToggleOutstationAccess = async (restricted: boolean) => {
+    setIsOutstationRestricted(restricted);
+    localStorage.setItem('usb_outstation_restricted', String(restricted));
+    try {
+      await setOutstationAccessInFirestore(restricted);
+      showToast(
+        restricted ? 'Outstations Restricted' : 'Outstations Open',
+        restricted ? 'Access for stations other than DAC is blocked' : 'Outstation access has been restored',
+        restricted ? 'info' : 'success'
+      );
+    } catch {
+      showToast('Saved Locally', 'Setting saved locally', 'info');
+    }
+  };
+
   // Handle Login (Saves credentials and securely logs activity to Firestore)
   const handleLogin = async (newUser: UserProfile) => {
+    // Outstation barrier: If not DAC and restricted, block login and show popup
+    if (newUser.station !== 'DAC' && isOutstationRestricted) {
+      setBlockedStationAttempt(newUser.station);
+      return;
+    }
+
     setUser(newUser);
     localStorage.setItem('usb_user', JSON.stringify(newUser));
     localStorage.setItem('usb_last_activity', Date.now().toString());
@@ -1048,7 +1100,16 @@ export default function App() {
   };
 
   if (!user) {
-    return <LoginModal onLogin={handleLogin} />;
+    return (
+      <>
+        <LoginModal onLogin={handleLogin} isOutstationRestricted={isOutstationRestricted} />
+        <OutstationRestrictedModal
+          isOpen={!!blockedStationAttempt}
+          station={blockedStationAttempt || undefined}
+          onClose={() => setBlockedStationAttempt(null)}
+        />
+      </>
+    );
   }
 
   return (
@@ -1127,6 +1188,8 @@ export default function App() {
             onDeleteNotice={handleDeleteNotice}
             onDeleteReport={handleDeleteReport}
             showToast={showToast}
+            isOutstationRestricted={isOutstationRestricted}
+            onToggleOutstationRestricted={handleToggleOutstationAccess}
           />
         )}
       </main>
