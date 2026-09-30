@@ -62,34 +62,38 @@ export function subscribeToSavedReports(
     return onSnapshot(
       colRef,
       (snapshot) => {
-        const reports: SavedReport[] = [];
-        const seenKeys = new Set<string>();
+        const rawReports: SavedReport[] = [];
 
         snapshot.forEach((docSnap) => {
           const raw = docSnap.data();
           if (!raw) return;
           const rep = { ...raw, id: raw.id || docSnap.id } as SavedReport;
+          rawReports.push(rep);
+        });
 
-          // Unique key combining flight, date, and document ID to avoid deleting valid reports
+        // In-memory sort by newest created timestamp first
+        rawReports.sort((a, b) => {
+          const tA = a.createdAt || (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+          const tB = b.createdAt || (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+          return tB - tA;
+        });
+
+        // Requirement 3: Deduplicate so latest/last submitted report for that flight and date takes precedence
+        const reports: SavedReport[] = [];
+        const seenFlightDateKeys = new Set<string>();
+
+        rawReports.forEach((rep) => {
           const flightNum = (rep.flight || rep.formData?.deptFlt || rep.formData?.arvFlt || '')
             .replace(/^BS-?/i, '')
             .trim()
             .toUpperCase();
-
           const rDate = (rep.formData?.date || rep.date || '').trim().toUpperCase();
-          const key = rep.id || `BS-${flightNum}-${rDate}`;
+          const key = flightNum && rDate ? `BS-${flightNum}-${rDate}` : rep.id;
 
-          if (!seenKeys.has(key)) {
-            seenKeys.add(key);
+          if (!seenFlightDateKeys.has(key)) {
+            seenFlightDateKeys.add(key);
             reports.push(rep);
           }
-        });
-
-        // In-memory sort ensures no document is excluded due to index/timestamp schema anomalies
-        reports.sort((a, b) => {
-          const tA = a.createdAt || (a.timestamp ? new Date(a.timestamp).getTime() : 0);
-          const tB = b.createdAt || (b.timestamp ? new Date(b.timestamp).getTime() : 0);
-          return tB - tA;
         });
 
         onUpdate(reports);

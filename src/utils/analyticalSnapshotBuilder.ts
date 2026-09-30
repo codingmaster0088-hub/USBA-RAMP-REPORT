@@ -214,12 +214,19 @@ export function buildDailyAnalyticalSnapshot(
   const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
   const expiresAt = now + THIRTY_DAYS_MS;
 
-  // Deduplicate reports by flight number
+  // Deduplicate reports by flight number (always keeping the latest/last report)
   const uniqueReportsMap = new Map<string, SavedReport>();
   reportsForDate.forEach((r) => {
     const fltKey = cleanFlightNum(r.formData?.deptFlt || r.formData?.arvFlt || r.flight || r.id);
-    if (!uniqueReportsMap.has(fltKey)) {
+    const timeCurr = r.createdAt || (r.timestamp ? new Date(r.timestamp).getTime() : 0);
+    const existing = uniqueReportsMap.get(fltKey);
+    if (!existing) {
       uniqueReportsMap.set(fltKey, r);
+    } else {
+      const timePrev = existing.createdAt || (existing.timestamp ? new Date(existing.timestamp).getTime() : 0);
+      if (timeCurr >= timePrev) {
+        uniqueReportsMap.set(fltKey, r);
+      }
     }
   });
   const dedupedReports = Array.from(uniqueReportsMap.values());
@@ -466,12 +473,19 @@ export function buildOutstationAnalyticalSnapshot(
     return isOut && isDateMatch;
   });
 
-  // Deduplicate by flight key
+  // Deduplicate by flight key (always prioritizing newest report)
   const uniqueReportsMap = new Map<string, SavedReport>();
   outstationReports.forEach((r) => {
-    const key = r.id || `${r.flight}_${r.formData?.deptFlt}_${r.formData?.station}`;
-    if (!uniqueReportsMap.has(key)) {
+    const key = cleanFlightNum(r.formData?.deptFlt || r.formData?.arvFlt || r.flight || r.id);
+    const timeCurr = r.createdAt || (r.timestamp ? new Date(r.timestamp).getTime() : 0);
+    const existing = uniqueReportsMap.get(key);
+    if (!existing) {
       uniqueReportsMap.set(key, r);
+    } else {
+      const timePrev = existing.createdAt || (existing.timestamp ? new Date(existing.timestamp).getTime() : 0);
+      if (timeCurr >= timePrev) {
+        uniqueReportsMap.set(key, r);
+      }
     }
   });
   const dedupedReports = Array.from(uniqueReportsMap.values());

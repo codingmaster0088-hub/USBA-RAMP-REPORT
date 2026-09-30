@@ -16,7 +16,9 @@ import {
   CheckSquare,
   Square,
   Calendar,
-  ShieldCheck
+  ShieldCheck,
+  Key,
+  PlusCircle
 } from 'lucide-react';
 import {
   RampReportFormData,
@@ -25,6 +27,12 @@ import {
   UserProfile,
   SavedReport
 } from '../types';
+import {
+  isReportLocked,
+  getReportAgeMs,
+  formatReportAgeMins,
+  SUPER_ADMIN_PIN
+} from '../utils/reportLock';
 import {
   lookupRoute,
   formatAircraftReg,
@@ -191,6 +199,8 @@ interface ReportFormProps {
   onDownloadJPG: (data: RampReportFormData, type: ReportType, mode: FlightMode) => void;
   onNewReport: () => void;
   isDarkMode?: boolean;
+  isSuperAdmin?: boolean;
+  onSuperAdminUnlock?: (pin: string) => boolean;
 }
 
 export const ReportForm: React.FC<ReportFormProps> = ({
@@ -200,8 +210,43 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   onSaveReport,
   onDownloadJPG,
   onNewReport,
-  isDarkMode = false
+  isDarkMode = false,
+  isSuperAdmin = false,
+  onSuperAdminUnlock
 }) => {
+  const [isSuperAdminUnlockedLocal, setIsSuperAdminUnlockedLocal] = useState<boolean>(isSuperAdmin);
+  const [isConvertedToNewReport, setIsConvertedToNewReport] = useState<boolean>(false);
+  const [showAdminPinInput, setShowAdminPinInput] = useState<boolean>(false);
+  const [adminPinValue, setAdminPinValue] = useState<string>('');
+  const [adminPinError, setAdminPinError] = useState<string>('');
+
+  useEffect(() => {
+    setIsSuperAdminUnlockedLocal(isSuperAdmin);
+  }, [isSuperAdmin]);
+
+  const isLockedReport = Boolean(
+    reportToEdit &&
+    !isConvertedToNewReport &&
+    !isSuperAdminUnlockedLocal &&
+    isReportLocked(reportToEdit, false)
+  );
+
+  const handleConvertToNewReport = () => {
+    setIsConvertedToNewReport(true);
+  };
+
+  const handleVerifySuperAdminPin = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (adminPinValue.trim() === SUPER_ADMIN_PIN) {
+      setIsSuperAdminUnlockedLocal(true);
+      setShowAdminPinInput(false);
+      setAdminPinError('');
+      if (onSuperAdminUnlock) onSuperAdminUnlock(adminPinValue.trim());
+    } else {
+      setAdminPinError('Invalid Super Admin PIN');
+    }
+  };
+
   const [draftRestoredAt, setDraftRestoredAt] = useState<string | null>(() => {
     if (reportToEdit) return null;
     try {
@@ -720,8 +765,8 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     }
 
     // CRITICAL: If flight number or date has changed while building/editing from an existing report,
-    // NEVER pass reportToEdit.id so the previous flight is NEVER overwritten or harmed!
-    const effectiveExistingId = isBuildingSeparateFlight ? undefined : reportToEdit?.id;
+    // or if the report is locked (>10 mins), NEVER pass reportToEdit.id so the previous flight is NEVER overwritten!
+    const effectiveExistingId = (isBuildingSeparateFlight || isConvertedToNewReport || isLockedReport) ? undefined : reportToEdit?.id;
     onSaveReport(formData, resolvedType, flightMode, effectiveExistingId);
   };
 
@@ -752,7 +797,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       }
     }
     // Automatically save report with modified data when download is clicked
-    const effectiveExistingId = isBuildingSeparateFlight ? undefined : reportToEdit?.id;
+    const effectiveExistingId = (isBuildingSeparateFlight || isConvertedToNewReport || isLockedReport) ? undefined : reportToEdit?.id;
     onSaveReport(formData, resolvedType, flightMode, effectiveExistingId);
     onDownloadJPG(formData, resolvedType, flightMode);
   };
@@ -1098,8 +1143,85 @@ export const ReportForm: React.FC<ReportFormProps> = ({
         </div>
       )}
 
-      {/* EDITING EXISTING REPORT BANNER (when editing exact same flight) */}
-      {isEditingExactSameFlight && (
+      {/* 10-Minute Lockout Warning Banner if Editing Locked Report */}
+      {reportToEdit && isLockedReport && (
+        <div className="rounded-2xl p-4 border-2 border-rose-500/80 bg-rose-950/90 text-rose-100 shadow-xl space-y-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 font-black text-sm text-rose-300">
+              <Lock className="w-5 h-5 text-rose-400 shrink-0" />
+              <span>REPORT LOCKED (READ-ONLY) - 10 MINUTE LIMIT EXPIRED</span>
+            </div>
+            <span className="text-[10px] font-mono font-black px-2.5 py-0.5 rounded-full bg-rose-900 text-rose-200 border border-rose-600">
+              SUPER ADMIN ONLY
+            </span>
+          </div>
+          <p className="text-xs text-rose-200 leading-relaxed">
+            This report for <strong>BS-{originalFlightClean}</strong> ({reportToEdit?.date}) was generated {formatReportAgeMins(getReportAgeMs(reportToEdit))}. To maintain official reporting integrity, direct modifications to this report are restricted to Super Admin.
+          </p>
+          <div className="flex items-center gap-2 pt-1 flex-wrap">
+            <button
+              type="button"
+              onClick={handleConvertToNewReport}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>SAVE AS NEW REPORT FOR THIS FLIGHT (LATEST VERSION)</span>
+            </button>
+            {!showAdminPinInput ? (
+              <button
+                type="button"
+                onClick={() => setShowAdminPinInput(true)}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs uppercase tracking-wider border border-slate-700 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Key className="w-3.5 h-3.5 text-amber-400" />
+                <span>SUPER ADMIN UNLOCK</span>
+              </button>
+            ) : (
+              <form onSubmit={handleVerifySuperAdminPin} className="flex items-center gap-2">
+                <input
+                  type="password"
+                  value={adminPinValue}
+                  onChange={(e) => {
+                    setAdminPinValue(e.target.value);
+                    setAdminPinError('');
+                  }}
+                  placeholder="PIN: 11126377"
+                  className="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white outline-none focus:border-amber-400 font-mono w-32"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl cursor-pointer"
+                >
+                  UNLOCK
+                </button>
+              </form>
+            )}
+          </div>
+          {adminPinError && (
+            <p className="text-[11px] text-rose-300 font-bold">{adminPinError}</p>
+          )}
+        </div>
+      )}
+
+      {/* Converted to New Report Notice Banner */}
+      {isConvertedToNewReport && (
+        <div className="rounded-2xl p-3.5 border-2 border-emerald-500/80 bg-emerald-950/80 text-emerald-100 shadow-xl flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <PlusCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-emerald-200">
+                Saving as NEW REPORT for BS-{currentFlightClean || originalFlightClean} ({formData.date})
+              </p>
+              <p className="text-[11px] text-emerald-300/80">
+                The server will store this as the latest official flight data. Previous report remains untouched.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDITING EXISTING REPORT BANNER (when editing exact same flight and not locked) */}
+      {isEditingExactSameFlight && !isLockedReport && !isConvertedToNewReport && (
         <div
           className={`rounded-2xl p-3.5 border shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
             isDarkMode
@@ -2492,16 +2614,22 @@ export const ReportForm: React.FC<ReportFormProps> = ({
             <span className="truncate">
               {isBuildingSeparateFlight
                 ? `SAVE SEPARATE (BS-${currentFlightClean})`
+                : (isLockedReport || isConvertedToNewReport)
+                ? `SAVE AS NEW REPORT (LATEST)`
                 : isEditingExactSameFlight
                 ? `UPDATE BS-${currentFlightClean}`
                 : 'SAVE REPORT'}
             </span>
           </div>
-          {isBuildingSeparateFlight && (
+          {(isLockedReport || isConvertedToNewReport) ? (
+            <span className="text-[10px] text-amber-200/90 font-mono font-normal">
+              Server records newest flight data
+            </span>
+          ) : isBuildingSeparateFlight ? (
             <span className="text-[10px] text-emerald-200/90 font-mono font-normal">
               BS-{originalFlightClean} stays untouched
             </span>
-          )}
+          ) : null}
         </button>
 
         <button

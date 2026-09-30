@@ -10,10 +10,19 @@ import {
   History,
   Timer,
   Upload,
-  PlusCircle
+  PlusCircle,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { SavedReport, RampReportFormData, ReportType, FlightMode, UserProfile, StationCode } from '../types';
 import { AdminReportUploadModal } from './AdminReportUploadModal';
+import {
+  isReportLocked,
+  getRemainingEditTimeMs,
+  formatRemainingEditTime,
+  SUPER_ADMIN_PIN
+} from '../utils/reportLock';
+import { ReportLockModal } from './ReportLockModal';
 
 export function getReportStation(report: SavedReport): string {
   if (report.formData?.station) return report.formData.station.toUpperCase();
@@ -33,6 +42,7 @@ interface SavedReportsProps {
   user?: UserProfile | null;
   savedReports: SavedReport[];
   onEditReport: (id: string) => void;
+  onNewReportForFlight?: (report: SavedReport) => void;
   onDeleteReport: (id: string) => void;
   onDeleteAllReports?: () => void;
   onDownloadJPG: (report: SavedReport) => void;
@@ -44,6 +54,7 @@ interface SavedReportsProps {
     existingId?: string,
     officerOverride?: { name: string; id: string }
   ) => void;
+  onSuperAdminUnlock?: (pin: string) => boolean;
   isDarkMode?: boolean;
   isAdmin?: boolean;
   isSuperAdmin?: boolean;
@@ -55,11 +66,13 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
   user,
   savedReports,
   onEditReport,
+  onNewReportForFlight,
   onBuildNextFlight,
   onDeleteReport,
   onDeleteAllReports,
   onDownloadJPG,
   onSaveUploadedReport,
+  onSuperAdminUnlock,
   isDarkMode = true,
   isAdmin = false,
   isSuperAdmin = false
@@ -68,6 +81,15 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
   const [showOnlyActive20H, setShowOnlyActive20H] = useState<boolean>(true);
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
+  const [lockedModalReport, setLockedModalReport] = useState<SavedReport | null>(null);
+
+  const handleEditClick = (report: SavedReport) => {
+    if (isReportLocked(report, isSuperAdmin)) {
+      setLockedModalReport(report);
+      return;
+    }
+    onEditReport(report.id);
+  };
 
   const userStation = (user?.station || 'DAC').toUpperCase();
   const [stationFilter, setStationFilter] = useState<string>(isSuperAdmin ? 'ALL' : userStation);
@@ -380,6 +402,9 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
               minute: '2-digit'
             });
             const remainingCountdown = getRemainingVanishTime(report.timestamp);
+            const isLocked = isReportLocked(report, isSuperAdmin);
+            const remainingEditMs = getRemainingEditTimeMs(report);
+            const remainingEditStr = formatRemainingEditTime(remainingEditMs);
 
             return (
               <div
@@ -452,8 +477,46 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
                     </span>
                   </div>
 
-                  {/* 20H Live Countdown Badge & Depart Time */}
+                  {/* 10-Min Lockout Badge, 20H Live Countdown Badge & Depart Time */}
                   <div className="flex flex-wrap items-center gap-2">
+                    {isLocked ? (
+                      <div
+                        title="Report locked 10 minutes after generation. Read-Only (Super Admin exclusive edit)"
+                        className={`inline-flex items-center gap-1 text-[10px] font-mono font-black px-2.5 py-1 rounded-full border shadow-sm ${
+                          isDarkMode
+                            ? 'bg-rose-950/80 border-rose-500/50 text-rose-300'
+                            : 'bg-rose-100 border-rose-300 text-rose-950'
+                        }`}
+                      >
+                        <Lock className="w-3 h-3 text-rose-400" />
+                        <span>LOCKED (10M+)</span>
+                      </div>
+                    ) : isSuperAdmin ? (
+                      <div
+                        title="Super Admin unrestricted edit access"
+                        className={`inline-flex items-center gap-1 text-[10px] font-mono font-black px-2.5 py-1 rounded-full border shadow-sm ${
+                          isDarkMode
+                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                            : 'bg-amber-100 border-amber-300 text-amber-950'
+                        }`}
+                      >
+                        <Unlock className="w-3 h-3 text-amber-400" />
+                        <span>ADMIN EDIT</span>
+                      </div>
+                    ) : (
+                      <div
+                        title="Remaining window before report becomes read-only"
+                        className={`inline-flex items-center gap-1 text-[10px] font-mono font-black px-2.5 py-1 rounded-full border shadow-sm ${
+                          isDarkMode
+                            ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+                            : 'bg-emerald-100 border-emerald-300 text-emerald-950'
+                        }`}
+                      >
+                        <Timer className="w-3 h-3 text-emerald-400 animate-pulse" />
+                        <span>EDIT: {remainingEditStr}</span>
+                      </div>
+                    )}
+
                     <div
                       title="Report auto-vanishes 20 hours after creation or last edit"
                       className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-black px-2.5 py-1 rounded-full border shadow-sm ${
@@ -503,8 +566,8 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
                     </span>
                   </div>
 
-                  {/* Actions: Download, Edit, Delete */}
-                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                  {/* Actions: Download, Edit/Locked, New Report, Build Next, Delete */}
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto flex-wrap">
                     <button
                       onClick={() => onDownloadJPG(report)}
                       className={`px-2.5 py-1 rounded-lg border text-[10px] sm:text-xs font-black flex items-center gap-1 active:scale-95 transition-all cursor-pointer ${
@@ -518,19 +581,54 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
                       <span>JPG</span>
                     </button>
 
-                    {/* Edit Button: Light Sky Blue in Sun mode */}
+                    {/* Edit or Locked Button */}
                     <button
-                      onClick={() => onEditReport(report.id)}
+                      onClick={() => handleEditClick(report)}
                       className={`px-2.5 py-1 rounded-lg border text-[10px] sm:text-xs font-black flex items-center gap-1 active:scale-95 transition-all cursor-pointer ${
-                        isDarkMode
+                        isLocked && !isSuperAdmin
+                          ? isDarkMode
+                            ? 'bg-rose-950/70 hover:bg-rose-900/80 text-rose-300 border-rose-700/60'
+                            : 'bg-rose-100 hover:bg-rose-200 text-rose-950 border-rose-300 shadow-sm'
+                          : isDarkMode
                           ? 'bg-blue-950 hover:bg-blue-900 text-blue-300 border-blue-800'
                           : 'bg-sky-200 hover:bg-sky-300 text-sky-950 border-sky-400 shadow-sm'
                       }`}
-                      title="Edit Report"
+                      title={
+                        isLocked
+                          ? isSuperAdmin
+                            ? 'Super Admin Edit'
+                            : 'Report is Locked (>10m). Click for options or Super Admin unlock'
+                          : 'Edit Report'
+                      }
                     >
-                      <Edit className="w-3.5 h-3.5 text-sky-600 dark:text-blue-400" />
-                      <span>EDIT</span>
+                      {isLocked && !isSuperAdmin ? (
+                        <>
+                          <Lock className="w-3.5 h-3.5 text-rose-400" />
+                          <span>LOCKED</span>
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="w-3.5 h-3.5 text-sky-600 dark:text-blue-400" />
+                          <span>{isSuperAdmin && isLocked ? 'EDIT (ADMIN)' : 'EDIT'}</span>
+                        </>
+                      )}
                     </button>
+
+                    {/* Create New Report for This Flight */}
+                    {onNewReportForFlight && (
+                      <button
+                        onClick={() => onNewReportForFlight(report)}
+                        className={`px-2.5 py-1 rounded-lg border text-[10px] sm:text-xs font-black flex items-center gap-1 active:scale-95 transition-all cursor-pointer ${
+                          isDarkMode
+                            ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-800'
+                            : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-950 border-emerald-400 shadow-sm'
+                        }`}
+                        title="Create a new report for this flight with latest times (Server saves and prioritizes newest data)"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>NEW REPORT</span>
+                      </button>
+                    )}
 
                     {/* Build Next Flight as Separate Flight */}
                     {onBuildNextFlight && (
@@ -538,12 +636,12 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
                         onClick={() => onBuildNextFlight(report)}
                         className={`px-2.5 py-1 rounded-lg border text-[10px] sm:text-xs font-black flex items-center gap-1 active:scale-95 transition-all cursor-pointer ${
                           isDarkMode
-                            ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-800'
-                            : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-950 border-emerald-400 shadow-sm'
+                            ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-900 border-slate-300 shadow-sm'
                         }`}
                         title="Build another flight from this aircraft without harming this report"
                       >
-                        <Plane className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <Plane className="w-3.5 h-3.5 text-cyan-500" />
                         <span>BUILD NEXT</span>
                       </button>
                     )}
@@ -565,6 +663,35 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
             );
           })}
         </div>
+      )}
+
+      {/* Report Lockout & Super Admin Unlock Modal */}
+      {lockedModalReport && (
+        <ReportLockModal
+          report={lockedModalReport}
+          onClose={() => setLockedModalReport(null)}
+          onCreateNewReportForFlight={(rep) => {
+            setLockedModalReport(null);
+            if (onNewReportForFlight) {
+              onNewReportForFlight(rep);
+            } else {
+              onEditReport(rep.id);
+            }
+          }}
+          onSuperAdminUnlock={(pin) => {
+            if (onSuperAdminUnlock) {
+              const ok = onSuperAdminUnlock(pin);
+              if (ok) {
+                const repId = lockedModalReport.id;
+                setLockedModalReport(null);
+                onEditReport(repId);
+                return true;
+              }
+            }
+            return false;
+          }}
+          isDarkMode={isDarkMode}
+        />
       )}
     </div>
   );

@@ -30,6 +30,7 @@ import {
   setOutstationAccessInFirestore
 } from './lib/firebase';
 import { parseDateToIso, buildDailyAnalyticalSnapshot, buildOutstationAnalyticalSnapshot, cleanFlightNum } from './utils/analyticalSnapshotBuilder';
+import { isReportLocked, SUPER_ADMIN_PIN, TEN_MINUTES_MS } from './utils/reportLock';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { LiveMonitor } from './components/LiveMonitor';
@@ -692,6 +693,65 @@ export default function App() {
     }
   };
 
+  // Requirement 2: Ramp officer creates a new report for the same flight to submit updated times
+  const handleCreateNewReportForFlight = (rep: SavedReport) => {
+    const flightClean = (rep.formData?.deptFlt || rep.flight || '').replace(/^BS-?/i, '');
+    const newFormData: RampReportFormData = {
+      ...rep.formData,
+      deptFlt: flightClean,
+      deptRoute: rep.formData?.deptRoute || rep.route || '',
+      arvFlt: rep.formData?.arvFlt || '',
+      arvRoute: rep.formData?.arvRoute || '',
+      date: rep.formData?.date || rep.date || '',
+      ac: rep.formData?.ac || '',
+      bay: rep.formData?.bay || '',
+      std: rep.formData?.std || '',
+      station: user ? user.station : (rep.formData?.station || 'DAC'),
+      // Clear previous turnaround timestamps so officer can submit fresh/latest times:
+      dc: '',
+      co: '',
+      ab: '',
+      con: '',
+      do: '',
+      disem: '',
+      securitySt: '',
+      securityEnd: '',
+      cleaningSt: '',
+      cleaningEnd: '',
+      cateringSt: '',
+      cateringEnd: '',
+      crew: '',
+      refuel: '',
+      lbag: '',
+      permit: '',
+      pax: '',
+      firstBusPax: '',
+      trimSubmitted: '',
+      trimSigned: '',
+      delayRemarks: '',
+      delayReason: '',
+      status: 'FLIGHT IS ONTIME'
+    };
+
+    setReportToEdit(null); // Explicitly null: creating a NEW report
+    setReportType(rep.type);
+    setActiveTab('form');
+    showToast(
+      `New Report for BS-${flightClean}`,
+      'Enter latest flight times. Server will save and prioritize this report.',
+      'info'
+    );
+  };
+
+  const handleSuperAdminUnlock = (pin: string): boolean => {
+    if (pin === SUPER_ADMIN_PIN) {
+      sessionStorage.setItem('usb_admin_unlocked_pin', pin);
+      showToast('Super Admin Mode Unlocked', 'Direct edit privilege enabled', 'success');
+      return true;
+    }
+    return false;
+  };
+
   const handleBuildNextFlightFromReport = (rep: SavedReport) => {
     // Preserve aircraft, bay, station, date, and officer, but clear flight numbers and turnaround times
     // so previous flight data is 100% safe and the new flight is created as a clean separate flight!
@@ -853,11 +913,14 @@ export default function App() {
     const finalReportDate = (data.date && data.date.trim()) ? data.date : getTodayFormattedDate();
     const reportDateIso = parseDateToIso(finalReportDate || 'TODAY');
 
+    // Check if active session has Super Admin privileges
+    const isSuperAdminUser = sessionStorage.getItem('usb_admin_unlocked_pin') === SUPER_ADMIN_PIN;
+
     // Strict Verification for Editing vs Building a Separate Flight:
     // A save is ONLY an update of an existing report if:
     // 1. existingId was provided AND
     // 2. The report with existingId has the SAME flight number AND the SAME date as the form being saved.
-    // If either flight number or date differs, this is explicitly a NEW SEPARATED FLIGHT!
+    // 3. The report is within the 10-minute window OR user is Super Admin!
     const origReportWithId = existingId ? savedReports.find((r) => r.id === existingId) : undefined;
     const isSameFlightNumber = origReportWithId
       ? cleanFlightNum(origReportWithId.flight || origReportWithId.formData?.deptFlt || origReportWithId.formData?.arvFlt || '') === targetFlightClean
@@ -866,28 +929,22 @@ export default function App() {
       ? parseDateToIso(origReportWithId.formData?.date || origReportWithId.date || '') === reportDateIso
       : false;
 
-    const isGenuineEditOfSameFlight = Boolean(origReportWithId && isSameFlightNumber && isSameDate);
-    const isCreatingSeparatedFlight = Boolean(origReportWithId && !isGenuineEditOfSameFlight);
+    // 10-Minute Lockout Rule:
+    const isLockedReport = origReportWithId ? isReportLocked(origReportWithId, isSuperAdminUser) : false;
 
-    // Look for existing report ONLY if genuinely updating the exact same flight, OR if there's already a report
-    // with this exact target flight number and date in savedReports:
-    let existingReport: SavedReport | undefined = undefined;
-    if (isGenuineEditOfSameFlight) {
-      existingReport = origReportWithId;
-    } else {
-      existingReport = savedReports.find((r) => {
-        const rFltClean = cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '');
-        if (rFltClean !== targetFlightClean) return false;
-        const rDateIso = parseDateToIso(r.formData?.date || r.date || '');
-        return rDateIso === reportDateIso;
-      });
-    }
+    // If report is locked (> 10 mins and not Super Admin), it cannot directly mutate the previous report.
+    // It is saved as a clean NEW REPORT for this flight with the latest information!
+    const isGenuineEditOfSameFlight = Boolean(
+      origReportWithId &&
+      !isLockedReport &&
+      isSameFlightNumber &&
+      isSameDate
+    );
+    const isCreatingSeparatedFlight = Boolean(origReportWithId && !isSameFlightNumber);
 
     // Determine target ID:
-    // If updating an existing flight with same number & date, reuse its id.
-    // If creating a separated flight (or brand new flight), generate its own distinct ID so previous flight is NEVER harmed!
     const canonicalFlightId = `report-bs${targetFlightClean.toLowerCase()}-${reportDateIso.replace(/-/g, '')}`;
-    const id = existingReport ? existingReport.id : canonicalFlightId;
+    const id = isGenuineEditOfSameFlight ? origReportWithId!.id : canonicalFlightId;
 
     // Ensure this ID is removed from deleted ids cache so it is never hidden
     try {
@@ -896,11 +953,12 @@ export default function App() {
       localStorage.setItem('usb_deleted_report_ids', JSON.stringify(updatedDeleted));
     } catch (e) {}
 
-    // Merge existing formData with new updates only when updating the exact same flight.
-    // When building/editing another flight from a previous saved flight, DO NOT inherit turnaround timestamps!
-    const mergedFormData: RampReportFormData = (existingReport && !isCreatingSeparatedFlight)
+    // Clean form data:
+    // If genuinely editing within 10 minutes (or Super Admin), merge if needed.
+    // If creating a NEW report (or saving fresh report for flight), use data directly so old discarded fields (e.g. old A/C reg) are NOT merged!
+    const mergedFormData: RampReportFormData = isGenuineEditOfSameFlight
       ? {
-          ...existingReport.formData,
+          ...origReportWithId!.formData,
           ...data,
           date: finalReportDate,
           station: activeUser.station
@@ -908,16 +966,16 @@ export default function App() {
       : { ...data, date: finalReportDate, station: activeUser.station };
 
     // Clean undefined or empty overrides if existing had value, BUT do NOT keep old delay reasons if new report is early/on-time
-    if (existingReport && !isCreatingSeparatedFlight) {
+    if (isGenuineEditOfSameFlight && origReportWithId) {
       const isNewStatusEarlyOrOnTime = (data.status || '').toUpperCase().includes('EARLY') || (data.status || '').toUpperCase().includes('ON TIME');
-      Object.keys(existingReport.formData).forEach((key) => {
+      Object.keys(origReportWithId.formData).forEach((key) => {
         const k = key as keyof RampReportFormData;
         if (isNewStatusEarlyOrOnTime && (k === 'delayReason' || k === 'delayRemarks')) {
           if (!data[k]) {
             mergedFormData[k] = '';
           }
-        } else if ((!data[k] || data[k] === '') && existingReport!.formData[k]) {
-          (mergedFormData as any)[k] = existingReport!.formData[k];
+        } else if ((!data[k] || data[k] === '') && origReportWithId.formData[k]) {
+          (mergedFormData as any)[k] = origReportWithId.formData[k];
         }
       });
     }
@@ -938,11 +996,11 @@ export default function App() {
       mode,
       flight: flightKey,
       date: finalReportDate,
-      route: data.deptRoute || data.arvRoute || existingReport?.route || 'N/A',
+      route: data.deptRoute || data.arvRoute || origReportWithId?.route || 'N/A',
       timestamp: new Date().toISOString(),
       createdAt: Date.now(),
-      officerName: activeUser.name || (existingReport && !isCreatingSeparatedFlight ? existingReport.officerName : activeUser.name) || 'RAMP OFFICER',
-      officerId: activeUser.id || (existingReport && !isCreatingSeparatedFlight ? existingReport.officerId : activeUser.id) || '0000',
+      officerName: activeUser.name || (isGenuineEditOfSameFlight ? origReportWithId?.officerName : activeUser.name) || 'RAMP OFFICER',
+      officerId: activeUser.id || (isGenuineEditOfSameFlight ? origReportWithId?.officerId : activeUser.id) || '0000',
       formData: mergedFormData
     };
 
@@ -950,10 +1008,15 @@ export default function App() {
       const filtered = prev.filter((r) => {
         // If this report has the specific ID being updated, replace it
         if (r.id === id) return false;
-        // If this report has the EXACT SAME flight number AND exact same date, replace it
+        // If this report has the EXACT SAME flight number AND exact same date:
         const rFltClean = cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '');
         const rDateIso = parseDateToIso(r.formData?.date || r.date || '');
         if (rFltClean === targetFlightClean && rDateIso === reportDateIso) {
+          // If an older report with a different ID existed in Firestore for this flight & date,
+          // delete the older report ID from Firestore in background so server only keeps the latest information!
+          if (r.id !== id) {
+            deleteReportFromFirestore(r.id).catch(() => {});
+          }
           return false;
         }
         // ALL other reports, including the original flight that was edited/cloned, are 100% PRESERVED!
@@ -972,9 +1035,15 @@ export default function App() {
           `Previous flight ${origReportWithId?.flight || ''} remains 100% safe & untouched!`,
           'success'
         );
+      } else if (isLockedReport) {
+        showToast(
+          `Latest Report Saved to Server: ${newEntry.flight}`,
+          `Server updated with latest information for ${newEntry.flight}`,
+          'success'
+        );
       } else {
         showToast(
-          existingReport ? 'Report Updated & Synced Live!' : 'Report Saved & Synced Live!',
+          isGenuineEditOfSameFlight ? 'Report Updated & Synced Live!' : 'Report Saved & Synced Live!',
           `${newEntry.flight} (${newEntry.route})`,
           'success'
         );
@@ -1154,6 +1223,8 @@ export default function App() {
             onDownloadJPG={handleDownloadJPG}
             onNewReport={handleNewReport}
             isDarkMode={isDarkMode}
+            isSuperAdmin={sessionStorage.getItem('usb_admin_unlocked_pin') === SUPER_ADMIN_PIN}
+            onSuperAdminUnlock={handleSuperAdminUnlock}
           />
         )}
 
@@ -1163,14 +1234,16 @@ export default function App() {
             user={user}
             savedReports={savedReports}
             onEditReport={handleEditReport}
+            onNewReportForFlight={handleCreateNewReportForFlight}
             onBuildNextFlight={handleBuildNextFlightFromReport}
             onDeleteReport={handleDeleteReport}
             onDeleteAllReports={handleDeleteAllReports}
             onDownloadJPG={handleDownloadFromSaved}
             onSaveUploadedReport={handleSaveReport}
+            onSuperAdminUnlock={handleSuperAdminUnlock}
             isDarkMode={isDarkMode}
-            isAdmin={user?.id === '1425' || user?.id === '0088' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126377'}
-            isSuperAdmin={sessionStorage.getItem('usb_admin_unlocked_pin') === '11126377'}
+            isAdmin={user?.id === '1425' || user?.id === '0088' || sessionStorage.getItem('usb_admin_unlocked_pin') === SUPER_ADMIN_PIN}
+            isSuperAdmin={sessionStorage.getItem('usb_admin_unlocked_pin') === SUPER_ADMIN_PIN}
           />
         )}
 
