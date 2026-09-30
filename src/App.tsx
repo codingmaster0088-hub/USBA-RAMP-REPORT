@@ -693,56 +693,6 @@ export default function App() {
     }
   };
 
-  // Requirement 2: Ramp officer creates a new report for the same flight to submit updated times
-  const handleCreateNewReportForFlight = (rep: SavedReport) => {
-    const flightClean = (rep.formData?.deptFlt || rep.flight || '').replace(/^BS-?/i, '');
-    const newFormData: RampReportFormData = {
-      ...rep.formData,
-      deptFlt: flightClean,
-      deptRoute: rep.formData?.deptRoute || rep.route || '',
-      arvFlt: rep.formData?.arvFlt || '',
-      arvRoute: rep.formData?.arvRoute || '',
-      date: rep.formData?.date || rep.date || '',
-      ac: rep.formData?.ac || '',
-      bay: rep.formData?.bay || '',
-      std: rep.formData?.std || '',
-      station: user ? user.station : (rep.formData?.station || 'DAC'),
-      // Clear previous turnaround timestamps so officer can submit fresh/latest times:
-      dc: '',
-      co: '',
-      ab: '',
-      con: '',
-      do: '',
-      disem: '',
-      securitySt: '',
-      securityEnd: '',
-      cleaningSt: '',
-      cleaningEnd: '',
-      cateringSt: '',
-      cateringEnd: '',
-      crew: '',
-      refuel: '',
-      lbag: '',
-      permit: '',
-      pax: '',
-      firstBusPax: '',
-      trimSubmitted: '',
-      trimSigned: '',
-      delayRemarks: '',
-      delayReason: '',
-      status: 'FLIGHT IS ONTIME'
-    };
-
-    setReportToEdit(null); // Explicitly null: creating a NEW report
-    setReportType(rep.type);
-    setActiveTab('form');
-    showToast(
-      `New Report for BS-${flightClean}`,
-      'Enter latest flight times. Server will save and prioritize this report.',
-      'info'
-    );
-  };
-
   const handleSuperAdminUnlock = (pin: string): boolean => {
     if (pin === SUPER_ADMIN_PIN) {
       sessionStorage.setItem('usb_admin_unlocked_pin', pin);
@@ -750,62 +700,6 @@ export default function App() {
       return true;
     }
     return false;
-  };
-
-  const handleBuildNextFlightFromReport = (rep: SavedReport) => {
-    // Preserve aircraft, bay, station, date, and officer, but clear flight numbers and turnaround times
-    // so previous flight data is 100% safe and the new flight is created as a clean separate flight!
-    const freshFormData: RampReportFormData = {
-      ...rep.formData,
-      deptFlt: '',
-      arvFlt: '',
-      deptRoute: '',
-      arvRoute: '',
-      std: '',
-      con: '',
-      do: '',
-      disem: '',
-      securitySt: '',
-      securityEnd: '',
-      cleaningSt: '',
-      cleaningEnd: '',
-      cateringSt: '',
-      cateringEnd: '',
-      crew: '',
-      refuel: '',
-      lbag: '',
-      permit: '',
-      pax: '',
-      firstBusPax: '',
-      trimSubmitted: '',
-      trimSigned: '',
-      dc: '',
-      co: '',
-      ab: '',
-      delayRemarks: '',
-      delayReason: '',
-      status: 'FLIGHT IS ONTIME'
-    };
-
-    setReportToEdit({
-      id: `report-new-${Date.now()}`,
-      type: rep.type,
-      mode: rep.mode,
-      flight: '',
-      date: rep.date || rep.formData?.date || '',
-      route: '',
-      timestamp: new Date().toISOString(),
-      formData: freshFormData,
-      officerName: user?.name || rep.officerName,
-      officerId: user?.id || rep.officerId
-    });
-    setReportType(rep.type);
-    setActiveTab('form');
-    showToast(
-      'Building New Separate Flight',
-      `Using aircraft ${rep.formData?.ac || ''}. Previous flight ${rep.flight} remains 100% safe & untouched!`,
-      'info'
-    );
   };
 
   const handleDeleteReport = async (id: string) => {
@@ -880,8 +774,21 @@ export default function App() {
     type: ReportType,
     mode: FlightMode,
     existingId?: string,
-    officerOverride?: { name: string; id: string }
+    officerOverrideOrDownloadAction?: { name: string; id: string } | boolean,
+    isDownloadActionParam?: boolean
   ) => {
+    let officerOverride: { name: string; id: string } | undefined;
+    let isDownloadAction = false;
+
+    if (typeof officerOverrideOrDownloadAction === 'boolean') {
+      isDownloadAction = officerOverrideOrDownloadAction;
+    } else if (officerOverrideOrDownloadAction && typeof officerOverrideOrDownloadAction === 'object') {
+      officerOverride = officerOverrideOrDownloadAction;
+      if (typeof isDownloadActionParam === 'boolean') {
+        isDownloadAction = isDownloadActionParam;
+      }
+    }
+
     const activeUser = officerOverride || user || {
       id: '0000',
       name: 'RAMP OFFICER',
@@ -990,6 +897,15 @@ export default function App() {
       }
     }
 
+    // 10-Minute Lockout Window rule:
+    // Only starts when user clicked on 'DOWNLOAD JPG'.
+    // If user clicked 'SAVE REPORT' for inputting the rest of data later, the report remains editable!
+    const previouslyDownloaded = Boolean(origReportWithId?.isDownloaded || (origReportWithId?.downloadedAt && origReportWithId.downloadedAt > 0));
+    const isNowDownloaded = isDownloadAction || (isGenuineEditOfSameFlight && previouslyDownloaded);
+    const downloadedAtTimestamp = isNowDownloaded
+      ? (isGenuineEditOfSameFlight && origReportWithId?.downloadedAt ? origReportWithId.downloadedAt : Date.now())
+      : undefined;
+
     const newEntry: SavedReport = {
       id,
       type: resolvedType,
@@ -999,6 +915,8 @@ export default function App() {
       route: data.deptRoute || data.arvRoute || origReportWithId?.route || 'N/A',
       timestamp: new Date().toISOString(),
       createdAt: Date.now(),
+      downloadedAt: downloadedAtTimestamp,
+      isDownloaded: isNowDownloaded,
       officerName: activeUser.name || (isGenuineEditOfSameFlight ? origReportWithId?.officerName : activeUser.name) || 'RAMP OFFICER',
       officerId: activeUser.id || (isGenuineEditOfSameFlight ? origReportWithId?.officerId : activeUser.id) || '0000',
       formData: mergedFormData
@@ -1122,13 +1040,38 @@ export default function App() {
     setRenderExportTarget({ formData: data, type, mode });
   };
 
-  const handleDownloadFromSaved = (report: SavedReport) => {
+  const handleDownloadFromSaved = async (report: SavedReport) => {
     setIsExporting(true);
     setRenderExportTarget({
       formData: report.formData,
       type: report.type,
       mode: report.mode
     });
+
+    // 10-Minute Lockout Rule:
+    // Starts from the moment user clicks DOWNLOAD JPG
+    if (!report.isDownloaded || !report.downloadedAt) {
+      const now = Date.now();
+      const updatedReport: SavedReport = {
+        ...report,
+        isDownloaded: true,
+        downloadedAt: report.downloadedAt || now
+      };
+
+      setSavedReports((prev) => {
+        const next = prev.map((r) => (r.id === report.id ? updatedReport : r));
+        try {
+          localStorage.setItem('usb_reports', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+
+      try {
+        await syncReportToFirestore(updatedReport);
+      } catch (e) {
+        console.error('Failed to sync download timestamp to firestore:', e);
+      }
+    }
   };
 
   // JPG Render Completion
@@ -1234,8 +1177,8 @@ export default function App() {
             user={user}
             savedReports={savedReports}
             onEditReport={handleEditReport}
-            onNewReportForFlight={handleCreateNewReportForFlight}
-            onBuildNextFlight={handleBuildNextFlightFromReport}
+            onNewReport={handleNewReport}
+            onNewReportForFlight={handleNewReport}
             onDeleteReport={handleDeleteReport}
             onDeleteAllReports={handleDeleteAllReports}
             onDownloadJPG={handleDownloadFromSaved}

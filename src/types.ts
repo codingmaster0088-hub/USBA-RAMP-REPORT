@@ -92,6 +92,8 @@ export interface SavedReport {
   route: string;
   timestamp: string;
   createdAt?: number;
+  downloadedAt?: number;
+  isDownloaded?: boolean;
   formData: RampReportFormData;
   officerName: string;
   officerId: string;

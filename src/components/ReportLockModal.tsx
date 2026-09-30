@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Lock, PlusCircle, Key, X, AlertTriangle, ShieldCheck, Clock } from 'lucide-react';
 import { SavedReport } from '../types';
 import {
-  getReportAgeMs,
+  getReportAgeSinceDownloadMs,
   formatReportAgeMins,
   SUPER_ADMIN_PIN
 } from '../utils/reportLock';
@@ -26,7 +26,7 @@ export const ReportLockModal: React.FC<ReportLockModalProps> = ({
   const [pinError, setPinError] = useState('');
   const [showPinInput, setShowPinInput] = useState(false);
 
-  const ageMs = getReportAgeMs(report);
+  const ageMs = getReportAgeSinceDownloadMs(report);
   const ageDisplay = formatReportAgeMins(ageMs);
   const flightNum = report.flight || report.formData?.deptFlt || report.formData?.arvFlt || 'FLIGHT';
   const route = report.formData?.deptRoute || report.formData?.arvRoute || report.route || 'ROUTE';
@@ -73,7 +73,7 @@ export const ReportLockModal: React.FC<ReportLockModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-semibold mt-0.5">
-                10-Minute Lockout Window Reached
+                10-Minute Lockout Window after JPG Download
               </p>
             </div>
           </div>
@@ -99,7 +99,7 @@ export const ReportLockModal: React.FC<ReportLockModalProps> = ({
             <span>A/C: <strong className="text-white font-bold">{acReg}</strong></span>
             <span>Date: <strong className="text-white font-bold">{dateStr}</strong></span>
             <span className="flex items-center gap-1 text-rose-400 font-bold">
-              <Clock className="w-3 h-3" /> {ageDisplay}
+              <Clock className="w-3 h-3" /> Downloaded: {ageDisplay}
             </span>
           </div>
         </div>
@@ -109,7 +109,7 @@ export const ReportLockModal: React.FC<ReportLockModalProps> = ({
           <div className="flex items-start gap-2 text-amber-300/90 font-bold">
             <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
             <span>
-              Official reports become <strong>Read-Only 10 minutes</strong> after generation to prevent conflicting records. Direct editing is restricted to <strong>Super Admin</strong>.
+              Official reports become <strong>Read-Only 10 minutes</strong> after clicking <strong>'DOWNLOAD JPG'</strong>. Direct editing is restricted to <strong>Super Admin</strong>.
             </span>
           </div>
           <p className="text-[11px] text-slate-400 pl-6">
@@ -128,7 +128,7 @@ export const ReportLockModal: React.FC<ReportLockModalProps> = ({
             className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 hover:from-amber-400 hover:to-yellow-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <PlusCircle className="w-4 h-4 stroke-[2.5]" />
-            <span>CREATE NEW REPORT FOR THIS FLIGHT</span>
+            <span>CREATE NEW REPORT</span>
           </button>
 
           {/* Super Admin Unlock Section */}

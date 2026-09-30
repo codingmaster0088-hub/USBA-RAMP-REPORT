@@ -29,8 +29,11 @@ import {
 } from '../types';
 import {
   isReportLocked,
-  getReportAgeMs,
+  isReportDownloaded,
+  getReportAgeSinceDownloadMs,
   formatReportAgeMins,
+  getRemainingEditTimeMs,
+  formatRemainingEditTime,
   SUPER_ADMIN_PIN
 } from '../utils/reportLock';
 import {
@@ -195,7 +198,13 @@ interface ReportFormProps {
   user: UserProfile;
   initialType: ReportType;
   reportToEdit: SavedReport | null;
-  onSaveReport: (data: RampReportFormData, type: ReportType, mode: FlightMode, reportId?: string) => void;
+  onSaveReport: (
+    data: RampReportFormData,
+    type: ReportType,
+    mode: FlightMode,
+    reportId?: string,
+    isDownloadAction?: boolean
+  ) => void;
   onDownloadJPG: (data: RampReportFormData, type: ReportType, mode: FlightMode) => void;
   onNewReport: () => void;
   isDarkMode?: boolean;
@@ -219,6 +228,15 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   const [showAdminPinInput, setShowAdminPinInput] = useState<boolean>(false);
   const [adminPinValue, setAdminPinValue] = useState<string>('');
   const [adminPinError, setAdminPinError] = useState<string>('');
+  const [nowMs, setNowMs] = useState<number>(Date.now());
+
+  // 1-second interval timer for live countdowns
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     setIsSuperAdminUnlockedLocal(isSuperAdmin);
@@ -230,6 +248,10 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     !isSuperAdminUnlockedLocal &&
     isReportLocked(reportToEdit, false)
   );
+
+  const isDownloaded = reportToEdit ? isReportDownloaded(reportToEdit) : false;
+  const remainingEditMs = reportToEdit ? getRemainingEditTimeMs(reportToEdit) : null;
+  const remainingEditStr = formatRemainingEditTime(remainingEditMs);
 
   const handleConvertToNewReport = () => {
     setIsConvertedToNewReport(true);
@@ -478,13 +500,17 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       setFormData(reportToEdit.formData);
       setReportType(reportToEdit.type);
       setFlightMode(reportToEdit.mode);
+      setIsConvertedToNewReport(false);
     } else {
-      // Switching to a new report: ensure date is always Today's date
-      const todayStr = getTodayFormattedDate();
-      setFormData((prev) => ({
-        ...prev,
-        date: todayStr
-      }));
+      // Switching to a new report: full fresh input page as requested!
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch (e) {}
+      setDraftRestoredAt(null);
+      setFormData(getInitialFormData(user.station));
+      setReportType(initialType || 'DOMESTIC');
+      setFlightMode(user?.station && user.station.toUpperCase() !== 'DAC' ? 'ROUND' : 'ROUND');
+      setIsConvertedToNewReport(false);
     }
   }, [reportToEdit]);
 
@@ -767,7 +793,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     // CRITICAL: If flight number or date has changed while building/editing from an existing report,
     // or if the report is locked (>10 mins), NEVER pass reportToEdit.id so the previous flight is NEVER overwritten!
     const effectiveExistingId = (isBuildingSeparateFlight || isConvertedToNewReport || isLockedReport) ? undefined : reportToEdit?.id;
-    onSaveReport(formData, resolvedType, flightMode, effectiveExistingId);
+    onSaveReport(formData, resolvedType, flightMode, effectiveExistingId, false);
   };
 
   const handleDownloadAttempt = () => {
@@ -798,7 +824,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
     }
     // Automatically save report with modified data when download is clicked
     const effectiveExistingId = (isBuildingSeparateFlight || isConvertedToNewReport || isLockedReport) ? undefined : reportToEdit?.id;
-    onSaveReport(formData, resolvedType, flightMode, effectiveExistingId);
+    onSaveReport(formData, resolvedType, flightMode, effectiveExistingId, true);
     onDownloadJPG(formData, resolvedType, flightMode);
   };
 
@@ -1156,7 +1182,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
             </span>
           </div>
           <p className="text-xs text-rose-200 leading-relaxed">
-            This report for <strong>BS-{originalFlightClean}</strong> ({reportToEdit?.date}) was generated {formatReportAgeMins(getReportAgeMs(reportToEdit))}. To maintain official reporting integrity, direct modifications to this report are restricted to Super Admin.
+            This report for <strong>BS-{originalFlightClean}</strong> ({reportToEdit?.date}) was downloaded as JPG {formatReportAgeMins(getReportAgeSinceDownloadMs(reportToEdit))}. To maintain official reporting integrity, direct modifications after 10 minutes of JPG download are restricted to Super Admin.
           </p>
           <div className="flex items-center gap-2 pt-1 flex-wrap">
             <button
@@ -1234,26 +1260,53 @@ export const ReportForm: React.FC<ReportFormProps> = ({
               <Clock className="w-4 h-4" />
             </span>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-black text-xs uppercase tracking-wider text-amber-600 dark:text-amber-400">
                   EDITING SAVED FLIGHT: BS-{originalFlightClean}
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 font-mono font-bold">
                   {reportToEdit?.date}
                 </span>
+
+                {/* 10-Minute Lockout Window Countdown Indicator */}
+                {isDownloaded && remainingEditMs !== null ? (
+                  <span
+                    className={`text-[10px] font-mono font-black px-2.5 py-0.5 rounded-full border shadow-sm flex items-center gap-1 ${
+                      isDarkMode
+                        ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50'
+                        : 'bg-emerald-100 text-emerald-950 border-emerald-400'
+                    }`}
+                  >
+                    <Clock className="w-3 h-3 text-emerald-500 animate-pulse" />
+                    <span>Edit: {remainingEditStr}</span>
+                  </span>
+                ) : (
+                  <span
+                    className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                      isDarkMode
+                        ? 'bg-blue-950/80 text-blue-300 border-blue-600/40'
+                        : 'bg-sky-100 text-sky-950 border-sky-300'
+                    }`}
+                  >
+                    Saved Draft (Editable)
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] opacity-90 leading-tight mt-0.5">
-                Modifying fields here will update this saved flight. Change flight number to build a separate flight safely.
+              <p className="text-[11px] opacity-90 leading-tight mt-1">
+                {isDownloaded
+                  ? `Report downloaded as JPG. 10-minute editing window active (${remainingEditStr} remaining). After 10m, it locks as Read-Only.`
+                  : "Saved via 'SAVE REPORT'. Full edit access enabled. The 10-minute lockout rule only begins after clicking 'DOWNLOAD JPG'."}
               </p>
             </div>
           </div>
           <button
             type="button"
-            onClick={handleBuildAnotherFlight}
-            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-black uppercase tracking-wider active:scale-95 transition-all cursor-pointer shrink-0 border border-blue-500 shadow-sm flex items-center gap-1.5"
+            onClick={onNewReport}
+            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black uppercase tracking-wider active:scale-95 transition-all cursor-pointer shrink-0 border border-emerald-500 shadow-sm flex items-center gap-1.5"
+            title="Open a fresh new report"
           >
-            <Plane className="w-3.5 h-3.5" />
-            <span>BUILD NEXT FLIGHT</span>
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span>NEW REPORT</span>
           </button>
         </div>
       )}

@@ -1,45 +1,80 @@
-// Report Lock Utility - 10-Minute Lockout Rule
-// Requirement 1: After generating a report, 10 minutes later that report becomes READ-ONLY. Only Super Admin can edit.
-// Requirement 2: To update flight data after 10 mins, ramp officer creates a new report for that flight.
-// Requirement 3: When a new report is created for the same flight, server saves and prioritizes the latest/last information.
+// Report Lock Utility - 10-Minute Lockout Rule after DOWNLOAD JPG
+// Rule:
+// 1. If user clicked on 'SAVE REPORT' for inputting the rest of data later, the report is NOT locked and remains EDITABLE.
+// 2. If user clicked on 'DOWNLOAD JPG' (official report card issued), the 10-minute timer begins from the download timestamp.
+// 3. 10 minutes after 'DOWNLOAD JPG', that report automatically becomes READ-ONLY (only Super Admin can edit).
 
 export const TEN_MINUTES_MS = 10 * 60 * 1000; // 10 minutes in milliseconds
 export const SUPER_ADMIN_PIN = '11126377';
 
-export function getReportCreatedAtMs(report: { createdAt?: number; timestamp?: string }): number {
-  if (report.createdAt && !isNaN(report.createdAt) && report.createdAt > 0) {
-    return report.createdAt;
-  }
-  if (report.timestamp) {
-    const t = new Date(report.timestamp).getTime();
-    if (!isNaN(t) && t > 0) {
-      return t;
-    }
-  }
-  return 0;
+export function isReportDownloaded(report: {
+  downloadedAt?: number;
+  isDownloaded?: boolean;
+}): boolean {
+  return Boolean(
+    (report.downloadedAt && !isNaN(report.downloadedAt) && report.downloadedAt > 0) ||
+    report.isDownloaded
+  );
 }
 
-export function getReportAgeMs(report: { createdAt?: number; timestamp?: string }): number {
-  const createdMs = getReportCreatedAtMs(report);
-  if (!createdMs) return 0;
-  return Math.max(0, Date.now() - createdMs);
+export function getReportDownloadedAtMs(report: {
+  downloadedAt?: number;
+  isDownloaded?: boolean;
+  createdAt?: number;
+  timestamp?: string;
+}): number | null {
+  if (report.downloadedAt && !isNaN(report.downloadedAt) && report.downloadedAt > 0) {
+    return report.downloadedAt;
+  }
+  return null;
+}
+
+export function getReportAgeSinceDownloadMs(report: {
+  downloadedAt?: number;
+  isDownloaded?: boolean;
+  createdAt?: number;
+  timestamp?: string;
+}): number | null {
+  const downloadedMs = getReportDownloadedAtMs(report);
+  if (!downloadedMs) return null;
+  return Math.max(0, Date.now() - downloadedMs);
 }
 
 export function isReportLocked(
-  report: { createdAt?: number; timestamp?: string },
+  report: {
+    downloadedAt?: number;
+    isDownloaded?: boolean;
+    createdAt?: number;
+    timestamp?: string;
+  },
   isSuperAdmin: boolean = false
 ): boolean {
   if (isSuperAdmin) return false;
-  const ageMs = getReportAgeMs(report);
-  return ageMs > TEN_MINUTES_MS;
+  // If report was NEVER downloaded as JPG (i.e. only saved via 'SAVE REPORT'),
+  // it is in progress / draft state and remains EDITABLE!
+  if (!isReportDownloaded(report)) {
+    return false;
+  }
+  const ageSinceDownload = getReportAgeSinceDownloadMs(report);
+  if (ageSinceDownload === null) return false;
+  return ageSinceDownload > TEN_MINUTES_MS;
 }
 
-export function getRemainingEditTimeMs(report: { createdAt?: number; timestamp?: string }): number {
-  const ageMs = getReportAgeMs(report);
-  return Math.max(0, TEN_MINUTES_MS - ageMs);
+export function getRemainingEditTimeMs(report: {
+  downloadedAt?: number;
+  isDownloaded?: boolean;
+  createdAt?: number;
+  timestamp?: string;
+}): number | null {
+  // If not downloaded, editing does not expire under the 10m countdown
+  if (!isReportDownloaded(report)) return null;
+  const ageSinceDownload = getReportAgeSinceDownloadMs(report);
+  if (ageSinceDownload === null) return null;
+  return Math.max(0, TEN_MINUTES_MS - ageSinceDownload);
 }
 
-export function formatRemainingEditTime(remainingMs: number): string {
+export function formatRemainingEditTime(remainingMs: number | null): string {
+  if (remainingMs === null) return 'Editable';
   if (remainingMs <= 0) return '0m 00s';
   const totalSeconds = Math.floor(remainingMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -47,7 +82,8 @@ export function formatRemainingEditTime(remainingMs: number): string {
   return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
 }
 
-export function formatReportAgeMins(ageMs: number): string {
+export function formatReportAgeMins(ageMs: number | null): string {
+  if (ageMs === null) return 'Not downloaded';
   const minutes = Math.floor(ageMs / (60 * 1000));
   if (minutes < 1) return 'Just now';
   if (minutes === 1) return '1 minute ago';
