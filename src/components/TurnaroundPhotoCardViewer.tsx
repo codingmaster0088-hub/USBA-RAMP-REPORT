@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   Download,
   X,
@@ -127,27 +127,94 @@ export const TurnaroundPhotoCardViewer: React.FC<TurnaroundPhotoCardViewerProps>
   const calculateOptimalFit = () => {
     const currentCardHeight = cardRef.current?.offsetHeight || cardHeight || 1450;
     let availableWidth = 1000;
-    let availableHeight = 600;
+    let availableHeight = 650;
 
     if (containerRef.current) {
-      availableWidth = containerRef.current.clientWidth - 32;
-      availableHeight = containerRef.current.clientHeight - 32;
+      availableWidth = containerRef.current.clientWidth - 24;
+      availableHeight = containerRef.current.clientHeight - 24;
     }
 
     if (availableHeight <= 100) {
-      availableHeight = Math.max(380, window.innerHeight - 220);
+      availableHeight = Math.max(480, window.innerHeight - 170);
     }
     if (availableWidth <= 100) {
-      availableWidth = Math.max(500, window.innerWidth - 80);
+      availableWidth = Math.max(500, window.innerWidth - 60);
     }
 
     const scaleW = availableWidth / 1280;
     const scaleH = availableHeight / currentCardHeight;
-    // Take the smaller scale so BOTH width and height fit completely in display at a glance without scrolling down or right
+    // Take the scale that fits both width and height cleanly
     const bestScale = Math.min(scaleW, scaleH);
-    const clampedScale = Math.min(1.0, Math.max(0.25, Math.round(bestScale * 100) / 100));
+    const clampedScale = Math.min(1.0, Math.max(0.30, Math.round(bestScale * 100) / 100));
     setZoomLevel(clampedScale);
   };
+
+  // Generate past 15 calendar days from today
+  const past15Days = useMemo(() => {
+    const days: {
+      dateIso: string;
+      dateDisplay: string;
+      dayMonth: string;
+      hasReport: boolean;
+      report?: SavedReport;
+    }[] = [];
+    const today = new Date();
+    const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+    for (let i = 0; i < 15; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const year = d.getFullYear();
+      const monthStr = String(d.getMonth() + 1).padStart(2, '0');
+      const dayStr = String(d.getDate()).padStart(2, '0');
+      const dateIso = `${year}-${monthStr}-${dayStr}`;
+      const dayMonth = `${dayStr} ${monthNames[d.getMonth()]}`;
+      const dateDisplay = `${dayStr} ${monthNames[d.getMonth()]} ${String(year).slice(-2)}`;
+
+      // Check if a report exists in availableDatesForFlight for this date
+      const matched = availableDatesForFlight.find((item) => {
+        const itemIso = item.dateIso || '';
+        const itemDisp = (item.dateDisplay || '').toUpperCase();
+        return (
+          itemIso === dateIso ||
+          itemDisp === dateDisplay ||
+          itemDisp.includes(dayMonth)
+        );
+      });
+
+      days.push({
+        dateIso,
+        dateDisplay,
+        dayMonth,
+        hasReport: Boolean(matched),
+        report: matched?.report
+      });
+    }
+    return days;
+  }, [availableDatesForFlight]);
+
+  // Mouse wheel zoom directly on the photo card report
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Prevent browser from scrolling whole window so wheel smoothly zooms the card
+      e.preventDefault();
+      e.stopPropagation();
+
+      const zoomFactor = e.deltaY < 0 ? 0.04 : -0.04;
+      setZoomLevel((prev) => {
+        const nextZoom = Math.round((prev + zoomFactor) * 100) / 100;
+        return Math.min(2.5, Math.max(0.25, nextZoom));
+      });
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
 
   // Dynamically observe card height so scaled container height is always exact
   useEffect(() => {
@@ -167,9 +234,9 @@ export const TurnaroundPhotoCardViewer: React.FC<TurnaroundPhotoCardViewerProps>
 
   // Automatically adjust photo card view size to see full report at a glance immediately
   useEffect(() => {
-    const initialH = Math.max(380, window.innerHeight - 220);
-    const initialW = Math.max(500, window.innerWidth - 80);
-    const initialScale = Math.min(1.0, Math.max(0.25, Math.min(initialW / 1280, initialH / 1450)));
+    const initialH = Math.max(480, window.innerHeight - 170);
+    const initialW = Math.max(500, window.innerWidth - 60);
+    const initialScale = Math.min(1.0, Math.max(0.30, Math.min(initialW / 1280, initialH / 1450)));
     setZoomLevel(Math.round(initialScale * 100) / 100);
 
     const timer = setTimeout(() => {
@@ -188,7 +255,7 @@ export const TurnaroundPhotoCardViewer: React.FC<TurnaroundPhotoCardViewerProps>
   }, []);
 
   const handleZoomIn = () => {
-    setZoomLevel((prev) => Math.min(1.8, Math.round((prev + 0.05) * 100) / 100));
+    setZoomLevel((prev) => Math.min(2.5, Math.round((prev + 0.05) * 100) / 100));
   };
 
   const handleZoomOut = () => {
@@ -242,146 +309,172 @@ export const TurnaroundPhotoCardViewer: React.FC<TurnaroundPhotoCardViewerProps>
   };
 
   return (
-    <div className="space-y-4 fade-in">
-      {/* Top Action & Navigation Bar */}
-      <div className={`flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl border ${
-        isDarkMode ? 'bg-slate-900/90 border-slate-800 text-slate-100' : 'bg-white border-slate-200 shadow-sm'
-      }`}>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
-              isDarkMode
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
-            }`}
-            title="Return to Table"
-          >
-            <ArrowLeft className="w-4 h-4 text-cyan-400" />
-            <span>BACK TO TABLE</span>
-          </button>
+    <div className="flex-1 flex flex-col min-h-0 space-y-2 fade-in">
+      {/* Top Action & Navigation Bar - Streamlined, Compact & Elegant */}
+      <div className={`p-2 sm:p-2.5 rounded-2xl border ${
+        isDarkMode ? 'bg-slate-900/95 border-slate-800 text-slate-100' : 'bg-white border-slate-200 shadow-sm'
+      } space-y-1.5 shadow-lg`}>
+        {/* Row 1: Back, Flight Info, Zoom Controls, Download JPG */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={onClose}
+              className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
+                isDarkMode
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
+              }`}
+              title="Return to Table"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+              <span>BACK TO TABLE</span>
+            </button>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono font-black text-amber-400 text-sm sm:text-base">
-                BS-{rawFlight}
+            <span className="font-mono font-black text-amber-400 text-base">
+              BS-{rawFlight}
+            </span>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-md border font-mono ${
+              isDarkMode ? 'bg-slate-950 text-cyan-300 border-cyan-500/30' : 'bg-cyan-50 text-cyan-900 border-cyan-200'
+            }`}>
+              {formData.deptRoute || formData.arvRoute || report.route || 'ROUTE'}
+            </span>
+            <span className={`text-[11px] font-mono font-black px-2 py-0.5 rounded-md border ${
+              isDarkMode ? 'bg-slate-950 text-amber-300 border-amber-500/40' : 'bg-amber-50 text-amber-900 border-amber-300'
+            }`}>
+              {formData.date || report.date}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Zoom Controls: Actual Size, Zoom In, Zoom Out, Fit */}
+            <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl border border-slate-800 shadow-inner">
+              <button
+                type="button"
+                onClick={handleZoomOut}
+                disabled={zoomLevel <= 0.25}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 transition-all cursor-pointer"
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+
+              <span className="font-mono text-xs font-black text-amber-400 min-w-[42px] text-center select-none">
+                {Math.round(zoomLevel * 100)}%
               </span>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-md border font-mono ${
-                isDarkMode ? 'bg-slate-950 text-cyan-300 border-cyan-500/30' : 'bg-cyan-50 text-cyan-900 border-cyan-200'
-              }`}>
-                {formData.deptRoute || formData.arvRoute || report.route || 'ROUTE'}
-              </span>
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${
-                isDarkMode ? 'bg-slate-950 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300'
-              }`}>
-                {formData.date || report.date}
-              </span>
+
+              <button
+                type="button"
+                onClick={handleZoomIn}
+                disabled={zoomLevel >= 2.5}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 transition-all cursor-pointer"
+                title="Zoom In"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="h-4 w-px bg-slate-800 mx-0.5" />
+
+              <button
+                type="button"
+                onClick={handleActualSize}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-black transition-all cursor-pointer ${
+                  Math.abs(zoomLevel - 1.0) < 0.01
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+                title="View 100% Actual Size (1280px)"
+              >
+                100%
+              </button>
+
+              <button
+                type="button"
+                onClick={handleFitScreen}
+                className="px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 hover:text-white hover:bg-cyan-500/30 border border-cyan-500/40 transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                title="Fit entire report card to screen at a glance without scrolling"
+              >
+                <Maximize2 className="w-3 h-3 text-cyan-400" />
+                <span>FIT (AT A GLANCE)</span>
+              </button>
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Official Ramp Photo Card generated by <strong className="text-white">{report.officerName || 'Ramp Officer'}</strong> (ID-{report.officerId || '0000'})
-            </p>
+
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={isExporting}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 active:scale-95 text-slate-950 font-mono text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-lg shadow-amber-500/20 cursor-pointer disabled:opacity-50"
+            >
+              {isExporting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span>DOWNLOAD JPG</span>
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Zoom Controls: Actual Size, Zoom In, Zoom Out, Fit */}
-          <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl border border-slate-800 shadow-inner">
-            <button
-              type="button"
-              onClick={handleZoomOut}
-              disabled={zoomLevel <= 0.35}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 transition-all cursor-pointer"
-              title="Zoom Out (-10%)"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-
-            <span className="font-mono text-xs font-black text-amber-400 min-w-[46px] text-center select-none">
-              {Math.round(zoomLevel * 100)}%
+        {/* Row 2: Officer Name & Staff ID, immediately followed by the Past 15 Days Selector */}
+        <div className="flex items-center gap-2 text-xs text-slate-400 flex-wrap pt-1 border-t border-slate-800/80">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-slate-400">Ramp Officer:</span>
+            <strong className="text-white font-bold">{officerUser.name}</strong>
+            <span className="font-mono text-cyan-300 font-bold bg-slate-950 px-1.5 py-0.5 rounded border border-cyan-500/30 text-[10px]">
+              ID-{officerUser.id}
             </span>
-
-            <button
-              type="button"
-              onClick={handleZoomIn}
-              disabled={zoomLevel >= 1.8}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 transition-all cursor-pointer"
-              title="Zoom In (+10%)"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-
-            <div className="h-4 w-px bg-slate-800 mx-0.5" />
-
-            <button
-              type="button"
-              onClick={handleActualSize}
-              className={`px-2 py-1 rounded-lg text-[10px] font-mono font-black transition-all cursor-pointer ${
-                Math.abs(zoomLevel - 1.0) < 0.01
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-              title="View 100% Actual Size (1280px)"
-            >
-              ACTUAL (100%)
-            </button>
-
-            <button
-              type="button"
-              onClick={handleFitScreen}
-              className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 hover:text-white hover:bg-cyan-500/30 border border-cyan-500/40 transition-all cursor-pointer flex items-center gap-1 shadow-sm"
-              title="Fit entire report card to screen at a glance without scrolling"
-            >
-              <Maximize2 className="w-3 h-3 text-cyan-400" />
-              <span>FIT (AT A GLANCE)</span>
-            </button>
           </div>
 
-          {/* Multiple Dates Switcher if flight has reports across multiple days */}
-          {availableDatesForFlight.length > 1 && (
-            <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
-              <span className="text-[10px] font-bold text-slate-400 px-2 flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-amber-400" /> DATE:
-              </span>
-              {availableDatesForFlight.map((d) => {
-                const isSelected = d.report.id === report.id || d.dateIso === report.date || d.dateDisplay === report.date;
+          <span className="text-slate-600 font-bold">•</span>
+
+          {/* Past 15 Days Date Buttons */}
+          <div className="flex items-center gap-1 overflow-x-auto max-w-full py-0.5 scrollbar-thin flex-1 min-w-0">
+            <span className="text-[10px] font-black uppercase text-amber-400 font-mono tracking-wider shrink-0 flex items-center gap-1 pr-1">
+              <Calendar className="w-3 h-3 text-amber-400" />
+              PAST 15 DAYS:
+            </span>
+            <div className="flex items-center gap-1 shrink-0">
+              {past15Days.map((d) => {
+                const isSelected =
+                  report.date?.includes(d.dayMonth) ||
+                  report.formData?.date?.includes(d.dayMonth) ||
+                  (d.hasReport && d.report?.id === report.id);
                 return (
                   <button
-                    key={d.report.id}
-                    onClick={() => onSelectDateReport && onSelectDateReport(d.report)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                    key={d.dateIso}
+                    type="button"
+                    disabled={!d.hasReport}
+                    onClick={() => d.report && onSelectDateReport && onSelectDateReport(d.report)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all shrink-0 cursor-pointer ${
                       isSelected
-                        ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        ? 'bg-amber-500 text-slate-950 font-black shadow-sm ring-1 ring-amber-300'
+                        : d.hasReport
+                        ? 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 hover:scale-105'
+                        : 'bg-slate-900/40 text-slate-600 border border-slate-800/40 cursor-not-allowed opacity-35'
                     }`}
+                    title={d.hasReport ? `View photo card for ${d.dateDisplay}` : `No report logged for this flight on ${d.dateDisplay}`}
                   >
-                    {d.dateDisplay}
+                    {d.dayMonth}
+                    {d.hasReport && !isSelected && (
+                      <span className="ml-1 w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block align-middle" />
+                    )}
                   </button>
                 );
               })}
             </div>
-          )}
+          </div>
 
-          <button
-            type="button"
-            onClick={handleDownload}
-            disabled={isExporting}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 active:scale-95 text-slate-950 font-mono text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-lg shadow-amber-500/20 cursor-pointer disabled:opacity-50"
-          >
-            {isExporting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Download className="w-3.5 h-3.5" />
-            )}
-            <span>DOWNLOAD JPG</span>
-          </button>
+          <span className="text-[10px] text-cyan-400/80 font-mono italic shrink-0 hidden md:inline ml-auto">
+            🖱️ Scroll mouse over card to Zoom In / Out
+          </span>
         </div>
       </div>
 
-      {/* Responsive Visual Card Container with Smooth Scaling - Full report visible at a glance */}
+      {/* Expanded Visual Card Container with Smooth Mouse Scroll Zooming */}
       <div
         ref={containerRef}
-        className="w-full flex-1 overflow-auto p-2 sm:p-4 rounded-3xl bg-slate-950/80 border border-slate-800 shadow-2xl flex flex-col items-center justify-center min-h-[460px] h-[calc(94vh-175px)] max-h-[calc(94vh-175px)]"
+        className="w-full flex-1 min-h-[460px] h-[calc(94vh-130px)] max-h-[calc(94vh-130px)] overflow-auto p-2 sm:p-4 rounded-3xl bg-slate-950/90 border border-slate-800 shadow-2xl flex flex-col items-center justify-start relative group"
+        title="Scroll mouse to Zoom In / Out"
       >
         <div
           style={{
@@ -390,7 +483,7 @@ export const TurnaroundPhotoCardViewer: React.FC<TurnaroundPhotoCardViewerProps>
             height: `${cardHeight * zoomLevel}px`,
             position: 'relative'
           }}
-          className="transition-[width,height] duration-150 ease-out flex-shrink-0"
+          className="transition-[width,height] duration-150 ease-out flex-shrink-0 my-auto"
         >
           <div
             ref={cardRef}
