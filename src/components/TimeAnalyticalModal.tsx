@@ -9,6 +9,7 @@ import {
 import { parseDateToIso, formatIsoToDisplay, cleanFlightNum } from '../utils/analyticalSnapshotBuilder';
 import { verifiedFlightReports } from '../data/verifiedFlightReports';
 import { BackendStorageConfirmationModal } from './BackendStorageConfirmationModal';
+import { TurnaroundPhotoCardViewer } from './TurnaroundPhotoCardViewer';
 import aircraftImage from '../assets/images/airplane_flying_sky_1788975401314.jpg';
 import {
   X,
@@ -58,6 +59,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedPhotoCardReport, setSelectedPhotoCardReport] = useState<SavedReport | null>(null);
   const [customHeaderPhoto, setCustomHeaderPhoto] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'HUD_TABLE' | 'PHOTO_CARD'>('HUD_TABLE');
 
@@ -163,6 +165,76 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       rangeText: `${oldestDisplay} (START) ➔ ${formatIsoToDDMMMYY(todayIso)} (TODAY)`
     };
   }, [snapshots, todayIso]);
+
+  // Pool all reports across current saved reports, all 30-day backend storage snapshots, and verified historical reports
+  const allReportsPool = useMemo(() => {
+    const map = new Map<string, SavedReport>();
+
+    // 1. Current saved reports
+    savedReports.forEach((r) => {
+      map.set(r.id, r);
+    });
+
+    // 2. Archived reports from all 30-day backend storage snapshots (previous days)
+    snapshots.forEach((snap) => {
+      if (snap.reportsSnapshot && Array.isArray(snap.reportsSnapshot)) {
+        snap.reportsSnapshot.forEach((r) => {
+          if (!map.has(r.id)) {
+            map.set(r.id, r);
+          }
+        });
+      }
+    });
+
+    // 3. Verified historical reports
+    verifiedFlightReports.forEach((r) => {
+      if (!map.has(r.id)) {
+        map.set(r.id, r);
+      }
+    });
+
+    return Array.from(map.values());
+  }, [savedReports, snapshots]);
+
+  // When searchQuery is entered, find all matching reports across previous days and today
+  const searchMatchedReports = useMemo(() => {
+    const q = searchQuery.trim().toUpperCase();
+    if (!q) return [];
+
+    const qClean = cleanFlightNum(q);
+
+    const matches = allReportsPool.filter((r) => {
+      const rFltClean = cleanFlightNum(r.flight || r.formData?.deptFlt || r.formData?.arvFlt || '');
+      if (qClean && rFltClean === qClean) return true;
+      if (r.flight.toUpperCase().includes(q)) return true;
+      if ((r.formData?.deptFlt || '').toUpperCase().includes(q)) return true;
+      if ((r.formData?.arvFlt || '').toUpperCase().includes(q)) return true;
+      return false;
+    });
+
+    // Sort by newest date/time first
+    return matches.sort((a, b) => {
+      const tA = a.createdAt || (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+      const tB = b.createdAt || (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+      return tB - tA;
+    });
+  }, [searchQuery, allReportsPool]);
+
+  // Available dates for the searched flight (if flight exists across multiple dates)
+  const availableDatesForFlight = useMemo(() => {
+    return searchMatchedReports.map((rep) => ({
+      dateDisplay: rep.formData?.date || rep.date || '',
+      dateIso: parseDateToIso(rep.formData?.date || rep.date || ''),
+      report: rep
+    }));
+  }, [searchMatchedReports]);
+
+  // Active matched report to display on photo card
+  const activeMatchedFlightReport = useMemo(() => {
+    if (selectedPhotoCardReport) return selectedPhotoCardReport;
+    if (searchMatchedReports.length > 0) return searchMatchedReports[0];
+    return null;
+  }, [selectedPhotoCardReport, searchMatchedReports]);
 
   // Category Filter State: ALL | DOMESTIC | INTERNATIONAL
   const [flightScopeFilter, setFlightScopeFilter] = useState<'ALL' | 'DOMESTIC' | 'INTERNATIONAL'>('ALL');
@@ -1235,10 +1307,26 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search flight, route, A/C, bay..."
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setSelectedPhotoCardReport(null);
+              }}
+              placeholder="Search any flight (e.g. 539, 122)..."
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-8 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedPhotoCardReport(null);
+                }}
+                className="absolute right-2.5 top-2 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Mode Switcher: HUD Table vs Photo Card Preview */}
@@ -1269,81 +1357,100 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
         </div>
 
         {/* Modal Body Container */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 bg-slate-950/60">
+        <div className={`flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 bg-slate-950/60 ${activeMatchedFlightReport ? 'overflow-hidden flex flex-col' : ''}`}>
           
-          {/* 30-DAY BACKEND CLOUD STORAGE RANGE & RETENTION BANNER */}
-          <div className="bg-gradient-to-r from-slate-950 via-cyan-950/40 to-slate-950 border border-cyan-500/40 rounded-2xl p-3 sm:p-3.5 flex items-center justify-between flex-wrap gap-3 shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-400 shrink-0">
-                <Database className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-mono">
-                    30-DAY CLOUD STORAGE
-                  </span>
-                  <span className="text-xs font-black text-white font-mono tracking-wider">
-                    ARCHIVE RANGE: <span className="text-cyan-400">{backendArchiveRange.rangeText}</span>
-                  </span>
+          {!activeMatchedFlightReport && (
+            <>
+              {/* 30-DAY BACKEND CLOUD STORAGE RANGE & RETENTION BANNER */}
+              <div className="bg-gradient-to-r from-slate-950 via-cyan-950/40 to-slate-950 border border-cyan-500/40 rounded-2xl p-3 sm:p-3.5 flex items-center justify-between flex-wrap gap-3 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-400 shrink-0">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-mono">
+                        30-DAY CLOUD STORAGE
+                      </span>
+                      <span className="text-xs font-black text-white font-mono tracking-wider">
+                        ARCHIVE RANGE: <span className="text-cyan-400">{backendArchiveRange.rangeText}</span>
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-sans mt-0.5">
+                      Full-day turnaround records are securely backed up in Firestore for 30 days and vanish automatically after retention.
+                    </p>
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-400 font-sans mt-0.5">
-                  Full-day turnaround records are securely backed up in Firestore for 30 days and vanish automatically after retention.
-                </p>
+
+                <div className="flex items-center gap-2">
+                  {activeBackendSnapshot ? (
+                    <span className="text-xs font-mono font-bold px-3 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 flex items-center gap-1.5 shadow-sm">
+                      <Check className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>BACKEND ARCHIVED ({dedupedDateReports.length} FLTS)</span>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleSaveToBackend(true)}
+                      className="px-3.5 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5"
+                      title="Archive full day turnaround data to backend storage now"
+                    >
+                      <Database className="w-3.5 h-3.5" />
+                      <span>SAVE TO BACKEND</span>
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-2">
-              {activeBackendSnapshot ? (
-                <span className="text-xs font-mono font-bold px-3 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 flex items-center gap-1.5 shadow-sm">
-                  <Check className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>BACKEND ARCHIVED ({dedupedDateReports.length} FLTS)</span>
-                </span>
-              ) : (
-                <button
-                  onClick={() => handleSaveToBackend(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5"
-                  title="Archive full day turnaround data to backend storage now"
-                >
-                  <Database className="w-3.5 h-3.5" />
-                  <span>SAVE TO BACKEND</span>
-                </button>
-              )}
-            </div>
-          </div>
+              {/* Quick Metrics Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                <div className="bg-slate-900/90 border border-cyan-500/30 rounded-2xl p-3 shadow">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">TOTAL FLIGHTS</span>
+                  <span className="text-xl font-black text-cyan-400 font-mono mt-0.5 block">{stats.totalFlights}</span>
+                </div>
+                <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-3 shadow">
+                  <span className="text-[10px] text-amber-400/80 font-bold uppercase tracking-wider block">AVG GROUND TIME</span>
+                  <span className="text-xl font-black text-amber-400 font-mono mt-0.5 block">{stats.avgGround}</span>
+                </div>
+                <div className="bg-slate-900/90 border border-indigo-500/30 rounded-2xl p-3 shadow">
+                  <span className="text-[10px] text-indigo-400/80 font-bold uppercase tracking-wider block">AVG SECURITY</span>
+                  <span className="text-xl font-black text-indigo-400 font-mono mt-0.5 block">{stats.avgSecurity}</span>
+                </div>
+                <div className="bg-slate-900/90 border border-teal-500/30 rounded-2xl p-3 shadow">
+                  <span className="text-[10px] text-teal-400/80 font-bold uppercase tracking-wider block">AVG CLEANING</span>
+                  <span className="text-xl font-black text-teal-400 font-mono mt-0.5 block">{stats.avgCleaning}</span>
+                </div>
+                <div className="bg-slate-900/90 border border-purple-500/30 rounded-2xl p-3 shadow">
+                  <span className="text-[10px] text-purple-400/80 font-bold uppercase tracking-wider block">AVG CATERING</span>
+                  <span className="text-xl font-black text-purple-400 font-mono mt-0.5 block">{stats.avgCatering}</span>
+                </div>
+                <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-3 shadow">
+                  <span className="text-[10px] text-emerald-400/80 font-bold uppercase tracking-wider block">AVG BOARDING</span>
+                  <span className="text-xl font-black text-emerald-400 font-mono mt-0.5 block">{stats.avgBoarding}</span>
+                </div>
+              </div>
+            </>
+          )}
 
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-            <div className="bg-slate-900/90 border border-cyan-500/30 rounded-2xl p-3 shadow">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">TOTAL FLIGHTS</span>
-              <span className="text-xl font-black text-cyan-400 font-mono mt-0.5 block">{stats.totalFlights}</span>
-            </div>
-            <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-3 shadow">
-              <span className="text-[10px] text-amber-400/80 font-bold uppercase tracking-wider block">AVG GROUND TIME</span>
-              <span className="text-xl font-black text-amber-400 font-mono mt-0.5 block">{stats.avgGround}</span>
-            </div>
-            <div className="bg-slate-900/90 border border-indigo-500/30 rounded-2xl p-3 shadow">
-              <span className="text-[10px] text-indigo-400/80 font-bold uppercase tracking-wider block">AVG SECURITY</span>
-              <span className="text-xl font-black text-indigo-400 font-mono mt-0.5 block">{stats.avgSecurity}</span>
-            </div>
-            <div className="bg-slate-900/90 border border-teal-500/30 rounded-2xl p-3 shadow">
-              <span className="text-[10px] text-teal-400/80 font-bold uppercase tracking-wider block">AVG CLEANING</span>
-              <span className="text-xl font-black text-teal-400 font-mono mt-0.5 block">{stats.avgCleaning}</span>
-            </div>
-            <div className="bg-slate-900/90 border border-purple-500/30 rounded-2xl p-3 shadow">
-              <span className="text-[10px] text-purple-400/80 font-bold uppercase tracking-wider block">AVG CATERING</span>
-              <span className="text-xl font-black text-purple-400 font-mono mt-0.5 block">{stats.avgCatering}</span>
-            </div>
-            <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-3 shadow">
-              <span className="text-[10px] text-emerald-400/80 font-bold uppercase tracking-wider block">AVG BOARDING</span>
-              <span className="text-xl font-black text-emerald-400 font-mono mt-0.5 block">{stats.avgBoarding}</span>
-            </div>
-          </div>
-
-          {/* TAB 1: HUD TABLE VIEW */}
+          {/* TAB 1: HUD TABLE VIEW OR GENERATED PHOTO CARD REPORT */}
           {activeTab === 'HUD_TABLE' && (
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+            <>
+              {activeMatchedFlightReport ? (
+                <div className="flex-1 flex flex-col min-h-0">
+                  <TurnaroundPhotoCardViewer
+                    report={activeMatchedFlightReport}
+                    onClose={() => {
+                      setSearchQuery('');
+                      setSelectedPhotoCardReport(null);
+                    }}
+                    availableDatesForFlight={availableDatesForFlight}
+                    onSelectDateReport={(rep) => setSelectedPhotoCardReport(rep)}
+                    isDarkMode={true}
+                  />
+                </div>
+              ) : (
+                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-950 text-slate-400 uppercase font-mono text-[10px] tracking-wider border-b border-slate-800">
                       <th className="py-3 px-3 text-center w-10">#</th>
@@ -1488,14 +1595,25 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
                             {row.officer}
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => setFlightToDelete(row)}
-                              title={`Delete flight ${row.flight} from report & database`}
-                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 hover:text-rose-300 border border-rose-500/30 transition-all cursor-pointer inline-flex items-center justify-center group active:scale-95 shadow-sm"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform text-rose-400" />
-                            </button>
+                            <div className="inline-flex items-center gap-1.5 justify-center">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPhotoCardReport(row.originalReport)}
+                                title={`View generated photo card report for flight ${row.flight}`}
+                                className="p-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/25 text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 transition-all cursor-pointer inline-flex items-center justify-center group active:scale-95 shadow-sm"
+                              >
+                                <Eye className="w-3.5 h-3.5 group-hover:scale-110 transition-transform text-cyan-400" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setFlightToDelete(row)}
+                                title={`Delete flight ${row.flight} from report & database`}
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 hover:text-rose-300 border border-rose-500/30 transition-all cursor-pointer inline-flex items-center justify-center group active:scale-95 shadow-sm"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform text-rose-400" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -1505,12 +1623,15 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
               </div>
             </div>
           )}
+        </>
+      )}
 
           {/* ========================================================================= */}
           {/* HIGH-RESOLUTION TIME ANALYTICAL PHOTO CARD (EXPORTED TO OFFICIAL JPG)     */}
           {/* Rendered directly in DOM for live preview and 100% reliable JPG capture   */}
           {/* ========================================================================= */}
-          <div className="pt-2 space-y-3">
+          {!activeMatchedFlightReport && (
+            <div className="pt-2 space-y-3">
             <div className="flex items-center justify-between text-xs text-slate-400 flex-wrap gap-2">
               <span className="font-black uppercase text-cyan-400 flex items-center gap-1.5">
                 <ImageIcon className="w-4 h-4" /> OFFICIAL HIGH-RESOLUTION TIME ANALYTICAL PHOTO CARD
@@ -1936,6 +2057,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
               </div>
             </div>
           </div>
+        )}
 
         </div>
 
