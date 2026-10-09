@@ -5,6 +5,7 @@
 // 3. 10 minutes after 'DOWNLOAD JPG', that report automatically becomes READ-ONLY (only Super Admin can edit).
 
 export const TEN_MINUTES_MS = 10 * 60 * 1000; // 10 minutes in milliseconds
+export const ADMIN_PIN = 'usba0088';
 export const SUPER_ADMIN_PIN = '11126377';
 
 export function isReportDownloaded(report: {

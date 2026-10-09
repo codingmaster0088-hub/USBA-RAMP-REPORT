@@ -27,7 +27,7 @@ export const DeleteNoticePinModal: React.FC<DeleteNoticePinModalProps> = ({
     setError('');
 
     const trimmedPin = pin.trim();
-    if (trimmedPin !== '11126' && trimmedPin !== '11126377') {
+    if (trimmedPin !== 'usba0088' && trimmedPin !== '11126377') {
       setError('Incorrect Admin Password! Delete authorized only with admin password.');
       return;
     }

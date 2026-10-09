@@ -65,7 +65,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   onToggleOutstationRestricted
 }) => {
   // Role-based Admin Authentication State
-  // 11126: Office Management (Only 1. NOTICE and 2. TIME ANALYTICAL)
+  // usba0088: Office Management / Admin (Only 1. NOTICE and 2. TIME ANALYTICAL)
   // 11126377: Super Admin (Full master access to all 6 modules)
   type AdminRole = 'MANAGEMENT' | 'SUPER_ADMIN';
 
@@ -73,7 +73,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
   const [unlockedRole, setUnlockedRole] = useState<AdminRole | null>(() => {
     const savedPin = sessionStorage.getItem('usb_admin_unlocked_pin');
     if (savedPin === '11126377') return 'SUPER_ADMIN';
-    if (savedPin === '11126') return 'MANAGEMENT';
+    if (savedPin === 'usba0088') return 'MANAGEMENT';
     return null;
   });
   const isPinUnlocked = unlockedRole !== null;
@@ -108,12 +108,12 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
       sessionStorage.setItem('usb_admin_role', 'SUPER_ADMIN');
       setPinError('');
       showToast('Super Admin Verified', 'Master Control Unlocked (Full Access)', 'success');
-    } else if (entered === '11126') {
+    } else if (entered === 'usba0088') {
       setUnlockedRole('MANAGEMENT');
-      sessionStorage.setItem('usb_admin_unlocked_pin', '11126');
+      sessionStorage.setItem('usb_admin_unlocked_pin', 'usba0088');
       sessionStorage.setItem('usb_admin_role', 'MANAGEMENT');
       setPinError('');
-      showToast('Management Access Verified', 'Authorized: 1. Notice & 2. Time Analytical', 'success');
+      showToast('Admin Access Verified', 'Authorized: 1. Notice & 2. Time Analytical', 'success');
     } else {
       setPinError('Incorrect Admin Password / PIN. Access Denied!');
       setAdminPin('');
@@ -438,7 +438,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
               MANAGEMENT ACCESS (3 MODULES AUTHORIZED):
             </label>
             <span className="text-[10px] font-mono text-slate-400">
-              Password Authenticated: <strong className="text-cyan-400">11126</strong>
+              Password Authenticated: <strong className="text-cyan-400">usba0088</strong>
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

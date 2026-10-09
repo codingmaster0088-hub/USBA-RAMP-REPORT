@@ -30,7 +30,7 @@ import {
   setOutstationAccessInFirestore
 } from './lib/firebase';
 import { parseDateToIso, buildDailyAnalyticalSnapshot, buildOutstationAnalyticalSnapshot, cleanFlightNum } from './utils/analyticalSnapshotBuilder';
-import { isReportLocked, SUPER_ADMIN_PIN, TEN_MINUTES_MS } from './utils/reportLock';
+import { isReportLocked, ADMIN_PIN, SUPER_ADMIN_PIN, TEN_MINUTES_MS } from './utils/reportLock';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { LiveMonitor } from './components/LiveMonitor';
@@ -1151,7 +1151,7 @@ export default function App() {
             onStartReportWithFlight={handleStartReportWithFlight}
             onStartReport={handleStartReport}
             isDarkMode={isDarkMode}
-            isAdmin={user?.id === '1425' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126377'}
+            isAdmin={user?.id === '1425' || sessionStorage.getItem('usb_admin_unlocked_pin') === ADMIN_PIN || sessionStorage.getItem('usb_admin_unlocked_pin') === SUPER_ADMIN_PIN}
             onDeleteNotice={handleDeleteNotice}
           />
         )}
@@ -1216,7 +1216,7 @@ export default function App() {
           notice={activePopupNotice}
           onClose={handleAcknowledgeNotice}
           isDarkMode={isDarkMode}
-          isAdmin={user?.id === '1425' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126' || sessionStorage.getItem('usb_admin_unlocked_pin') === '11126377'}
+          isAdmin={user?.id === '1425' || sessionStorage.getItem('usb_admin_unlocked_pin') === ADMIN_PIN || sessionStorage.getItem('usb_admin_unlocked_pin') === SUPER_ADMIN_PIN}
           onDeleteNotice={handleDeleteNotice}
         />
       )}
