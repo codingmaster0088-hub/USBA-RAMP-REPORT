@@ -112,10 +112,13 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
   }, [formData, type, mode, user]);
 
   const flightTitle = `BS-${formData.deptFlt || 'XXX'} (${formData.deptRoute || 'ROUTE'})`;
-  const isDelay = formData.status?.includes('DELAY');
-  const isEarly = formData.status?.includes('EARLY');
+  const rawStatus = (formData.status || 'FLIGHT IS ONTIME').toUpperCase();
+  const isDelay = rawStatus.includes('DELAY') || rawStatus.includes('DELAYED') || rawStatus.includes('DLY');
+  const isEarly = rawStatus.includes('EARLY');
 
-  const statusBg = isDelay ? '#dc3545' : isEarly ? '#28a745' : '#eca400';
+  // Status Bar colors: Early (Green/White), Ontime (Yellow/Black), Delay (Red/White)
+  const statusBarBg = isDelay ? '#dc2626' : isEarly ? '#16a34a' : '#ffff00';
+  const statusBarColor = isDelay ? '#ffffff' : isEarly ? '#ffffff' : '#000000';
   const rawPic = (formData.pic || '').trim();
   const cleanPicName = rawPic.replace(/^PIC:?\s*/i, '').toUpperCase();
 
@@ -464,11 +467,11 @@ export const ReportCanvasCard: React.FC<ReportCanvasCardProps> = ({
             fontSize: '32px',
             fontWeight: 900,
             padding: '12px',
-            color: '#000000',
+            color: statusBarColor,
             margin: 0,
             textTransform: 'uppercase',
             letterSpacing: '2px',
-            backgroundColor: '#ffff00',
+            backgroundColor: statusBarBg,
             borderTop: '3px solid #000000',
             borderBottom: '3px solid #000000'
           }}

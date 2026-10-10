@@ -1977,10 +1977,12 @@ export const ReportForm: React.FC<ReportFormProps> = ({
         {formData.status && (
           <div className="space-y-2">
             <div
-              className={`p-2.5 rounded-xl border text-center font-mono font-extrabold text-xs transition-all ${
+              className={`p-2.5 rounded-xl border text-center font-mono font-black text-xs transition-all shadow-md ${
                 formData.status.includes('DELAY')
-                  ? 'bg-red-950/80 border-red-500/50 text-red-300'
-                  : 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+                  ? 'bg-red-600 text-white border-red-700'
+                  : formData.status.includes('EARLY')
+                  ? 'bg-green-600 text-white border-green-700'
+                  : 'bg-yellow-400 text-black border-yellow-500'
               }`}
             >
               {formData.status}
