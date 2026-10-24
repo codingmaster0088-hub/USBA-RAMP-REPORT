@@ -235,7 +235,18 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
 
     allReportsPool.forEach((r) => {
       const rDateStr = (r.formData?.date || r.date || '').trim();
-      const iso = parseDateToIso(rDateStr);
+      let iso = parseDateToIso(rDateStr);
+      if (!iso || !iso.startsWith('20')) {
+        if (r.createdAt) {
+          try {
+            iso = new Date(r.createdAt).toISOString().slice(0, 10);
+          } catch (_) {}
+        } else if (r.timestamp) {
+          try {
+            iso = new Date(r.timestamp).toISOString().slice(0, 10);
+          } catch (_) {}
+        }
+      }
       if (iso && iso.startsWith('20')) {
         const existing = counts.get(iso);
         const display = formatIsoToDDMMMYY(iso);
@@ -247,25 +258,29 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
       }
     });
 
+    // Also include any archived snapshots from backend
+    snapshots.forEach((snap) => {
+      const iso = snap.dateIso || parseDateToIso(snap.dateDisplay);
+      if (iso && iso.startsWith('20')) {
+        const count = snap.totalReportsCount || (snap.reportsSnapshot ? snap.reportsSnapshot.length : 0);
+        if (!counts.has(iso) || (counts.get(iso)?.count === 0 && count > 0)) {
+          counts.set(iso, { iso, display: snap.dateDisplay || formatIsoToDDMMMYY(iso), count });
+        }
+      }
+    });
+
     // Ensure today is always present in date list
     if (!counts.has(todayIso)) {
       counts.set(todayIso, { iso: todayIso, display: formatIsoToDDMMMYY(todayIso), count: 0 });
     }
 
     return Array.from(counts.values()).sort((a, b) => b.iso.localeCompare(a.iso));
-  }, [allReportsPool, todayIso]);
+  }, [allReportsPool, snapshots, todayIso]);
 
   // Find the most recent date that has flight records
   const mostRecentDateWithFlights = useMemo(() => {
     return availableDatesList.find((d) => d.count > 0 && d.iso !== todayIso);
   }, [availableDatesList, todayIso]);
-
-  // If today currently has 0 flights, automatically switch to the most recent date with saved flights (e.g. 23 Oct)
-  useEffect(() => {
-    if (isTodaySelected && dedupedDateReports.length === 0 && mostRecentDateWithFlights) {
-      setSelectedIsoDate(mostRecentDateWithFlights.iso);
-    }
-  }, [mostRecentDateWithFlights]);
 
   // Active matched report to display on photo card
   const activeMatchedFlightReport = useMemo(() => {
@@ -686,6 +701,13 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
 
     return Array.from(map.values()).filter((r) => !isFlightDeleted(r));
   }, [savedReports, activeBackendSnapshot, selectedIsoDate, deletedFlightIds, deletedFlightNumbers]);
+
+  // If today currently has 0 flights, automatically switch to the most recent date with saved flights (e.g. 23 Oct)
+  useEffect(() => {
+    if (selectedIsoDate === todayIso && dedupedDateReports.length === 0 && mostRecentDateWithFlights) {
+      setSelectedIsoDate(mostRecentDateWithFlights.iso);
+    }
+  }, [mostRecentDateWithFlights, dedupedDateReports.length, selectedIsoDate, todayIso]);
 
   // Process & filter reports
   const processedRows = useMemo(() => {

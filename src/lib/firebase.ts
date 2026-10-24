@@ -83,13 +83,12 @@ export function subscribeToSavedReports(
     console.warn('Could not read cached reports:', e);
   }
 
-  // 2. Query Firestore with limit to conserve free tier quota
+  // 2. Query Firestore collection to retrieve all operational turnaround reports
   try {
     const colRef = collection(db, 'savedReports');
-    const q = query(colRef, limit(300));
 
     return onSnapshot(
-      q,
+      colRef,
       (snapshot) => {
         const rawReports: SavedReport[] = [];
 
@@ -560,25 +559,28 @@ export function subscribeToDailyAnalyticalSnapshots(
   }
 
   try {
-    const q = query(collection(db, 'dailyAnalyticalSnapshots'), limit(60));
+    const colRef = collection(db, 'dailyAnalyticalSnapshots');
     return onSnapshot(
-      q,
+      colRef,
       (snapshot) => {
         const list: DailyAnalyticalSnapshot[] = [];
         const now = Date.now();
 
         snapshot.forEach((docSnap) => {
-          const item = docSnap.data() as DailyAnalyticalSnapshot;
-          const expiresAt = item.expiresAt || (item.savedAt ? item.savedAt + THIRTY_DAYS_MS : now + THIRTY_DAYS_MS);
+          try {
+            const item = docSnap.data() as DailyAnalyticalSnapshot;
+            if (!item) return;
+            const expiresAt = item.expiresAt || (item.savedAt ? item.savedAt + THIRTY_DAYS_MS : now + THIRTY_DAYS_MS);
 
-          if (now <= expiresAt) {
-            list.push(item);
-          } else {
-            deleteDoc(doc(db, 'dailyAnalyticalSnapshots', docSnap.id)).catch(() => {});
+            if (now <= expiresAt) {
+              list.push({ ...item, id: item.id || docSnap.id });
+            }
+          } catch (e) {
+            console.warn('Error parsing snapshot doc:', e);
           }
         });
 
-        list.sort((a, b) => b.dateIso.localeCompare(a.dateIso));
+        list.sort((a, b) => (b.dateIso || '').localeCompare(a.dateIso || ''));
         localStorage.setItem('usb_daily_snapshots', JSON.stringify(list));
         onUpdate(list);
       },
