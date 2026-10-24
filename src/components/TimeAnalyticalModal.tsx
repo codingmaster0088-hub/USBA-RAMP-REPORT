@@ -923,7 +923,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
   // Save Full Day Snapshot to Backend Firestore
   const handleSaveToBackend = async (showModal = true) => {
     try {
-      const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+      const expiresAt = Date.now() + 15 * 24 * 60 * 60 * 1000;
       const expiresDateObj = new Date(expiresAt);
       const expiresDateStr = `${String(expiresDateObj.getDate()).padStart(2, '0')} ${expiresDateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase()} ${expiresDateObj.getFullYear()}`;
 
@@ -1464,7 +1464,7 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
           
           {!activeMatchedFlightReport && (
             <>
-              {/* 30-DAY BACKEND CLOUD STORAGE RANGE & RETENTION BANNER */}
+              {/* 15-DAY BACKEND CLOUD STORAGE RANGE & RETENTION BANNER */}
               <div className="bg-gradient-to-r from-slate-950 via-cyan-950/40 to-slate-950 border border-cyan-500/40 rounded-2xl p-3 sm:p-3.5 flex items-center justify-between flex-wrap gap-3 shadow-lg">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-400 shrink-0">
@@ -1473,14 +1473,14 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-mono">
-                        30-DAY CLOUD STORAGE
+                        15-DAY CLOUD STORAGE
                       </span>
                       <span className="text-xs font-black text-white font-mono tracking-wider">
                         ARCHIVE RANGE: <span className="text-cyan-400">{backendArchiveRange.rangeText}</span>
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 font-sans mt-0.5">
-                      Full-day turnaround records are securely backed up in Firestore for 30 days and vanish automatically after retention.
+                      Full-day turnaround records are securely backed up in Firestore for 15 days and vanish automatically after retention.
                     </p>
                   </div>
                 </div>

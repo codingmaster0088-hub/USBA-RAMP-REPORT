@@ -20,7 +20,7 @@ export const db = config.firestoreDatabaseId
   : getFirestore(app);
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000; // 30 Days auto-retention for Daily Analytical Snapshots
+export const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000; // Strict 15-Day rolling retention for database records
 
 // Helper to detect if an error is a Firebase quota limit or rate-limit exhaustion
 export function isQuotaExceededError(err: any): boolean {
@@ -91,11 +91,20 @@ export function subscribeToSavedReports(
       colRef,
       (snapshot) => {
         const rawReports: SavedReport[] = [];
+        const now = Date.now();
 
         snapshot.forEach((docSnap) => {
           const raw = docSnap.data();
           if (!raw) return;
           const rep = { ...raw, id: raw.id || docSnap.id } as SavedReport;
+
+          // Auto-purge reports older than 15 days to keep database lean, within free quotas, and latest
+          const repTime = rep.createdAt || (rep.timestamp ? new Date(rep.timestamp).getTime() : 0);
+          if (repTime > 0 && now - repTime > FIFTEEN_DAYS_MS) {
+            deleteDoc(doc(db, 'savedReports', docSnap.id)).catch(() => {});
+            return;
+          }
+
           rawReports.push(rep);
         });
 
@@ -499,14 +508,14 @@ export async function logUserActivityToFirestore(log: UserLog) {
 }
 
 // =========================================================================
-// 30-DAY BACKEND STORAGE FOR DAILY ANALYTICAL & TIME SNAPSHOTS
+// 15-DAY BACKEND STORAGE FOR DAILY ANALYTICAL & TIME SNAPSHOTS
 // =========================================================================
 
-// Save full-day analytical snapshot to Firestore with 30-day retention
+// Save full-day analytical snapshot to Firestore with 15-day retention
 export async function saveDailyAnalyticalSnapshotToFirestore(snapshot: DailyAnalyticalSnapshot): Promise<void> {
   const docId = `SNAPSHOT_${snapshot.dateIso}_${snapshot.station || 'ALL'}`;
   const now = Date.now();
-  const expiresAt = snapshot.expiresAt || (now + THIRTY_DAYS_MS);
+  const expiresAt = snapshot.expiresAt || (now + FIFTEEN_DAYS_MS);
 
   const payload: DailyAnalyticalSnapshot = {
     ...snapshot,
@@ -570,10 +579,12 @@ export function subscribeToDailyAnalyticalSnapshots(
           try {
             const item = docSnap.data() as DailyAnalyticalSnapshot;
             if (!item) return;
-            const expiresAt = item.expiresAt || (item.savedAt ? item.savedAt + THIRTY_DAYS_MS : now + THIRTY_DAYS_MS);
+            const expiresAt = item.expiresAt || (item.savedAt ? item.savedAt + FIFTEEN_DAYS_MS : now + FIFTEEN_DAYS_MS);
 
             if (now <= expiresAt) {
               list.push({ ...item, id: item.id || docSnap.id });
+            } else {
+              deleteDoc(doc(db, 'dailyAnalyticalSnapshots', docSnap.id)).catch(() => {});
             }
           } catch (e) {
             console.warn('Error parsing snapshot doc:', e);
