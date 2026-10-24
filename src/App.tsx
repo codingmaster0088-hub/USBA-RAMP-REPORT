@@ -343,7 +343,7 @@ export default function App() {
             name: 'Outstation System Init',
             id: 'INIT_TODAY'
           });
-          if (snap.totalReportsCount >= 0) {
+          if (savedReports.length > 0 && snap.totalReportsCount > 0) {
             await saveDailyAnalyticalSnapshotToFirestore(snap);
             sessionStorage.setItem(initSaveKey, 'true');
             console.log(`[Auto Database] Outstation snapshot initialized in database for ${todayIso}`);
