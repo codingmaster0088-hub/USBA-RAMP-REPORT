@@ -13,7 +13,8 @@ import {
   PlusCircle,
   Lock,
   Unlock,
-  Database
+  Database,
+  Calendar
 } from 'lucide-react';
 import { SavedReport, RampReportFormData, ReportType, FlightMode, UserProfile, StationCode } from '../types';
 import { AdminReportUploadModal } from './AdminReportUploadModal';
@@ -63,6 +64,7 @@ interface SavedReportsProps {
 }
 
 const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 export const SavedReports: React.FC<SavedReportsProps> = ({
@@ -81,7 +83,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
   isSuperAdmin = false
 }) => {
   const [filterType, setFilterType] = useState<'ALL' | 'DOMESTIC' | 'INTERNATIONAL'>('ALL');
-  const [timeFilter, setTimeFilter] = useState<'15_DAYS' | 'TODAY' | 'YESTERDAY'>('15_DAYS');
+  const [timeFilter, setTimeFilter] = useState<'ACTIVE_20H' | 'TODAY' | 'YESTERDAY'>('ACTIVE_20H');
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
   const [lockedModalReport, setLockedModalReport] = useState<SavedReport | null>(null);
@@ -113,25 +115,25 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Helper to calculate remaining time before report auto-vanishes (15 Days Rolling Retention)
+  // Helper to calculate remaining time before report auto-vanishes (20 Hours Active Shift)
   const getRemainingVanishTime = (timestamp: string) => {
     const repTime = new Date(timestamp).getTime();
-    if (isNaN(repTime) || repTime <= 0) return '15d left';
+    if (isNaN(repTime) || repTime <= 0) return '20h left';
 
-    const remainingMs = FIFTEEN_DAYS_MS - (nowMs - repTime);
-    if (remainingMs <= 0) return 'Expiring...';
+    const remainingMs = TWENTY_HOURS_MS - (nowMs - repTime);
+    if (remainingMs <= 0) return 'Archived';
 
-    const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+    const mins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
 
-    if (days > 0) {
-      return `${days}d ${hours}h left`;
+    if (hours > 0) {
+      return `${hours}h ${mins}m left`;
     }
-    return `${hours}h left`;
+    return `${mins}m left`;
   };
 
-  // Filter logic: Station filter (Only officer station, or super admin filter) + Deduplicate by flight & date + 15 Days Retention
-  const { filteredReports, todayCount, yesterdayCount, totalCount } = useMemo(() => {
+  // Filter logic: Station filter (Only officer station, or super admin filter) + Deduplicate by flight & date + 20H Active Shift
+  const { filteredReports, active20HCount, todayCount, yesterdayCount } = useMemo(() => {
     // 1. Station-based filtering
     const stationMatched = savedReports.filter((rep) => {
       const repStation = getReportStation(rep);
@@ -165,25 +167,27 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
 
     const deduplicatedReports = Array.from(uniqueMap.values());
 
-    // 15-Day Rolling Retention: keep all reports within 15 days
-    const active15Days = deduplicatedReports.filter((rep) => {
+    // 1. Active Shift Reports: Within 20 Hours (Safe default for officers)
+    const active20HReports = deduplicatedReports.filter((rep) => {
       const repTime = rep.createdAt || (rep.timestamp ? new Date(rep.timestamp).getTime() : 0);
-      return repTime > 0 ? nowMs - repTime <= FIFTEEN_DAYS_MS : true;
+      return repTime > 0 ? nowMs - repTime <= TWENTY_HOURS_MS : true;
     });
 
-    const todayReports = active15Days.filter((rep) => {
+    // 2. Today's Reports (< 24H or matching Today)
+    const todayReports = deduplicatedReports.filter((rep) => {
       const repTime = rep.createdAt || (rep.timestamp ? new Date(rep.timestamp).getTime() : 0);
       const isWithin24H = repTime > 0 && nowMs - repTime <= TWENTY_FOUR_HOURS_MS;
       const rDate = (rep.formData?.date || rep.date || '').toUpperCase();
       return isWithin24H || rDate.includes('TODAY');
     });
 
-    const yesterdayReports = active15Days.filter((rep) => {
+    // 3. Yesterday's Reports (between 24H and 48H)
+    const yesterdayReports = deduplicatedReports.filter((rep) => {
       const repTime = rep.createdAt || (rep.timestamp ? new Date(rep.timestamp).getTime() : 0);
       return repTime > 0 && (nowMs - repTime > TWENTY_FOUR_HOURS_MS && nowMs - repTime <= 2 * TWENTY_FOUR_HOURS_MS);
     });
 
-    let timeFiltered = active15Days;
+    let timeFiltered = active20HReports;
     if (timeFilter === 'TODAY') {
       timeFiltered = todayReports;
     } else if (timeFilter === 'YESTERDAY') {
@@ -197,9 +201,9 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
 
     return {
       filteredReports: matched,
+      active20HCount: active20HReports.length,
       todayCount: todayReports.length,
-      yesterdayCount: yesterdayReports.length,
-      totalCount: active15Days.length
+      yesterdayCount: yesterdayReports.length
     };
   }, [savedReports, filterType, timeFilter, nowMs, isSuperAdmin, stationFilter, userStation]);
 
@@ -287,16 +291,16 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
           </div>
         </div>
 
-        {/* 15-Days Rolling Retention Filter Switch */}
+        {/* Active Shift / Date Filter Switch */}
         <div
           className={`flex items-center justify-between p-2 rounded-xl border text-xs flex-wrap gap-2 ${
             isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
           }`}
         >
           <div className={`flex items-center gap-1.5 text-[11px] ${isDarkMode ? 'text-slate-300' : 'text-slate-800 font-bold'}`}>
-            <Database className="w-3.5 h-3.5 text-cyan-400" />
+            <Clock className="w-3.5 h-3.5 text-amber-400" />
             <span>Show: <strong className={isDarkMode ? 'text-amber-300' : 'text-amber-900 font-black'}>
-              {timeFilter === '15_DAYS' ? 'All Active (15 Days)' : timeFilter === 'TODAY' ? 'Today (< 24H)' : 'Yesterday'}
+              {timeFilter === 'ACTIVE_20H' ? 'Active Shift (< 20H)' : timeFilter === 'TODAY' ? 'Today (< 24H)' : 'Yesterday'}
             </strong></span>
           </div>
           <div
@@ -305,32 +309,32 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
             }`}
           >
             <button
-              onClick={() => setTimeFilter('15_DAYS')}
+              onClick={() => setTimeFilter('ACTIVE_20H')}
               className={`px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                timeFilter === '15_DAYS'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md font-black'
+                timeFilter === 'ACTIVE_20H'
+                  ? 'bg-amber-500 text-slate-950 shadow-md font-black'
                   : isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-700'
               }`}
             >
-              <Database className="w-3 h-3" />
-              <span>ALL 15 DAYS ({totalCount})</span>
+              <Clock className="w-3 h-3" />
+              <span>ACTIVE (20H) ({active20HCount})</span>
             </button>
             <button
               onClick={() => setTimeFilter('TODAY')}
-              className={`px-2 py-1 rounded-md font-bold transition-all flex items-center gap-1 cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1 cursor-pointer ${
                 timeFilter === 'TODAY'
                   ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
                   : isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-700'
               }`}
             >
-              <Clock className="w-3 h-3" />
+              <Calendar className="w-3 h-3" />
               <span>TODAY ({todayCount})</span>
             </button>
             <button
               onClick={() => setTimeFilter('YESTERDAY')}
-              className={`px-2 py-1 rounded-md font-bold transition-all flex items-center gap-1 cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1 cursor-pointer ${
                 timeFilter === 'YESTERDAY'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                  ? 'bg-blue-500 text-white shadow-md font-black'
                   : isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-700'
               }`}
             >
@@ -452,11 +456,11 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
             No saved reports found.
           </p>
           <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-            {timeFilter === 'TODAY'
-              ? 'No reports generated yet today. Switch to ALL 15 DAYS to view previous days.'
-              : timeFilter === 'YESTERDAY'
-              ? 'No reports found for yesterday. Switch to ALL 15 DAYS to view all records.'
-              : 'No saved reports recorded in the last 15 days.'}
+            {timeFilter === 'ACTIVE_20H'
+              ? 'No active turnaround reports created or updated in the last 20 hours.'
+              : timeFilter === 'TODAY'
+              ? 'No reports generated yet today.'
+              : 'No reports recorded for yesterday.'}
           </p>
         </div>
       ) : (

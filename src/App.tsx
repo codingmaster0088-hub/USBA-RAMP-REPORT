@@ -247,10 +247,10 @@ export default function App() {
     }
   };
 
-  // Active Saved Count (Within 15 Days Rolling Retention) for the bottom nav badge & header indicators
+  // Active Saved Count (Within 20 Hours Active Shift) for the bottom nav badge & header indicators
   const activeSavedCount = useMemo(() => {
     const now = Date.now();
-    const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+    const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000;
     const isSuperAdmin = sessionStorage.getItem('usb_admin_unlocked_pin') === '11126377';
     const userStation = (user?.station || 'DAC').toUpperCase();
 
@@ -260,7 +260,7 @@ export default function App() {
         if (reportStation !== userStation) return false;
       }
       const t = r.createdAt || (r.timestamp ? new Date(r.timestamp).getTime() : 0);
-      return t > 0 ? now - t <= FIFTEEN_DAYS_MS : true;
+      return t > 0 ? now - t <= TWENTY_HOURS_MS : true;
     }).length;
   }, [savedReports, user?.station]);
 
