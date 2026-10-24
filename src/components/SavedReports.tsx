@@ -85,6 +85,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
   const [lockedModalReport, setLockedModalReport] = useState<SavedReport | null>(null);
+  const [visibleCount, setVisibleCount] = useState<number>(30);
 
   const handleEditClick = (report: SavedReport) => {
     if (isReportLocked(report, isSuperAdmin)) {
@@ -201,6 +202,15 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
       totalCount: active15Days.length
     };
   }, [savedReports, filterType, timeFilter, nowMs, isSuperAdmin, stationFilter, userStation]);
+
+  // Reset pagination to first 30 reports on filter change
+  useEffect(() => {
+    setVisibleCount(30);
+  }, [timeFilter, stationFilter, filterType]);
+
+  const displayedReports = useMemo(() => {
+    return filteredReports.slice(0, visibleCount);
+  }, [filteredReports, visibleCount]);
 
   return (
     <div className={`space-y-3 pb-20 fade-in ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
@@ -451,7 +461,7 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredReports.map((report) => {
+          {displayedReports.map((report) => {
             const lastUpdatedTime = new Date(report.timestamp).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit'
@@ -714,6 +724,43 @@ export const SavedReports: React.FC<SavedReportsProps> = ({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* High-Performance Pagination / Load More Bar */}
+      {filteredReports.length > visibleCount && (
+        <div
+          className={`p-3 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg ${
+            isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300 shadow-slate-200'
+          }`}
+        >
+          <div className="text-xs font-mono text-slate-400">
+            Showing <strong className="text-amber-400 font-black">{displayedReports.length}</strong> of{' '}
+            <strong className={isDarkMode ? 'text-white font-black' : 'text-slate-900 font-black'}>
+              {filteredReports.length}
+            </strong>{' '}
+            saved reports
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setVisibleCount((prev) => Math.min(prev + 30, filteredReports.length))}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 text-slate-950 font-black text-xs transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+            >
+              <span>LOAD MORE (+30)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisibleCount(filteredReports.length)}
+              className={`px-3 py-2 rounded-xl border text-xs font-black transition-all cursor-pointer ${
+                isDarkMode
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+              }`}
+            >
+              <span>SHOW ALL ({filteredReports.length})</span>
+            </button>
+          </div>
         </div>
       )}
 

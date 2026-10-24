@@ -98,10 +98,9 @@ export function subscribeToSavedReports(
           if (!raw) return;
           const rep = { ...raw, id: raw.id || docSnap.id } as SavedReport;
 
-          // Auto-purge reports older than 15 days to keep database lean, within free quotas, and latest
+          // In-memory filter: exclude reports older than 15 days to keep UI lean and responsive
           const repTime = rep.createdAt || (rep.timestamp ? new Date(rep.timestamp).getTime() : 0);
           if (repTime > 0 && now - repTime > FIFTEEN_DAYS_MS) {
-            deleteDoc(doc(db, 'savedReports', docSnap.id)).catch(() => {});
             return;
           }
 
@@ -133,7 +132,11 @@ export function subscribeToSavedReports(
           }
         });
 
-        localStorage.setItem('usb_reports', JSON.stringify(reports));
+        try {
+          localStorage.setItem('usb_reports', JSON.stringify(reports));
+        } catch (e) {
+          console.warn('LocalStorage save failed:', e);
+        }
         onUpdate(reports);
       },
       (error) => {
@@ -341,8 +344,6 @@ export function subscribeToNotices(
 
           if (ageMs <= TWENTY_FOUR_HOURS_MS) {
             notices.push({ ...item, createdAt: createdTs });
-          } else {
-            deleteDoc(doc(db, 'notices', item.id)).catch(() => {});
           }
         });
 
@@ -583,8 +584,6 @@ export function subscribeToDailyAnalyticalSnapshots(
 
             if (now <= expiresAt) {
               list.push({ ...item, id: item.id || docSnap.id });
-            } else {
-              deleteDoc(doc(db, 'dailyAnalyticalSnapshots', docSnap.id)).catch(() => {});
             }
           } catch (e) {
             console.warn('Error parsing snapshot doc:', e);
