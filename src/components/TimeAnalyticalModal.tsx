@@ -229,6 +229,44 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
     }));
   }, [searchMatchedReports]);
 
+  // Comprehensive list of dates that contain flight records in database
+  const availableDatesList = useMemo(() => {
+    const counts = new Map<string, { iso: string; display: string; count: number }>();
+
+    allReportsPool.forEach((r) => {
+      const rDateStr = (r.formData?.date || r.date || '').trim();
+      const iso = parseDateToIso(rDateStr);
+      if (iso && iso.startsWith('20')) {
+        const existing = counts.get(iso);
+        const display = formatIsoToDDMMMYY(iso);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          counts.set(iso, { iso, display, count: 1 });
+        }
+      }
+    });
+
+    // Ensure today is always present in date list
+    if (!counts.has(todayIso)) {
+      counts.set(todayIso, { iso: todayIso, display: formatIsoToDDMMMYY(todayIso), count: 0 });
+    }
+
+    return Array.from(counts.values()).sort((a, b) => b.iso.localeCompare(a.iso));
+  }, [allReportsPool, todayIso]);
+
+  // Find the most recent date that has flight records
+  const mostRecentDateWithFlights = useMemo(() => {
+    return availableDatesList.find((d) => d.count > 0 && d.iso !== todayIso);
+  }, [availableDatesList, todayIso]);
+
+  // If today currently has 0 flights, automatically switch to the most recent date with saved flights (e.g. 23 Oct)
+  useEffect(() => {
+    if (isTodaySelected && dedupedDateReports.length === 0 && mostRecentDateWithFlights) {
+      setSelectedIsoDate(mostRecentDateWithFlights.iso);
+    }
+  }, [mostRecentDateWithFlights]);
+
   // Active matched report to display on photo card
   const activeMatchedFlightReport = useMemo(() => {
     if (selectedPhotoCardReport) return selectedPhotoCardReport;
@@ -1356,6 +1394,49 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
           </div>
         </div>
 
+        {/* Quick Date Switcher Bar with Flight Counts */}
+        {availableDatesList.length > 0 && (
+          <div className="bg-slate-900/90 border-b border-slate-800/80 px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-thin shrink-0">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1 font-mono">
+              <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+              AVAILABLE DATES:
+            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {availableDatesList.map((d) => {
+                const isSelected = selectedIsoDate === d.iso;
+                const isToday = d.iso === todayIso;
+                return (
+                  <button
+                    key={d.iso}
+                    type="button"
+                    onClick={() => setSelectedIsoDate(d.iso)}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-amber-500 text-slate-950 font-black shadow-md ring-1 ring-amber-300'
+                        : d.count > 0
+                        ? 'bg-slate-950 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400'
+                        : 'bg-slate-950/40 text-slate-500 border border-slate-800 hover:text-slate-300'
+                    }`}
+                    title={`${d.display}: ${d.count} flight records`}
+                  >
+                    <span>{d.display}</span>
+                    {isToday && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-slate-950 text-amber-300 font-black">
+                        TODAY
+                      </span>
+                    )}
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                      isSelected ? 'bg-slate-950 text-amber-300' : 'bg-slate-800 text-slate-300'
+                    }`}>
+                      {d.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Modal Body Container */}
         <div className={`flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 bg-slate-950/60 ${activeMatchedFlightReport ? 'overflow-hidden flex flex-col' : ''}`}>
           
@@ -1470,8 +1551,27 @@ export const TimeAnalyticalModal: React.FC<TimeAnalyticalModalProps> = ({
                   <tbody className="divide-y divide-slate-800/60 font-sans text-slate-200">
                     {processedRows.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="py-12 text-center text-slate-500 font-mono text-xs">
-                          No turnaround duration records found for {activeDateDisplay} ({flightScopeFilter}).
+                        <td colSpan={12} className="py-12 text-center">
+                          <div className="space-y-3 max-w-lg mx-auto">
+                            <p className="text-slate-400 font-mono text-xs">
+                              No flight duration records found for <strong className="text-amber-400">{activeDateDisplay}</strong> ({flightScopeFilter}).
+                            </p>
+                            {mostRecentDateWithFlights && (
+                              <div className="p-4 bg-slate-950/90 border border-cyan-500/40 rounded-2xl space-y-2.5 shadow-xl">
+                                <p className="text-xs text-slate-300">
+                                  Found <strong className="text-amber-400">{mostRecentDateWithFlights.count} flights</strong> saved in database for <strong className="text-cyan-300">{mostRecentDateWithFlights.display}</strong>.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedIsoDate(mostRecentDateWithFlights.iso)}
+                                  className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 text-xs font-black rounded-xl cursor-pointer shadow-lg shadow-cyan-500/20 transition-all active:scale-95 inline-flex items-center gap-1.5 font-mono uppercase tracking-wider"
+                                >
+                                  <Calendar className="w-4 h-4 text-slate-950" />
+                                  <span>VIEW {mostRecentDateWithFlights.display} FLIGHTS ({mostRecentDateWithFlights.count})</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ) : (

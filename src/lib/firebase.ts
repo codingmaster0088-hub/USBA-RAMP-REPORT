@@ -86,7 +86,7 @@ export function subscribeToSavedReports(
   // 2. Query Firestore with limit to conserve free tier quota
   try {
     const colRef = collection(db, 'savedReports');
-    const q = query(colRef, orderBy('createdAt', 'desc'), limit(120));
+    const q = query(colRef, limit(300));
 
     return onSnapshot(
       q,
@@ -560,7 +560,7 @@ export function subscribeToDailyAnalyticalSnapshots(
   }
 
   try {
-    const q = query(collection(db, 'dailyAnalyticalSnapshots'), orderBy('dateIso', 'desc'), limit(30));
+    const q = query(collection(db, 'dailyAnalyticalSnapshots'), limit(60));
     return onSnapshot(
       q,
       (snapshot) => {
