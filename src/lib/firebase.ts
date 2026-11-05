@@ -65,30 +65,125 @@ function getCreatedTimestamp(item: { createdAt?: number; id: string }): number {
   return !isNaN(parsed) && parsed > 1600000000000 ? parsed : Date.now();
 }
 
-// Real-time listener for Saved Reports across all devices with quota resilience & local caching
+// =========================================================================
+// OFFLINE & QUOTA PENDING SYNC QUEUE
+// Ensures any report created or edited on any browser/device is queued and
+// guaranteed to sync to Firestore the moment connection is active!
+// =========================================================================
+
+export function addToPendingSync(report: SavedReport) {
+  try {
+    const queue: SavedReport[] = JSON.parse(localStorage.getItem('usb_pending_sync_reports') || '[]');
+    const filtered = queue.filter((r) => r.id !== report.id);
+    filtered.push(report);
+    localStorage.setItem('usb_pending_sync_reports', JSON.stringify(filtered));
+  } catch (e) {
+    console.warn('Failed to add to pending sync queue:', e);
+  }
+}
+
+export function removeFromPendingSync(reportId: string) {
+  try {
+    const queue: SavedReport[] = JSON.parse(localStorage.getItem('usb_pending_sync_reports') || '[]');
+    const filtered = queue.filter((r) => r.id !== reportId);
+    localStorage.setItem('usb_pending_sync_reports', JSON.stringify(filtered));
+  } catch (e) {}
+}
+
+export async function flushPendingSyncReports(): Promise<number> {
+  let syncedCount = 0;
+  try {
+    const queue: SavedReport[] = JSON.parse(localStorage.getItem('usb_pending_sync_reports') || '[]');
+    if (!queue.length) return 0;
+
+    const remaining: SavedReport[] = [];
+    for (const report of queue) {
+      try {
+        const docRef = doc(db, 'savedReports', report.id);
+        await setDoc(docRef, sanitizeForFirestore(report), { merge: true });
+        syncedCount++;
+        console.log(`[Pending Sync] Synced flight ${report.flight} (${report.id}) to Firestore`);
+      } catch (err) {
+        remaining.push(report);
+      }
+    }
+    localStorage.setItem('usb_pending_sync_reports', JSON.stringify(remaining));
+  } catch (e) {
+    console.warn('Error flushing pending sync reports:', e);
+  }
+  return syncedCount;
+}
+
+// Auto-flush pending queue whenever window comes online
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    flushPendingSyncReports().catch(() => {});
+  });
+}
+
+// =========================================================================
+// MULTICAST SHARED SUBSCRIBER FOR SAVED REPORTS
+// Solves duplicate queries and binds limit to 150 documents to save quota!
+// =========================================================================
+
+let savedReportsSubscribers: Array<{
+  onUpdate: (reports: SavedReport[]) => void;
+  onError?: (err: any) => void;
+}> = [];
+let savedReportsUnsub: (() => void) | null = null;
+let lastKnownSavedReports: SavedReport[] | null = null;
+
 export function subscribeToSavedReports(
   onUpdate: (reports: SavedReport[]) => void,
   onError?: (err: any) => void
 ) {
-  // 1. Immediately hydrate from local cache so UI is instant and never blocked
-  try {
-    const cached = localStorage.getItem('usb_reports');
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        onUpdate(parsed);
+  // 1. If we already have memory or cached reports, serve immediately
+  if (lastKnownSavedReports) {
+    onUpdate(lastKnownSavedReports);
+  } else {
+    try {
+      const cached = localStorage.getItem('usb_reports');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          lastKnownSavedReports = parsed;
+          onUpdate(parsed);
+        }
       }
+    } catch (e) {
+      console.warn('Could not read cached reports:', e);
     }
-  } catch (e) {
-    console.warn('Could not read cached reports:', e);
   }
 
-  // 2. Query Firestore collection to retrieve all operational turnaround reports
-  try {
-    const colRef = collection(db, 'savedReports');
+  // Register subscriber
+  const sub = { onUpdate, onError };
+  savedReportsSubscribers.push(sub);
 
-    return onSnapshot(
-      colRef,
+  // If listener already active, return cleanup
+  if (savedReportsUnsub) {
+    return () => {
+      savedReportsSubscribers = savedReportsSubscribers.filter((s) => s !== sub);
+      if (savedReportsSubscribers.length === 0 && savedReportsUnsub) {
+        savedReportsUnsub();
+        savedReportsUnsub = null;
+      }
+    };
+  }
+
+  // Flush any pending reports on connect
+  flushPendingSyncReports().catch(() => {});
+
+  // 2. Query Firestore with limit(150) to preserve daily read quota
+  try {
+    let qRef;
+    try {
+      qRef = query(collection(db, 'savedReports'), orderBy('timestamp', 'desc'), limit(150));
+    } catch {
+      qRef = query(collection(db, 'savedReports'), limit(150));
+    }
+
+    savedReportsUnsub = onSnapshot(
+      qRef,
       (snapshot) => {
         const rawReports: SavedReport[] = [];
         const now = Date.now();
@@ -98,7 +193,6 @@ export function subscribeToSavedReports(
           if (!raw) return;
           const rep = { ...raw, id: raw.id || docSnap.id } as SavedReport;
 
-          // In-memory filter: exclude reports older than 15 days to keep UI lean and responsive
           const repTime = rep.createdAt || (rep.timestamp ? new Date(rep.timestamp).getTime() : 0);
           if (repTime > 0 && now - repTime > FIFTEEN_DAYS_MS) {
             return;
@@ -132,12 +226,21 @@ export function subscribeToSavedReports(
           }
         });
 
+        lastKnownSavedReports = reports;
         try {
           localStorage.setItem('usb_reports', JSON.stringify(reports));
         } catch (e) {
           console.warn('LocalStorage save failed:', e);
         }
-        onUpdate(reports);
+
+        // Fan out to all active subscribers
+        savedReportsSubscribers.forEach((s) => {
+          try {
+            s.onUpdate(reports);
+          } catch (e) {
+            console.error('Subscriber callback error:', e);
+          }
+        });
       },
       (error) => {
         if (isQuotaExceededError(error)) {
@@ -145,13 +248,14 @@ export function subscribeToSavedReports(
           try {
             const cached = localStorage.getItem('usb_reports');
             if (cached) {
-              onUpdate(JSON.parse(cached));
+              const parsed = JSON.parse(cached);
+              savedReportsSubscribers.forEach((s) => s.onUpdate(parsed));
             }
           } catch (_) {}
           return;
         }
         console.warn('Issue listening to savedReports:', error?.message || error);
-        if (onError) onError(error);
+        savedReportsSubscribers.forEach((s) => s.onError && s.onError(error));
       }
     );
   } catch (err) {
@@ -161,11 +265,18 @@ export function subscribeToSavedReports(
       console.warn('Failed to subscribe to savedReports:', err);
     }
     if (onError) onError(err);
-    return () => {};
   }
+
+  return () => {
+    savedReportsSubscribers = savedReportsSubscribers.filter((s) => s !== sub);
+    if (savedReportsSubscribers.length === 0 && savedReportsUnsub) {
+      savedReportsUnsub();
+      savedReportsUnsub = null;
+    }
+  };
 }
 
-// Save or Update a report in Firestore with automatic offline/local fallback
+// Save or Update a report in Firestore with automatic offline/local fallback and queue
 export async function syncReportToFirestore(report: SavedReport): Promise<void> {
   const cleanReport = sanitizeForFirestore({
     ...report,
@@ -180,6 +291,7 @@ export async function syncReportToFirestore(report: SavedReport): Promise<void> 
     const filtered = cached.filter((r: SavedReport) => r.id !== cleanReport.id);
     filtered.unshift(cleanReport);
     localStorage.setItem('usb_reports', JSON.stringify(filtered));
+    lastKnownSavedReports = filtered;
   } catch (e) {
     console.warn('Failed to update local cache for report:', e);
   }
@@ -187,10 +299,12 @@ export async function syncReportToFirestore(report: SavedReport): Promise<void> 
   try {
     const docRef = doc(db, 'savedReports', cleanReport.id);
     await setDoc(docRef, cleanReport, { merge: true });
+    removeFromPendingSync(cleanReport.id);
     console.log(`[Firestore] Report synced: ${cleanReport.id} (${cleanReport.flight})`);
   } catch (err) {
+    addToPendingSync(cleanReport);
     if (isQuotaExceededError(err)) {
-      console.warn(`[Firestore Offline Cache] Quota limit reached; report ${cleanReport.id} successfully saved in local cache.`);
+      console.warn(`[Firestore Offline Cache] Quota limit reached; report ${cleanReport.id} queued in pending sync.`);
       return;
     }
     console.warn(`[Firestore Warning] Could not sync report ${report?.id} to remote:`, err);
@@ -200,10 +314,12 @@ export async function syncReportToFirestore(report: SavedReport): Promise<void> 
 
 // Delete a report from Firestore with local cache cleanup
 export async function deleteReportFromFirestore(id: string) {
+  removeFromPendingSync(id);
   try {
     const cached = JSON.parse(localStorage.getItem('usb_reports') || '[]');
     const filtered = cached.filter((r: SavedReport) => r.id !== id);
     localStorage.setItem('usb_reports', JSON.stringify(filtered));
+    lastKnownSavedReports = filtered;
   } catch (e) {
     console.warn('Failed to delete report from local cache:', e);
   }
@@ -550,28 +666,60 @@ export async function saveDailyAnalyticalSnapshotToFirestore(snapshot: DailyAnal
   }
 }
 
-// Real-time subscription to 30-Day Daily Analytical Snapshots with strict auto-purge and quota resilience
+// Multicast shared listener for Daily Analytical Snapshots
+let dailySnapshotsSubscribers: Array<{
+  onUpdate: (snapshots: DailyAnalyticalSnapshot[]) => void;
+  onError?: (err: any) => void;
+}> = [];
+let dailySnapshotsUnsub: (() => void) | null = null;
+let lastKnownSnapshots: DailyAnalyticalSnapshot[] | null = null;
+
+// Real-time subscription to 15-Day Daily Analytical Snapshots with strict auto-purge and quota resilience
 export function subscribeToDailyAnalyticalSnapshots(
   onUpdate: (snapshots: DailyAnalyticalSnapshot[]) => void,
   onError?: (err: any) => void
 ) {
-  // Hydrate from local cache immediately
-  try {
-    const cached = localStorage.getItem('usb_daily_snapshots');
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed)) {
-        onUpdate(parsed);
+  // 1. If we already have memory or cached snapshots, serve immediately
+  if (lastKnownSnapshots) {
+    onUpdate(lastKnownSnapshots);
+  } else {
+    try {
+      const cached = localStorage.getItem('usb_daily_snapshots');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          lastKnownSnapshots = parsed;
+          onUpdate(parsed);
+        }
       }
+    } catch (e) {
+      console.warn('Could not read cached snapshots:', e);
     }
-  } catch (e) {
-    console.warn('Could not read cached snapshots:', e);
+  }
+
+  const sub = { onUpdate, onError };
+  dailySnapshotsSubscribers.push(sub);
+
+  if (dailySnapshotsUnsub) {
+    return () => {
+      dailySnapshotsSubscribers = dailySnapshotsSubscribers.filter((s) => s !== sub);
+      if (dailySnapshotsSubscribers.length === 0 && dailySnapshotsUnsub) {
+        dailySnapshotsUnsub();
+        dailySnapshotsUnsub = null;
+      }
+    };
   }
 
   try {
-    const colRef = collection(db, 'dailyAnalyticalSnapshots');
-    return onSnapshot(
-      colRef,
+    let qRef;
+    try {
+      qRef = query(collection(db, 'dailyAnalyticalSnapshots'), orderBy('dateIso', 'desc'), limit(20));
+    } catch {
+      qRef = query(collection(db, 'dailyAnalyticalSnapshots'), limit(20));
+    }
+
+    dailySnapshotsUnsub = onSnapshot(
+      qRef,
       (snapshot) => {
         const list: DailyAnalyticalSnapshot[] = [];
         const now = Date.now();
@@ -591,16 +739,33 @@ export function subscribeToDailyAnalyticalSnapshots(
         });
 
         list.sort((a, b) => (b.dateIso || '').localeCompare(a.dateIso || ''));
-        localStorage.setItem('usb_daily_snapshots', JSON.stringify(list));
-        onUpdate(list);
+        lastKnownSnapshots = list;
+        try {
+          localStorage.setItem('usb_daily_snapshots', JSON.stringify(list));
+        } catch (_) {}
+
+        dailySnapshotsSubscribers.forEach((s) => {
+          try {
+            s.onUpdate(list);
+          } catch (e) {
+            console.error('Snapshot subscriber error:', e);
+          }
+        });
       },
       (error) => {
         if (isQuotaExceededError(error)) {
           console.warn('[Firestore Cache Mode] Daily read quota reached for dailyAnalyticalSnapshots; serving from local cache.');
+          try {
+            const cached = localStorage.getItem('usb_daily_snapshots');
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              dailySnapshotsSubscribers.forEach((s) => s.onUpdate(parsed));
+            }
+          } catch (_) {}
           return;
         }
         console.warn('Issue listening to dailyAnalyticalSnapshots:', error?.message || error);
-        if (onError) onError(error);
+        dailySnapshotsSubscribers.forEach((s) => s.onError && s.onError(error));
       }
     );
   } catch (err) {
@@ -610,8 +775,15 @@ export function subscribeToDailyAnalyticalSnapshots(
       console.warn('Failed to subscribe to dailyAnalyticalSnapshots:', err);
     }
     if (onError) onError(err);
-    return () => {};
   }
+
+  return () => {
+    dailySnapshotsSubscribers = dailySnapshotsSubscribers.filter((s) => s !== sub);
+    if (dailySnapshotsSubscribers.length === 0 && dailySnapshotsUnsub) {
+      dailySnapshotsUnsub();
+      dailySnapshotsUnsub = null;
+    }
+  };
 }
 
 // System Setting: Outstation Access Control (Defaults to true: restricted)
